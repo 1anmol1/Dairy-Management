@@ -1,0 +1,75 @@
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+amritmanage-deploy/node_modules/
+amritmanage-deploy/frontend/node_modules/
+amritmanage-deploy/backend/node_modules/
+
+# ── Environment variables (NEVER commit these) ────────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+amritmanage-deploy/backend/.env
+amritmanage-deploy/frontend/.env
+UPLOAD-THIS-ENV-TO-SERVER.env
+deploy/BACKEND-ENV.env
+deploy/FRONTEND-ENV.env
+
+# ── Build outputs ─────────────────────────────────────────────
+frontend/dist/
+frontend/build/
+backend/dist/
+amritmanage-deploy/frontend/dist/
+
+# ── Zip artifacts ─────────────────────────────────────────────
+amritmanage-deploy.zip
+*.zip
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# ── OS files ──────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# ── Editor / IDE ──────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ── WhatsApp session data (can be large / sensitive) ──────────
+backend/.wwebjs_auth/
+backend/.wwebjs_cache/
+amritmanage-deploy/backend/.wwebjs_auth/
+amritmanage-deploy/backend/.wwebjs_cache/
+
+# ── Kiro spec/config (internal tooling) ──────────────────────
+.kiro/
+
+# ── Misc ──────────────────────────────────────────────────────
+*.pem
+*.key
+coverage/
+.nyc_output/
+package-lock.json
+frontend/package-lock.json
+backend/package-lock.json

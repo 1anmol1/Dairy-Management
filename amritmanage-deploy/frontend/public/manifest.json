@@ -1,0 +1,43 @@
+{
+  "name": "Amrit Manage",
+  "short_name": "Amrit",
+  "description": "Dairy Business Management — Record deliveries, generate bills, track payments.",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0F62FE",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "id": "/app",
+  "icons": [
+    { "src": "/icon-72x72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "any" },
+    { "src": "/icon-96x96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "any" },
+    { "src": "/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Owner Login",
+      "short_name": "Owner",
+      "description": "Sign in as dairy owner",
+      "url": "/securelogin/ownerlogin",
+      "icons": [{ "src": "/icon-96x96.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Staff Login",
+      "short_name": "Staff",
+      "description": "Sign in as delivery staff",
+      "url": "/loginto/staffaccess",
+      "icons": [{ "src": "/icon-96x96.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ],
+  "screenshots": []
+}
