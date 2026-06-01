@@ -19,7 +19,6 @@
     <link rel="apple-touch-icon" sizes="152x152" href="/icon-152x152.png" />
     <link rel="apple-touch-icon" sizes="144x144" href="/icon-144x144.png" />
     <link rel="apple-touch-icon" sizes="120x120" href="/icon-120x120.png" />
-    <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -28,19 +27,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <!-- Register Service Worker for PWA — only on app subdomain -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        var h = window.location.hostname;
-        var isApp = h === 'amritmanage-app.eurekai.in' || h.startsWith('app.');
-        if (isApp) {
-          window.addEventListener('load', function () {
-            navigator.serviceWorker.register('/sw.js').catch(function (err) {
-              console.warn('SW registration failed:', err);
-            });
-          });
-        }
-      }
-    </script>
   </body>
 </html>

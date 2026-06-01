@@ -32,15 +32,15 @@ const PLAN_DISPLAY = {
 // ── Static features ───────────────────────────────────────────
 const PLAN_STATIC_FEATURES = {
   silver: {
-    included: ['Up to 50 customers', 'Up to 2 employees', 'Daily milk entry (morning + evening)', 'Manual billing', 'Payment recording'],
+    included: ['Up to 50 customers', 'Up to 2 staff', 'Daily milk entry (morning + evening)', 'Manual billing', 'Payment recording'],
     excluded: ['Automatic Monthly Billing', 'PDF Bill Generation', 'WhatsApp Alerts', 'Advanced Reports', 'Data export (Excel/PDF)']
   },
   gold: {
-    included: ['Everything in Silver', 'Up to 300 customers', 'Up to 7 employees', 'Automatic monthly billing', 'Payment tracking and history', 'PDF bill download', 'WhatsApp alerts', 'Employee separate login'],
+    included: ['Everything in Silver', 'Up to 150 customers', 'Up to 5 staff', 'Automatic monthly billing', 'Payment tracking and history', 'PDF bill download', 'WhatsApp alerts', 'Employee separate login'],
     excluded: ['Advanced analytics', 'Data export (Excel/PDF)']
   },
   platinum: {
-    included: ['Everything in Gold', 'Unlimited customers', 'Unlimited employees', 'Automatic monthly billing', 'Payment tracking and history', 'Advanced reports and analytics', 'Priority support', 'Data export (Excel/PDF)', 'Dedicated onboarding support', 'Custom rate management', 'Custom WhatsApp message templates'],
+    included: ['Everything in Gold', 'Unlimited customers', 'Up to 15 staff', 'Automatic monthly billing', 'Payment tracking and history', 'Advanced reports and analytics', 'Priority support', 'Data export (Excel/PDF)', 'Dedicated onboarding support', 'Custom rate management', 'Custom WhatsApp message templates'],
     excluded: []
   }
 };
@@ -48,7 +48,7 @@ const PLAN_STATIC_FEATURES = {
 // Marathi feature labels
 const MR_FEATURES = {
   'Up to 50 customers': 'सर्वाधिक ५० ग्राहक',
-  'Up to 2 employees': 'सर्वाधिक २ कर्मचारी',
+  'Up to 2 staff': 'सर्वाधिक २ कर्मचारी',
   'Daily milk entry (morning + evening)': 'रोजची दूध नोंद (सकाळ + संध्याकाळ)',
   'Manual billing': 'मॅन्युअल बिलिंग',
   'Payment recording': 'देयक नोंद',
@@ -58,8 +58,8 @@ const MR_FEATURES = {
   'Advanced Reports': 'प्रगत अहवाल',
   'Data export (Excel/PDF)': 'डेटा एक्सपोर्ट (Excel/PDF)',
   'Everything in Silver': 'सिल्व्हरमधील सर्व काही',
-  'Up to 300 customers': 'सर्वाधिक ३०० ग्राहक',
-  'Up to 7 employees': 'सर्वाधिक ७ कर्मचारी',
+  'Up to 150 customers': 'सर्वाधिक १५० ग्राहक',
+  'Up to 5 staff': 'सर्वाधिक ५ कर्मचारी',
   'Automatic monthly billing': 'आपोआप मासिक बिलिंग',
   'Payment tracking and history': 'देयक ट्रॅकिंग आणि इतिहास',
   'PDF bill download': 'PDF बिल डाउनलोड',
@@ -68,7 +68,7 @@ const MR_FEATURES = {
   'Advanced analytics': 'प्रगत विश्लेषण',
   'Everything in Gold': 'गोल्डमधील सर्व काही',
   'Unlimited customers': 'अमर्यादित ग्राहक',
-  'Unlimited employees': 'अमर्यादित कर्मचारी',
+  'Up to 15 staff': 'सर्वाधिक १५ कर्मचारी',
   'Advanced reports and analytics': 'प्रगत अहवाल आणि विश्लेषण',
   'Priority support': 'प्राधान्य सपोर्ट',
   'Dedicated onboarding support': 'समर्पित ऑनबोर्डिंग सपोर्ट',
@@ -256,12 +256,23 @@ const PricingPage = () => {
 
                   {/* Features */}
                   <div style={{ display: 'grid', gap: '12px', flexGrow: 1, marginBottom: '28px' }}>
-                    {plan.included.map((f, j) => (
-                      <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
-                        <Check size={16} color={key === 'gold' ? '#B8860B' : '#24A148'} style={{ flexShrink: 0, marginTop: '1px' }} />
-                        <span>{mr(f)}</span>
-                      </div>
-                    ))}
+                    {plan.included.map((f, j) => {
+                      const is15Staff = f === 'Up to 15 staff';
+                      const tooltipText = isMarathi
+                        ? '१५ पेक्षा जास्त कर्मचाऱ्यांची आवश्यकता आहे? तुमच्या मर्जीनुसार मर्यादा वाढवण्यासाठी आमच्याशी संपर्क साधा.'
+                        : 'Staff limit can be extended beyond 15 upon request. Contact support for details.';
+                      return (
+                        <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px' }}>
+                          <Check size={16} color={key === 'gold' ? '#B8860B' : '#24A148'} style={{ flexShrink: 0, marginTop: '1px' }} />
+                          <span
+                            title={is15Staff ? tooltipText : undefined}
+                            style={is15Staff ? { borderBottom: '1px dotted #8D8D8D', cursor: 'help' } : {}}
+                          >
+                            {mr(f)}{is15Staff ? '*' : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
                     {plan.excluded.map((f, j) => (
                       <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '14px', color: '#8D8D8D' }}>
                         <X size={16} color="#DA1E28" style={{ flexShrink: 0, marginTop: '1px' }} />

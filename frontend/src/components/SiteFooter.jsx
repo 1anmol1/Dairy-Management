@@ -47,6 +47,7 @@ const SiteFooter = () => {
   ];
 
   const supportLinks = [
+    { to: '/promote', l: t('footer.links.promote', 'Promote & Earn') },
     { to: '/faq',     l: t('footer.links.faq',     'FAQ') },
     { to: '/privacy', l: t('footer.links.privacy',  'Privacy Policy') },
     { to: '/terms',   l: t('footer.links.terms',    'Terms of Service') }

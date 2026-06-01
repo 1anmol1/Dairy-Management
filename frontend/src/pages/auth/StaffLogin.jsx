@@ -63,13 +63,10 @@ const StaffLogin = () => {
     </LoginShell>
   );
 };
-
 const StaffLoginForm = () => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [showCode, setShowCode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorInfo, setErrorInfo] = useState(null);
   const { login } = useAuth();
@@ -85,24 +82,25 @@ const StaffLoginForm = () => {
     clearError();
     if (!phone) { setErrorInfo({ type: 'input', text: isMarathi ? 'कृपया तुमचा फोन नंबर टाका.' : 'Please enter your phone number.' }); return; }
     if (!password) { setErrorInfo({ type: 'input', text: isMarathi ? 'कृपया तुमचा पासवर्ड टाका.' : 'Please enter your password.' }); return; }
-    if (!showCode) {
-      if (!/^\d{10}$/.test(phone.trim())) { setErrorInfo({ type: 'input', text: isMarathi ? 'वैध १०-अंकी फोन नंबर टाका.' : 'Enter a valid 10-digit phone number.' }); return; }
-      setLoading(true);
-      try {
-        await api.post('/auth/validate-credentials', { phone: phone.trim(), password, role: 'staff' });
-        setShowCode(true);
-      } catch (err) { setError(err); } finally { setLoading(false); }
-      return;
-    }
-    if (!code.trim()) { setErrorInfo({ type: 'input', text: isMarathi ? 'कृपया व्हेरिफिकेशन कोड टाका.' : 'Please enter the verification code.' }); return; }
+    if (!/^\d{10}$/.test(phone.trim())) { setErrorInfo({ type: 'input', text: isMarathi ? 'वैध १०-अंकी फोन नंबर टाका.' : 'Enter a valid 10-digit phone number.' }); return; }
+    
     setLoading(true);
-    clearError();
     try {
-      const user = await login(phone.trim(), password, code.trim());
-      if (user.role !== 'staff') { localStorage.removeItem('amrit_token'); localStorage.removeItem('amrit_user'); setErrorInfo({ type: 'credentials', text: isMarathi ? 'हे क्रेडेन्शियल कर्मचारी खात्याचे नाहीत.' : 'These credentials do not belong to a staff account.' }); return; }
+      // Direct login without verification code or OTP step!
+      const user = await login(phone.trim(), password, '');
+      if (user.role !== 'staff') {
+        localStorage.removeItem('amrit_token');
+        localStorage.removeItem('amrit_user');
+        setErrorInfo({ type: 'credentials', text: isMarathi ? 'हे क्रेडेन्शियल कर्मचारी खात्याचे नाहीत.' : 'These credentials do not belong to a staff account.' });
+        return;
+      }
       toast.success(isMarathi ? `स्वागत आहे, ${user.name}!` : `Welcome, ${user.name}!`);
       navigate('/app/staff');
-    } catch (err) { setError(err); setShowCode(false); setCode(''); } finally { setLoading(false); }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -118,7 +116,7 @@ const StaffLoginForm = () => {
           <label className="input-label">{isMarathi ? 'फोन नंबर' : 'Phone Number'}</label>
           <div style={{ position: 'relative' }}>
             <Phone size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8D8D8D' }} />
-            <input type="tel" className="input" style={{ paddingLeft: '38px' }} placeholder="" value={phone} onChange={e => { setPhone(e.target.value); clearError(); }} autoComplete="off" inputMode="numeric" maxLength={10} />
+            <input type="tel" className="input" style={{ paddingLeft: '38px' }} placeholder="" value={phone} onChange={e => { setPhone(e.target.value.replace(/[^0-9]/g, '')); clearError(); }} autoComplete="off" inputMode="numeric" maxLength={10} />
           </div>
         </div>
         <div className="input-group">
@@ -131,20 +129,10 @@ const StaffLoginForm = () => {
             </button>
           </div>
         </div>
-        {showCode && (
-          <div className="input-group" style={{ animation: 'fadeSlideIn 0.2s ease' }}>
-            <label className="input-label">{isMarathi ? 'व्हेरिफिकेशन कोड' : 'Verification Code'}</label>
-            <input type="password" className="input" autoFocus placeholder="" value={code} onChange={e => { setCode(e.target.value); clearError(); }} autoComplete="off" />
-            <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
-              {isMarathi ? 'तुमच्या मालकाने दिलेला कोड टाका.' : 'Enter the code provided by your owner.'}
-            </div>
-          </div>
-        )}
-        <button type="submit" className="btn btn-full btn-lg" disabled={loading} style={{ marginTop: '8px', backgroundColor: '#24A148', color: '#FFFFFF', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-          {loading ? <><div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> {isMarathi ? 'साइन इन होत आहे...' : 'Signing in...'}</> : showCode ? (isMarathi ? 'साइन इन करा' : 'Sign In') : (isMarathi ? 'पुढे' : 'Continue')}
+        <button type="submit" className="btn btn-full btn-lg" disabled={loading} style={{ marginTop: '16px', backgroundColor: '#24A148', color: '#FFFFFF', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+          {loading ? <><div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> {isMarathi ? 'साइन इन होत आहे...' : 'Signing in...'}</> : (isMarathi ? 'साइन इन करा' : 'Sign In')}
         </button>
       </form>
-      <style>{`@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
 };

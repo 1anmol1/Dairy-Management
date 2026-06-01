@@ -11,6 +11,7 @@
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -19,6 +20,7 @@ body {
   color: #161616;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 /* ── Button base ─────────────────────────────────────────────── */

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserCheck,
   ClipboardList, Receipt, LogOut,
   Menu, X, Milk, KeyRound, Phone, Mail, Building2,
-  ChevronDown, ChevronUp, Droplets, BookOpen
+  ChevronDown, ChevronUp, Droplets, BookOpen, CheckCircle, MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -27,15 +28,101 @@ const OwnerLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [showPwModal, setShowPwModal] = useState(false);
+  const [showRenewalModal, setShowRenewalModal] = useState(false);
+  const toast = useToast();
 
   const handleLogout = () => {
     logout();
     navigate('/securelogin/ownerlogin');
   };
 
+  const subStatus = user?.subscription?.status;
+
+  useEffect(() => {
+    if (subStatus !== 'expired') return;
+
+    const handleGlobalClick = (e) => {
+      const target = e.target;
+      
+      // Allow clicking inside sidebar or mobile header
+      if (target.closest('.sidebar') || target.closest('.mobile-header')) {
+        return;
+      }
+      
+      // Allow clicking inside renewal modal or any standard modal overlay
+      if (target.closest('.renewal-modal') || target.closest('.modal-overlay') || target.closest('.modal')) {
+        return;
+      }
+
+      // Allow language toggle clicks
+      if (target.closest('[title*="मराठी"]') || target.closest('[title*="English"]') || target.closest('button[aria-label*="Marathi"]')) {
+        return;
+      }
+
+      // Allow toast messages
+      if (target.closest('.toast') || target.closest('.go3130511874') || target.closest('.hot-toast')) {
+        return;
+      }
+
+      // Allow date pickers, search input, filters, dropdowns, and pagination/refresh buttons
+      const isDateOrFilter = 
+        target.tagName === 'INPUT' || 
+        target.tagName === 'SELECT' || 
+        target.tagName === 'OPTION' || 
+        target.tagName === 'LABEL' ||
+        target.closest('input') ||
+        target.closest('select') ||
+        target.closest('.flatpickr-calendar') ||
+        target.closest('.react-calendar') ||
+        target.closest('[class*="calendar"]') ||
+        target.closest('[class*="filter"]') ||
+        target.closest('[class*="date"]') ||
+        target.closest('[class*="search"]') ||
+        (target.closest('svg') && (
+          target.closest('svg').innerHTML.includes('filter') || 
+          target.closest('svg').innerHTML.includes('calendar') || 
+          target.closest('svg').innerHTML.includes('search')
+        )) ||
+        (target.textContent && (
+          target.textContent.toLowerCase().includes('filter') || 
+          target.textContent.toLowerCase().includes('फिल्टर') || 
+          target.textContent.toLowerCase().includes('date') || 
+          target.textContent.toLowerCase().includes('तारीख') ||
+          target.textContent.toLowerCase().includes('search') ||
+          target.textContent.toLowerCase().includes('शोधा')
+        ));
+
+      if (isDateOrFilter) {
+        return;
+      }
+
+      // Otherwise, block any clickable elements
+      const clickable = target.closest('button') || target.closest('a') || target.closest('[role="button"]') || target.closest('.btn');
+      
+      if (clickable) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        setShowRenewalModal(true);
+        toast.error(isMarathi ? 'तुमची सदस्यता संपली आहे. कृपया नूतनीकरण करा.' : 'Your subscription has expired. Please renew.');
+      }
+    };
+
+    window.addEventListener('click', handleGlobalClick, true);
+    return () => window.removeEventListener('click', handleGlobalClick, true);
+  }, [subStatus, isMarathi, toast]);
+
+  const isDairyOwner = user?.ownerRole === 'dairy_owner';
+
   const navItems = [
     { to: '/app/owner', icon: LayoutDashboard, label: t('app.nav.dashboard', 'Dashboard'), end: true },
-    { to: '/app/owner/customers', icon: Users, label: t('app.nav.customers', 'Customers') },
+    ...(isDairyOwner ? [
+      { to: '/app/owner/farmers', icon: Users, label: isMarathi ? 'शेतकरी (दूध उत्पादक)' : 'Farmers (Suppliers)' },
+      { to: '/app/owner/customers', icon: Users, label: isMarathi ? 'ग्राहक (दूध खरेदीदार)' : 'Customers (Buyers)' }
+    ] : [
+      { to: '/app/owner/customers', icon: Users, label: t('app.nav.customers', 'Customers') }
+    ]),
+    { to: '/app/owner/delivery', icon: CheckCircle, label: isMarathi ? 'वितरण नोंदवा' : 'Log Deliveries' },
     { to: '/app/owner/staff', icon: UserCheck, label: t('app.nav.staff', 'Staff') },
     { to: '/app/owner/collection', icon: Droplets, label: t('app.nav.dailyCollection', 'Daily Collection') },
     { to: '/app/owner/logs', icon: ClipboardList, label: t('app.nav.logs', 'Logs') },
@@ -46,10 +133,10 @@ const OwnerLayout = () => {
       : []),
     ...(user?.features?.whatsapp_alerts
       ? [{ to: '/app/owner/whatsapp', icon: WhatsAppNavIcon, label: t('app.nav.whatsapp', 'WhatsApp') }]
-      : [])
+      : []),
+    { to: '/app/owner/feedback', icon: MessageSquare, label: isMarathi ? 'अभिप्राय (फीडबॅक)' : 'Feedback & Support' }
   ];
 
-  const subStatus = user?.subscription?.status;
   const subBadgeClass =
     subStatus === 'active' ? 'badge-green' :
     subStatus === 'trial'  ? 'badge-blue'  : 'badge-red';
@@ -57,12 +144,12 @@ const OwnerLayout = () => {
   const SidebarContent = () => (
     <>
       {/* Logo */}
-      <div className="sidebar-logo">
+      <Link to="/app/owner" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
         <img src={amritLogo} alt="Amrit Manage" style={{ height: '32px', width: 'auto', display: 'block', marginBottom: '4px', filter: 'brightness(0) invert(1)' }} />
         {user?.businessName && (
           <div style={{ color: '#8D8D8D', fontSize: '12px', marginTop: '2px' }}>{user.businessName}</div>
         )}
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className="sidebar-nav">
@@ -188,12 +275,12 @@ const OwnerLayout = () => {
 
       <div className="main-content">
         <div className="mobile-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Link to="/app/owner" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
             <img src={amritLogo} alt="Amrit Manage" style={{ height: '26px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
             {user?.businessName && (
               <span style={{ color: '#8D8D8D', fontSize: '13px' }}>· {user.businessName}</span>
             )}
-          </div>
+          </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <LanguageToggle style={{ fontSize: '12px', padding: '4px 8px', backgroundColor: 'transparent', borderColor: '#525252', color: '#C6C6C6' }} />
             <button
@@ -209,6 +296,80 @@ const OwnerLayout = () => {
       </div>
 
       {showPwModal && <ChangePasswordModal onClose={() => setShowPwModal(false)} />}
+      {showRenewalModal && (
+        <RenewalModal
+          isMarathi={isMarathi}
+          onClose={() => setShowRenewalModal(false)}
+          onRenew={() => {
+            setShowRenewalModal(false);
+            navigate('/app/owner/upgrade');
+          }}
+          onLogout={handleLogout}
+        />
+      )}
+    </div>
+  );
+};
+
+// ── Renewal Modal ─────────────────────────────────────────────
+const RenewalModal = ({ onClose, onRenew, onLogout, isMarathi }) => {
+  return (
+    <div className="modal-overlay" style={{ zIndex: 99999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+      <div className="modal renewal-modal" style={{ backgroundColor: '#FFFFFF', padding: '32px', borderRadius: '8px', maxWidth: '440px', width: '100%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.25)', border: '1px solid #EAEAEA' }}>
+        <div style={{
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          backgroundColor: '#FFF1F1',
+          color: '#DA1E28',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 20px'
+        }}>
+          <AlertCircle size={32} />
+        </div>
+        
+        <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#161616', marginBottom: '12px' }}>
+          {isMarathi ? 'सदस्यता संपली आहे' : 'Subscription Expired'}
+        </h2>
+        
+        <p style={{ fontSize: '14.5px', color: '#525252', lineHeight: 1.6, marginBottom: '28px' }}>
+          {isMarathi 
+            ? 'तुमची सदस्यता संपली आहे. सर्व वैशिष्ट्ये पुनर्संचयित करण्यासाठी आणि तुमचा व्यवसाय सुरू ठेवण्यासाठी कृपया नूतनीकरण करा.'
+            : 'Your subscription has expired. Please renew or upgrade your plan to restore access to all features.'}
+        </p>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button 
+            type="button" 
+            className="btn btn-primary btn-full" 
+            style={{ height: '44px', fontWeight: 600, justifyContent: 'center' }}
+            onClick={onRenew}
+          >
+            {isMarathi ? 'नूतनीकरण / अपग्रेड करा' : 'Renew / Upgrade Now'}
+          </button>
+          
+          <button 
+            type="button" 
+            className="btn btn-ghost btn-full" 
+            style={{ height: '44px', fontWeight: 600, justifyContent: 'center', borderColor: '#E0E0E0', color: '#161616' }}
+            onClick={onClose}
+          >
+            {isMarathi ? 'बंद करा (फक्त पाहा)' : 'Close (View Only)'}
+          </button>
+          
+          <button 
+            type="button" 
+            className="btn btn-danger btn-full" 
+            style={{ height: '44px', fontWeight: 600, justifyContent: 'center', marginTop: '10px' }}
+            onClick={onLogout}
+          >
+            <LogOut size={16} style={{ marginRight: '8px' }} />
+            {isMarathi ? 'बाहेर पडा (लॉगआउट)' : 'Sign Out (Logout)'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

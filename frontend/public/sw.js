@@ -36,13 +36,16 @@ self.addEventListener('activate', (event) => {
 
 // ── Fetch: network-first for /api, cache-first for assets ────
 self.addEventListener('fetch', (event) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
 
-  // Always go to network for API calls
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(fetch(event.request));
-    return;
-  }
+  // Skip unsupported request schemes (like chrome-extension)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+  // Always go to network directly for API calls (bypass Service Worker)
+  if (url.pathname.startsWith('/api/')) return;
 
   // Navigation requests — network first, fallback to cached shell
   if (event.request.mode === 'navigate') {
@@ -58,7 +61,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets — cache first, then network
+  // Only use cache-first strategy for static assets
+  const isStaticAsset =
+    PRECACHE_URLS.includes(url.pathname) ||
+    /\.(js|css|png|jpg|jpeg|gif|svg|ico|json|woff|woff2|ttf|eot)$/i.test(url.pathname);
+
+  if (!isStaticAsset) {
+    // Let browser handle client routes and dynamic GET requests natively
+    return;
+  }
+
+  // Static assets — cache first, then network fallback
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;

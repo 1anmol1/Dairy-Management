@@ -40,24 +40,41 @@ const TableSkeleton = () => (
 );
 
 // ── Date helpers ──────────────────────────────────────────────
-const toDateStr = (d) => d.toISOString().split('T')[0];
+const toDateStr = (d) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 const getTodayStr = () => toDateStr(new Date());
 const todayStr = getTodayStr(); // module-level for initial state only
 
+const parseLocalDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+};
+
 const fmtDate = (dateStr) => {
   if (!dateStr) return '';
-  const today = getTodayStr();
-  const d = new Date(dateStr + 'T00:00:00');
-  const diff = Math.round((new Date(today + 'T00:00:00') - d) / 86400000);
+  const d = parseLocalDate(dateStr);
+  const today = parseLocalDate(getTodayStr());
+  const diff = Math.round((today - d) / 86400000);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const stepDate = (dateStr, delta) => {
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = parseLocalDate(dateStr);
   d.setDate(d.getDate() + delta);
   return toDateStr(d);
+};
+
+const formatShortDate = (dateStr) => {
+  if (!dateStr) return '';
+  const d = parseLocalDate(dateStr);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 };
 
 // ── View modes ────────────────────────────────────────────────
@@ -601,7 +618,7 @@ const Logs = () => {
                               <span style={{ fontWeight: 700 }}>{log.delivered_qty}{L}</span>
                               {view !== VIEW.DAY && (
                                 <span style={{ color: '#8D8D8D' }}>
-                                  {new Date(log.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                  {formatShortDate(log.date)}
                                 </span>
                               )}
                             </div>
@@ -665,7 +682,7 @@ const Logs = () => {
                         <tr key={log._id}>
                           {view !== VIEW.DAY && (
                             <td style={{ fontSize: '12px', color: '#525252', whiteSpace: 'nowrap' }}>
-                              {new Date(log.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                              {formatShortDate(log.date)}
                             </td>
                           )}
                           <td>

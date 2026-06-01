@@ -15,7 +15,7 @@ const PLAN_COLORS = { silver: '#8D8D8D', gold: '#D4AF37', platinum: '#525252' };
 
 // Platinum plan highlights shown in the upgrade prompt
 const PLATINUM_HIGHLIGHTS = [
-  'Unlimited customers and employees',
+  'Unlimited customers, up to 15 staff',
   'Custom WhatsApp message templates',
   'Advanced reports and analytics',
   'Data export (Excel and PDF)',
@@ -26,7 +26,7 @@ const PLATINUM_HIGHLIGHTS = [
 
 // Gold plan highlights
 const GOLD_HIGHLIGHTS = [
-  'Up to 300 customers, 7 staff',
+  'Up to 150 customers, 5 staff',
   'Automatic monthly billing',
   'PDF bill generation & download',
   'WhatsApp delivery alerts',

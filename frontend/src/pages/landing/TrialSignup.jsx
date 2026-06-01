@@ -94,18 +94,18 @@ const TrialSignup = () => {
 
   const BENEFITS = [
     { icon: Clock,       en: 'Free setup assistance — we help you get started',  mr: 'विनामूल्य सेटअप सहाय्य — आम्ही तुम्हाला मदत करतो' },
-    { icon: Users,       en: 'Up to 200 customers (Amrit Gold limits)',           mr: 'सर्वाधिक २०० ग्राहक (अमृत गोल्ड मर्यादा)' },
+    { icon: Users,       en: 'Up to 150 customers (Amrit Gold limits)',           mr: 'सर्वाधिक १५० ग्राहक (अमृत गोल्ड मर्यादा)' },
     { icon: Receipt,     en: 'Auto billing, WhatsApp alerts, PDF bills',          mr: 'आपोआप बिलिंग, WhatsApp अलर्ट, PDF बिले' },
     { icon: ShieldCheck, en: 'Your data is safe and never deleted',               mr: 'तुमचा डेटा सुरक्षित आणि कधीही डिलीट होत नाही' },
   ];
 
   const INCLUDED = [
-    { en: 'Customer management (up to 200)',       mr: 'ग्राहक व्यवस्थापन (सर्वाधिक २००)' },
+    { en: 'Customer management (up to 150)',       mr: 'ग्राहक व्यवस्थापन (सर्वाधिक १५०)' },
     { en: 'Daily milk entry, morning and evening', mr: 'रोजची दूध नोंद, सकाळ आणि संध्याकाळ' },
     { en: 'Automatic monthly bill generation',     mr: 'आपोआप मासिक बिल तयार' },
     { en: 'Payment tracking and history',          mr: 'देयक ट्रॅकिंग आणि इतिहास' },
     { en: 'WhatsApp delivery alerts',              mr: 'WhatsApp वितरण अलर्ट' },
-    { en: 'Staff separate login (up to 7)',        mr: 'कर्मचारी स्वतंत्र लॉगिन (सर्वाधिक ७)' },
+    { en: 'Staff separate login (up to 5)',        mr: 'कर्मचारी स्वतंत्र लॉगिन (सर्वाधिक ५)' },
     { en: 'PDF bill download',                     mr: 'PDF बिल डाउनलोड' },
     { en: 'Default rate management',               mr: 'डिफॉल्ट दर व्यवस्थापन' },
   ];
@@ -206,7 +206,7 @@ const TrialSignup = () => {
                   </label>
                   <input type="tel" className="input" placeholder="9876543210" value={phone} inputMode="numeric"
                     maxLength={10}
-                    onChange={e => { setPhone(e.target.value); clearError('phone'); }}
+                    onChange={e => { setPhone(e.target.value.replace(/[^0-9]/g, '')); clearError('phone'); }}
                     style={errors.phone ? { borderColor: '#DA1E28' } : {}} />
                   {errors.phone && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{errors.phone}</div>}
                 </div>
@@ -258,7 +258,7 @@ const TrialSignup = () => {
                     {mr('City', 'शहर')} *
                   </label>
                   <input type="text" className="input" placeholder={mr('Pune', 'पुणे')} value={city}
-                    onChange={e => { setCity(e.target.value); clearError('city'); }}
+                    onChange={e => { setCity(e.target.value.replace(/[^a-zA-Z\u0900-\u097F\s]/g, '')); clearError('city'); }}
                     style={errors.city ? { borderColor: '#DA1E28' } : {}} />
                   {errors.city && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{errors.city}</div>}
                 </div>
@@ -267,7 +267,7 @@ const TrialSignup = () => {
                     {mr('Pincode', 'पिनकोड')} *
                   </label>
                   <input type="text" className="input" placeholder="411001" value={pincode} inputMode="numeric"
-                    onChange={e => { setPincode(e.target.value); clearError('pincode'); }}
+                    onChange={e => { setPincode(e.target.value.replace(/[^0-9]/g, '')); clearError('pincode'); }}
                     style={errors.pincode ? { borderColor: '#DA1E28' } : {}} />
                   {errors.pincode && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{errors.pincode}</div>}
                 </div>
@@ -279,7 +279,7 @@ const TrialSignup = () => {
                     {mr('District', 'जिल्हा')} *
                   </label>
                   <input type="text" className="input" placeholder={mr('Pune', 'पुणे')} value={district}
-                    onChange={e => { setDistrict(e.target.value); clearError('district'); }}
+                    onChange={e => { setDistrict(e.target.value.replace(/[^a-zA-Z\u0900-\u097F\s]/g, '')); clearError('district'); }}
                     style={errors.district ? { borderColor: '#DA1E28' } : {}} />
                   {errors.district && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{errors.district}</div>}
                 </div>

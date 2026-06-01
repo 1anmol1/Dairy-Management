@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Customer = require('../models/Customer');
+const Farmer = require('../models/Farmer');
 const DailyLog = require('../models/DailyLog');
 const Bill = require('../models/Bill');
 const DefaultRate = require('../models/DefaultRate');
@@ -128,9 +129,18 @@ router.get('/customers', async (req, res, next) => {
 // POST /api/owner/customers
 router.post('/customers', async (req, res, next) => {
   try {
-    const { name, phone, address, base_requirement, default_price, custom_price, notes, assignedStaffId } = req.body;
+    const { name, phone, address, base_requirement, default_price, custom_price, notes, assignedStaffId, language } = req.body;
     if (!name || !phone || default_price === undefined) {
       return res.status(400).json({ error: 'Name, phone, and price are required.' });
+    }
+
+    // Enforce maxCustomers limit (skip if unlimited, represented by 999999 or -1)
+    const maxCust = req.user.maxCustomers ?? 150; // default gold limit
+    if (maxCust !== -1 && maxCust < 999999) {
+      const activeCount = await Customer.countDocuments({ ownerId: req.user._id, isActive: true });
+      if (activeCount >= maxCust) {
+        return res.status(400).json({ error: `Customer limit reached (${maxCust}). Upgrade your plan or contact support to increase it.` });
+      }
     }
 
     const customer = await Customer.create({
@@ -141,7 +151,8 @@ router.post('/customers', async (req, res, next) => {
       custom_price: custom_price || null,
       assignedStaffId: assignedStaffId || null,
       customerCode: req.body.customerCode?.trim() || null,
-      showCodeToStaff: req.body.showCodeToStaff === true || req.body.showCodeToStaff === 'true'
+      showCodeToStaff: req.body.showCodeToStaff === true || req.body.showCodeToStaff === 'true',
+      language: language || 'en'
     });
 
     res.status(201).json({ customer });
@@ -156,7 +167,7 @@ router.put('/customers/:id', async (req, res, next) => {
     const customer = await Customer.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!customer) return res.status(404).json({ error: 'Customer not found.' });
 
-    const allowed = ['name', 'phone', 'address', 'base_requirement', 'default_price', 'custom_price', 'notes', 'isActive', 'assignedStaffId', 'customerCode', 'showCodeToStaff'];
+    const allowed = ['name', 'phone', 'address', 'base_requirement', 'default_price', 'custom_price', 'notes', 'isActive', 'assignedStaffId', 'customerCode', 'showCodeToStaff', 'language'];
     allowed.forEach(field => {
       if (req.body[field] !== undefined) customer[field] = req.body[field];
     });
@@ -177,6 +188,79 @@ router.delete('/customers/:id', async (req, res, next) => {
     customer.isActive = false;
     await customer.save();
     res.json({ message: 'Customer deactivated.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/owner/farmers
+router.get('/farmers', async (req, res, next) => {
+  try {
+    const { active, search, page = 1, limit = 50 } = req.query;
+    const query = { ownerId: req.user._id };
+
+    if (active !== undefined) query.isActive = active === 'true';
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        { name: { $regex: escaped, $options: 'i' } },
+        { phone: { $regex: escaped, $options: 'i' } },
+        { customerCode: { $regex: escaped, $options: 'i' } }
+      ];
+    }
+
+    const safeLimit = Math.min(Math.max(parseInt(limit) || 15, 1), 100);
+    const skip = (Math.max(parseInt(page) || 1, 1) - 1) * safeLimit;
+
+    const [farmers, total] = await Promise.all([
+      Farmer.find(query).sort({ name: 1 }).skip(skip).limit(safeLimit).lean(),
+      Farmer.countDocuments(query)
+    ]);
+
+    res.json({ customers: farmers, total });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/owner/farmers
+router.post('/farmers', async (req, res, next) => {
+  try {
+    const { name, phone, address, default_price, custom_price, notes, assignedStaffId, language } = req.body;
+    if (!name || !phone || default_price === undefined) {
+      return res.status(400).json({ error: 'Name, phone, and price are required.' });
+    }
+
+    const farmer = await Farmer.create({
+      ownerId: req.user._id,
+      name, phone, address, notes,
+      default_price,
+      custom_price: custom_price || null,
+      assignedStaffId: assignedStaffId || null,
+      customerCode: req.body.customerCode?.trim() || null,
+      showCodeToStaff: req.body.showCodeToStaff === true || req.body.showCodeToStaff === 'true',
+      language: language || 'en'
+    });
+
+    res.status(201).json({ customer: farmer });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/owner/farmers/:id
+router.put('/farmers/:id', async (req, res, next) => {
+  try {
+    const farmer = await Farmer.findOne({ _id: req.params.id, ownerId: req.user._id });
+    if (!farmer) return res.status(404).json({ error: 'Farmer not found.' });
+
+    const allowed = ['name', 'phone', 'address', 'default_price', 'custom_price', 'notes', 'isActive', 'assignedStaffId', 'customerCode', 'showCodeToStaff', 'language'];
+    allowed.forEach(field => {
+      if (req.body[field] !== undefined) farmer[field] = req.body[field];
+    });
+
+    await farmer.save();
+    res.json({ customer: farmer });
   } catch (err) {
     next(err);
   }
@@ -208,6 +292,15 @@ router.post('/staff', async (req, res, next) => {
       return res.status(400).json({ error: 'Name, phone, and password are required.' });
     }
 
+    // Enforce maxStaff limit (skip if unlimited, represented by 999999 or -1)
+    const maxSt = req.user.maxStaff ?? 5; // default gold limit
+    if (maxSt !== -1 && maxSt < 999999) {
+      const staffCount = await User.countDocuments({ ownerId: req.user._id, role: 'staff' });
+      if (staffCount >= maxSt) {
+        return res.status(400).json({ error: `Staff limit reached (${maxSt}). Upgrade your plan or contact support to increase it.` });
+      }
+    }
+
     const existing = await User.findOne({ phone: phone.trim() });
     if (existing) return res.status(400).json({ error: 'Phone already registered.' });
 
@@ -237,28 +330,9 @@ router.delete('/staff/:id', async (req, res, next) => {
   }
 });
 
-// PATCH /api/owner/staff/:id/password — owner resets a staff password
+// PATCH /api/owner/staff/:id/password — Disabled (only Superadmin can reset staff passwords)
 router.patch('/staff/:id/password', async (req, res, next) => {
-  try {
-    const { newPassword, verificationCode } = req.body;
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
-    }
-
-    // Require owner verification code from DB
-    if (!(await verifyOwnerOtp(verificationCode))) {
-      return res.status(401).json({ error: 'Invalid verification code.' });
-    }
-
-    const staff = await User.findOne({ _id: req.params.id, ownerId: req.user._id, role: 'staff' });
-    if (!staff) return res.status(404).json({ error: 'Staff not found.' });
-
-    staff.password = newPassword;
-    await staff.save();
-    res.json({ message: 'Staff password updated.' });
-  } catch (err) {
-    next(err);
-  }
+  return res.status(403).json({ error: 'Only Superadmin can reset staff passwords.' });
 });
 
 // PATCH /api/owner/password — owner changes their own password
@@ -357,7 +431,7 @@ router.get('/logs', async (req, res, next) => {
     }
 
     const logs = await DailyLog.find(query)
-      .populate('customerId', 'name phone')
+      .populate('customerId', 'name phone language')
       .populate('staffId', 'name')
       .sort({ date: -1, slot: 1, createdAt: -1 })
       .limit(Math.min(parseInt(limit) || 200, 500))
@@ -388,12 +462,14 @@ router.patch('/logs/:id', async (req, res, next) => {
       log.amount_calculated = log.delivered_qty * log.price_per_liter;
     }
     if (notes !== undefined) log.notes = notes;
+    if (req.body.whatsappSent !== undefined) log.whatsappSent = req.body.whatsappSent;
+    if (req.body.whatsappError !== undefined) log.whatsappError = req.body.whatsappError;
 
     await log.save();
 
     // Re-populate for response
     const populated = await DailyLog.findById(log._id)
-      .populate('customerId', 'name phone')
+      .populate('customerId', 'name phone language')
       .populate('staffId', 'name')
       .lean();
 
@@ -518,7 +594,7 @@ router.get('/bills', async (req, res, next) => {
     if (year) query.year = parseInt(year);
 
     const bills = await Bill.find(query)
-      .populate('customerId', 'name phone')
+      .populate('customerId', 'name phone language')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -560,7 +636,7 @@ router.post('/bills/:id/send-pdf-whatsapp', async (req, res, next) => {
       return res.status(400).json({ error: 'html and filename are required.' });
     }
     const bill = await Bill.findOne({ _id: req.params.id, ownerId: req.user._id })
-      .populate('customerId', 'name phone').lean();
+      .populate('customerId', 'name phone language').lean();
     if (!bill) return res.status(404).json({ error: 'Bill not found.' });
 
     let puppeteer;
@@ -774,19 +850,20 @@ router.get('/message-templates', async (req, res, next) => {
 // POST /api/owner/message-templates
 router.post('/message-templates', async (req, res, next) => {
   try {
-    const { name, type, body, isDefault } = req.body;
+    const { name, type, body, isDefault, language } = req.body;
     if (!name || !body) return res.status(400).json({ error: 'name and body are required.' });
 
-    // If setting as default for a type, unset others
+    const lang = language || 'en';
+    // If setting as default for a type and language, unset others
     if (isDefault && type) {
       await MessageTemplate.updateMany(
-        { ownerId: req.user._id, type, isDefault: true },
+        { ownerId: req.user._id, type, language: lang, isDefault: true },
         { isDefault: false }
       );
     }
 
     const template = await MessageTemplate.create({
-      ownerId: req.user._id, name, type: type || 'custom', body, isDefault: !!isDefault
+      ownerId: req.user._id, name, type: type || 'custom', body, isDefault: !!isDefault, language: lang
     });
     res.status(201).json({ template });
   } catch (err) {
@@ -797,13 +874,14 @@ router.post('/message-templates', async (req, res, next) => {
 // PATCH /api/owner/message-templates/:id
 router.patch('/message-templates/:id', async (req, res, next) => {
   try {
-    const { name, type, body, isDefault, isActive } = req.body;
+    const { name, type, body, isDefault, isActive, language } = req.body;
     const template = await MessageTemplate.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!template) return res.status(404).json({ error: 'Template not found.' });
 
+    const lang = language !== undefined ? language : template.language;
     if (isDefault && type) {
       await MessageTemplate.updateMany(
-        { ownerId: req.user._id, type, isDefault: true, _id: { $ne: template._id } },
+        { ownerId: req.user._id, type, language: lang, isDefault: true, _id: { $ne: template._id } },
         { isDefault: false }
       );
     }
@@ -813,6 +891,7 @@ router.patch('/message-templates/:id', async (req, res, next) => {
     if (body !== undefined) template.body = body;
     if (isDefault !== undefined) template.isDefault = isDefault;
     if (isActive !== undefined) template.isActive = isActive;
+    if (language !== undefined) template.language = language;
     await template.save();
 
     res.json({ template });
@@ -835,21 +914,33 @@ router.delete('/message-templates/:id', async (req, res, next) => {
 });
 
 // POST /api/owner/message-templates/seed-defaults
-// Seeds the 3 default templates if none exist
+// Seeds the default templates (English and Marathi) if none exist
 router.post('/message-templates/seed-defaults', async (req, res, next) => {
   try {
     const ownerId = req.user._id;
     const existing = await MessageTemplate.countDocuments({ ownerId });
     if (existing > 0) {
-      // Check if payment_reminder template exists; if not, create it
-      const hasPaymentReminder = await MessageTemplate.exists({ ownerId, type: 'payment_reminder', isActive: true });
-      if (!hasPaymentReminder) {
+      // Check if payment_reminder template exists for each language; if not, create it
+      const hasPaymentReminderEn = await MessageTemplate.exists({ ownerId, type: 'payment_reminder', language: 'en', isActive: true });
+      if (!hasPaymentReminderEn) {
         await MessageTemplate.create({
           ownerId,
           name: 'Pending Payment Reminder',
           type: 'payment_reminder',
-          body: 'Dear {{customerName}}, your milk bill for {{monthName}} is ₹{{grandTotal}}. Paid: ₹{{totalPaid}}. Balance due: ₹{{balance}}. Please pay at your earliest. — {{businessName}}',
-          isDefault: true
+          body: 'Dear {{customerName}}, your milk bill for {{monthName}} is {{grandTotal}}. Paid: {{totalPaid}}. Balance due: {{balance}}. Please pay at your earliest. — {{businessName}}',
+          isDefault: true,
+          language: 'en'
+        });
+      }
+      const hasPaymentReminderMr = await MessageTemplate.exists({ ownerId, type: 'payment_reminder', language: 'mr', isActive: true });
+      if (!hasPaymentReminderMr) {
+        await MessageTemplate.create({
+          ownerId,
+          name: 'Pending Payment Reminder (Marathi)',
+          type: 'payment_reminder',
+          body: 'प्रिय {{customerName}}, तुमचे {{monthName}} महिन्याचे दूध बिल {{grandTotal}} आहे. भरलेली रक्कम: {{totalPaid}}. थकीत रक्कम: {{balance}}. कृपया लवकरात लवकर भरणा करावा. — {{businessName}}',
+          isDefault: true,
+          language: 'mr'
         });
       }
       const templates = await MessageTemplate.find({ ownerId, isActive: true }).lean();
@@ -857,35 +948,77 @@ router.post('/message-templates/seed-defaults', async (req, res, next) => {
     }
 
     const defaults = [
+      // English templates
       {
         name: 'Regular Delivery',
         type: 'delivery',
-        body: 'Hi {{customerName}}, {{quantity}}L of milk has been delivered to you today. Any queries? Contact: {{ownerPhone}}',
-        isDefault: true
+        body: 'Hi {{customerName}}, {{quantity}} of milk has been delivered to you today. Any queries? Contact: {{ownerPhone}}',
+        isDefault: true,
+        language: 'en'
       },
       {
         name: 'Extra Delivery',
         type: 'extra_delivery',
-        body: 'Hi {{customerName}}, {{quantity}}L of milk (including {{extraQty}}L extra) has been delivered to you today. Any queries? Contact: {{ownerPhone}}',
-        isDefault: true
+        body: 'Hi {{customerName}}, {{quantity}} of milk (including {{extraQty}} extra) has been delivered to you today. Any queries? Contact: {{ownerPhone}}',
+        isDefault: true,
+        language: 'en'
       },
       {
         name: 'No Delivery Today',
         type: 'no_delivery',
         body: 'Hi {{customerName}}, no milk delivery is scheduled for you today. Any queries? Contact: {{ownerPhone}}',
-        isDefault: true
+        isDefault: true,
+        language: 'en'
       },
       {
         name: 'Pending Payment Reminder',
         type: 'payment_reminder',
-        body: 'Dear {{customerName}}, your milk bill for {{monthName}} is ₹{{grandTotal}}. Paid: ₹{{totalPaid}}. Balance due: ₹{{balance}}. Please pay at your earliest. — {{businessName}}',
-        isDefault: true
+        body: 'Dear {{customerName}}, your milk bill for {{monthName}} is {{grandTotal}}. Paid: {{totalPaid}}. Balance due: {{balance}}. Please pay at your earliest. — {{businessName}}',
+        isDefault: true,
+        language: 'en'
       },
       {
         name: 'Monthly Bill Statement',
         type: 'monthly_bill',
-        body: 'Hi {{customerName}}, your milk statement for {{monthName}}:\nTotal: ₹{{grandTotal}}\nPaid: ₹{{totalPaid}}\nBalance: ₹{{balance}}\nContact: {{ownerPhone}}',
-        isDefault: true
+        body: 'Hi {{customerName}}, your milk statement for {{monthName}}:\nTotal: {{grandTotal}}\nPaid: {{totalPaid}}\nBalance: {{balance}}\nContact: {{ownerPhone}}',
+        isDefault: true,
+        language: 'en'
+      },
+      // Marathi templates
+      {
+        name: 'Regular Delivery (Marathi)',
+        type: 'delivery',
+        body: 'नमस्कार {{customerName}}, आज तुम्हाला {{quantity}} दूध वितरित केले गेले आहे. काही अडचण असल्यास संपर्क साधा: {{ownerPhone}}',
+        isDefault: true,
+        language: 'mr'
+      },
+      {
+        name: 'Extra Delivery (Marathi)',
+        type: 'extra_delivery',
+        body: 'नमस्कार {{customerName}}, आज तुम्हाला {{quantity}} दूध (अतिरिक्त: {{extraQty}}) वितरित केले गेले आहे. काही अडचण असल्यास संपर्क साधा: {{ownerPhone}}',
+        isDefault: true,
+        language: 'mr'
+      },
+      {
+        name: 'No Delivery Today (Marathi)',
+        type: 'no_delivery',
+        body: 'नमस्कार {{customerName}}, आज कोणतेही दूध वितरण नियोजित नाही. काही अडचण असल्यास संपर्क साधा: {{ownerPhone}}',
+        isDefault: true,
+        language: 'mr'
+      },
+      {
+        name: 'Pending Payment Reminder (Marathi)',
+        type: 'payment_reminder',
+        body: 'प्रिय {{customerName}}, तुमचे {{monthName}} महिन्याचे दूध बिल {{grandTotal}} आहे. भरलेली रक्कम: {{totalPaid}}. थकीत रक्कम: {{balance}}. कृपया लवकरात लवकर भरणा करावा. — {{businessName}}',
+        isDefault: true,
+        language: 'mr'
+      },
+      {
+        name: 'Monthly Bill Statement (Marathi)',
+        type: 'monthly_bill',
+        body: 'नमस्कार {{customerName}}, तुमचे {{monthName}} महिन्याचे बिल विवरण:\nएकूण: {{grandTotal}}\nभरलेले: {{totalPaid}}\nथकीत: {{balance}}\nसंपर्क: {{ownerPhone}}',
+        isDefault: true,
+        language: 'mr'
       }
     ];
 
@@ -922,6 +1055,331 @@ router.post('/send-whatsapp', async (req, res, next) => {
     );
 
     res.json({ success: true, message: 'Message sent.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── TERM RATES ────────────────────────────────────────────────
+const TermRate = require('../models/TermRate');
+
+router.get('/term-rates', async (req, res, next) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Month and Year are required.' });
+    }
+    const ownerId = req.user._id;
+    const termRate = await TermRate.findOne({ ownerId, month: parseInt(month), year: parseInt(year) }).lean();
+    
+    // Fallback default rate
+    let fallbackRate = 35;
+    const DefaultRate = require('../models/DefaultRate');
+    const currentDefaultRate = await DefaultRate.findOne({ ownerId }).sort({ effectiveFrom: -1 }).lean();
+    if (currentDefaultRate) {
+      fallbackRate = currentDefaultRate.rate;
+    }
+
+    res.json({
+      termRate: termRate || {
+        term1Rate: fallbackRate,
+        term2Rate: fallbackRate,
+        term3Rate: fallbackRate,
+        isDefault: true
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/term-rates', async (req, res, next) => {
+  try {
+    const { month, year, term1Rate, term2Rate, term3Rate } = req.body;
+    if (month === undefined || year === undefined || term1Rate === undefined || term2Rate === undefined || term3Rate === undefined) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+    const ownerId = req.user._id;
+    const termRate = await TermRate.findOneAndUpdate(
+      { ownerId, month: parseInt(month), year: parseInt(year) },
+      {
+        term1Rate: parseFloat(term1Rate),
+        term2Rate: parseFloat(term2Rate),
+        term3Rate: parseFloat(term3Rate),
+        changedBy: ownerId
+      },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, termRate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── FARMER COLLECTIONS ─────────────────────────────────────────
+const FarmerCollection = require('../models/FarmerCollection');
+
+router.get('/farmer-collections', async (req, res, next) => {
+  try {
+    const { farmerId } = req.query;
+    if (!farmerId) {
+      return res.status(400).json({ error: 'farmerId is required.' });
+    }
+    const ownerId = req.user._id;
+    const collections = await FarmerCollection.find({ ownerId, farmerId })
+      .sort({ date: -1, time: -1 })
+      .limit(10)
+      .lean();
+    res.json({ collections });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── DAIRY DEFAULT RATES ─────────────────────────────────────────
+const DairyDefaultRate = require('../models/DairyDefaultRate');
+
+router.get('/dairy-default-rates', async (req, res, next) => {
+  try {
+    const dairyOwnerId = req.user._id;
+    // Find all active rates
+    const activeRates = await DairyDefaultRate.find({ dairyOwnerId, isActive: true }).sort({ effectiveFrom: -1 }).lean();
+    const history = await DairyDefaultRate.find({ dairyOwnerId }).sort({ createdAt: -1 }).limit(50).lean();
+    
+    // If empty, generate standard defaults in memory
+    const defaultConfigs = {
+      Cow: { milkType: 'Cow', baseRate: 40, fatMultiplier: 0.12, snfMultiplier: 0.08, bonusPerLiter: 0, deductionPerLiter: 0, effectiveFrom: new Date(), isActive: true },
+      Buffalo: { milkType: 'Buffalo', baseRate: 50, fatMultiplier: 0.15, snfMultiplier: 0.10, bonusPerLiter: 0, deductionPerLiter: 0, effectiveFrom: new Date(), isActive: true },
+      Mixed: { milkType: 'Mixed', baseRate: 45, fatMultiplier: 0.13, snfMultiplier: 0.09, bonusPerLiter: 0, deductionPerLiter: 0, effectiveFrom: new Date(), isActive: true }
+    };
+
+    activeRates.forEach(r => {
+      defaultConfigs[r.milkType] = r;
+    });
+
+    res.json({
+      configs: Object.values(defaultConfigs),
+      history
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/dairy-default-rates', async (req, res, next) => {
+  try {
+    const dairyOwnerId = req.user._id;
+    const { milkType, baseRate, fatMultiplier, snfMultiplier, bonusPerLiter, deductionPerLiter, effectiveFrom } = req.body;
+
+    if (!milkType || baseRate === undefined || fatMultiplier === undefined || snfMultiplier === undefined || bonusPerLiter === undefined || deductionPerLiter === undefined || !effectiveFrom) {
+      return res.status(400).json({ error: 'All default rate configuration fields are required.' });
+    }
+
+    // Deactivate previous active rates of this milkType
+    await DairyDefaultRate.updateMany(
+      { dairyOwnerId, milkType, isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    const newRate = await DairyDefaultRate.create({
+      dairyOwnerId,
+      milkType,
+      baseRate: parseFloat(baseRate),
+      fatMultiplier: parseFloat(fatMultiplier),
+      snfMultiplier: parseFloat(snfMultiplier),
+      bonusPerLiter: parseFloat(bonusPerLiter),
+      deductionPerLiter: parseFloat(deductionPerLiter),
+      effectiveFrom: new Date(effectiveFrom),
+      isActive: true,
+      createdBy: dairyOwnerId,
+      updatedBy: dairyOwnerId
+    });
+
+    res.status(201).json({ success: true, rate: newRate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/farmer-collections/next-number', async (req, res, next) => {
+  try {
+    const ownerId = req.user._id;
+    const dateStr = req.query.date || new Date().toISOString().split('T')[0];
+    const formattedDate = dateStr.replace(/-/g, '');
+    const count = await FarmerCollection.countDocuments({ ownerId, date: dateStr });
+    const seq = String(count + 1).padStart(4, '0');
+    const nextNum = `COL-${formattedDate}-${seq}`;
+    res.json({ nextNumber: nextNum });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/farmer-collections', async (req, res, next) => {
+  const mongoose = require('mongoose');
+  let session = null;
+  let useTransaction = false;
+
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+    useTransaction = true;
+  } catch (e) {
+    if (session) {
+      session.endSession();
+      session = null;
+    }
+  }
+
+  try {
+    const ownerId = req.user._id;
+    const {
+      farmerId,
+      date,
+      time,
+      shift,
+      milkType,
+      quantity,
+      fat,
+      snf,
+      clr,
+      ratePerLiter,
+      baseRate,
+      fatValue,
+      snfValue,
+      grossAmount,
+      bonusAmount,
+      deductionAmount,
+      netAmount,
+      notes
+    } = req.body;
+
+    const opt = useTransaction ? { session } : {};
+
+    if (!farmerId || !date || !time || !shift || !milkType || !quantity || !ratePerLiter || netAmount === undefined) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(400).json({ error: 'All required collection details must be provided.' });
+    }
+
+    const formattedDate = date.replace(/-/g, '');
+    const count = await FarmerCollection.countDocuments({ ownerId, date }).session(useTransaction ? session : null);
+    const seq = String(count + 1).padStart(4, '0');
+    const collectionNumber = `COL-${formattedDate}-${seq}`;
+
+    const farmer = await Farmer.findOne({ _id: farmerId, ownerId }).session(useTransaction ? session : null);
+    if (!farmer) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(404).json({ error: 'Farmer not found.' });
+    }
+
+    const newCollection = new FarmerCollection({
+      ownerId,
+      dairyOwnerId: ownerId,
+      collectionNumber,
+      farmerId,
+      supplierId: farmerId,
+      date,
+      collectionDate: date,
+      time,
+      collectionTime: time,
+      shift,
+      milkType,
+      quantity: parseFloat(quantity),
+      fat: parseFloat(fat),
+      snf: parseFloat(snf),
+      clr: clr ? parseFloat(clr) : null,
+      ratePerLiter: parseFloat(ratePerLiter),
+      baseRate: baseRate ? parseFloat(baseRate) : 0,
+      fatValue: fatValue ? parseFloat(fatValue) : 0,
+      snfValue: snfValue ? parseFloat(snfValue) : 0,
+      grossAmount: parseFloat(grossAmount),
+      bonusAmount: parseFloat(bonusAmount),
+      deductionAmount: parseFloat(deductionAmount),
+      netAmount: parseFloat(netAmount),
+      notes: notes || '',
+      collectedBy: ownerId
+    });
+
+    await newCollection.save(opt);
+
+    await Farmer.updateOne(
+      { _id: farmerId, ownerId },
+      { $inc: { balance: parseFloat(netAmount) } },
+      opt
+    );
+
+    if (useTransaction) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+
+    res.status(201).json({ success: true, collection: newCollection });
+  } catch (err) {
+    if (useTransaction && session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+    next(err);
+  }
+});
+
+router.post('/farmer-collections/send-whatsapp', async (req, res, next) => {
+  try {
+    const { collectionId } = req.body;
+    if (!collectionId) {
+      return res.status(400).json({ error: 'collectionId is required.' });
+    }
+    const ownerId = req.user._id;
+    const coll = await FarmerCollection.findOne({ _id: collectionId, ownerId }).populate('farmerId');
+    if (!coll) {
+      return res.status(404).json({ error: 'Collection record not found.' });
+    }
+
+    const { sendMessage } = require('../services/whatsappService');
+    const farmer = coll.farmerId;
+    
+    // Formatting currency in Rupee symbol
+    const msg = `*Amrit Dairy Milk Collection Receipt*\n\n` +
+                `Receipt No: ${coll.collectionNumber}\n` +
+                `Date: ${coll.date} (${coll.shift === 'Morning' ? 'सकाळ' : 'संध्याकाळ'})\n` +
+                `Farmer: ${farmer.name} (${farmer.customerCode || 'N/A'})\n` +
+                `Milk Type: ${coll.milkType === 'Cow' ? 'गाय' : coll.milkType === 'Buffalo' ? 'म्हैस' : 'मिश्रित'}\n` +
+                `Qty: ${coll.quantity.toFixed(2)} L\n` +
+                `FAT: ${coll.fat.toFixed(2)}% | SNF: ${coll.snf.toFixed(2)}%\n` +
+                `Rate: ₹${coll.ratePerLiter.toFixed(2)}/L\n` +
+                `*Net Amount: ₹${coll.netAmount.toFixed(2)}*\n\n` +
+                `Thank you for delivering milk!`;
+
+    await sendMessage(ownerId.toString(), farmer.phone, msg);
+    res.json({ success: true, message: 'Receipt sent successfully via WhatsApp.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/owner/feedback ──────────────────────────────────
+router.post('/feedback', async (req, res, next) => {
+  try {
+    const { category, message, rating } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: 'Feedback message is required.' });
+    }
+
+    const Feedback = require('../models/Feedback');
+    const feedback = await Feedback.create({
+      ownerId: req.user._id,
+      category,
+      message,
+      rating
+    });
+
+    res.status(201).json({ success: true, feedback, message: 'Feedback submitted successfully.' });
   } catch (err) {
     next(err);
   }

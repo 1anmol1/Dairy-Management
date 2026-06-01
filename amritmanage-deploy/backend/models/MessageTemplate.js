@@ -37,6 +37,11 @@ const messageTemplateSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  language: {
+    type: String,
+    enum: ['en', 'mr'],
+    default: 'en'
   }
 }, { timestamps: true });
 

@@ -1,27 +1,899 @@
 /**
- * Daily Collection — /app/owner/collection
- * Owner logs today's total milk collected and assigns quotas to each staff member.
- * Staff cannot deliver more than their assigned quota.
+ * Daily Collection Page
+ * Dynamically switches layout based on ownerRole:
+ * - dairy_owner: new 5-card detailed entry page (DailyCollectionDailyOwner)
+ * - milk_supplier / default: original intake & quota assignment page (DailyCollectionMilkSupplier)
  */
-import React, { useEffect, useState, useCallback } from 'react';
-import { Droplets, Save, RefreshCw, AlertCircle, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import {
+  Droplets,
+  Users,
+  Save,
+  Printer,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle,
+  AlertCircle,
+  FileText
+} from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
 import useWindowWidth from '../../hooks/useWindowWidth';
 import useThrottle from '../../hooks/useThrottle';
 import { useMarathi } from '../../i18n/marathi';
+import { useAuth } from '../../context/AuthContext';
+import { FarmerModal } from './Farmers';
 
-const DailyCollection = () => {
+// ── DAILY OWNER DETAILED 5-CARD LAYOUT ──────────────────────────────────────────
+const DailyCollectionDailyOwner = () => {
+  const toast = useToast();
+  const { isMarathi } = useMarathi();
+  const { user } = useAuth();
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
+
+  const getLocalDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Header State
+  const [date, setDate] = useState(getLocalDateStr);
+  const [time, setTime] = useState(() => new Date().toTimeString().split(' ')[0].substring(0, 5));
+  const [shift, setShift] = useState(() => {
+    const hour = new Date().getHours();
+    return hour < 14 ? 'Morning' : 'Evening';
+  });
+  const [centerName, setCenterName] = useState(() => localStorage.getItem('amrit_center_name') || '');
+  const [collectionNumber, setCollectionNumber] = useState('');
+
+  // Farmers List & Search State
+  const [farmers, setFarmers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFarmer, setSelectedFarmer] = useState(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [loadingFarmers, setLoadingFarmers] = useState(true);
+  const [showAddFarmerModal, setShowAddFarmerModal] = useState(false);
+  const [staffList, setStaffList] = useState([]);
+
+  // Milk Entry State
+  const [milkType, setMilkType] = useState('Cow');
+  const [quantity, setQuantity] = useState('');
+  const [fat, setFat] = useState('');
+  const [snf, setSnf] = useState('');
+  const [clr, setClr] = useState('');
+  const [notes, setNotes] = useState('');
+
+  // Pricing & Summary state
+  const [baseRate, setBaseRate] = useState(35);
+  const [fatBonus, setFatBonus] = useState(0);
+  const [snfBonus, setSnfBonus] = useState(0);
+  const [finalRate, setFinalRate] = useState(35);
+
+  const [grossAmount, setGrossAmount] = useState(0);
+  const [bonusAmount, setBonusAmount] = useState(0);
+  const [deductionAmount, setDeductionAmount] = useState(0);
+  const [netAmount, setNetAmount] = useState(0);
+  const [hasRateConfig, setHasRateConfig] = useState(true);
+
+  // History & Ledger
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [dairyRates, setDairyRates] = useState([]);
+
+  // Save State
+  const [saving, setSaving] = useState(false);
+  const [savedRecord, setSavedRecord] = useState(null);
+
+  // Ref for focus
+  const qtyInputRef = useRef(null);
+
+  // Fetch farmers on mount
+  useEffect(() => {
+    const fetchFarmers = async () => {
+      setLoadingFarmers(true);
+      try {
+        const { data } = await api.get('/owner/farmers', { params: { active: 'true', limit: 1000 } });
+        setFarmers(data.customers || []);
+      } catch (err) {
+        toast.error('Failed to load farmers list.');
+      } finally {
+        setLoadingFarmers(false);
+      }
+    };
+    const fetchStaff = async () => {
+      try {
+        const { data } = await api.get('/owner/staff');
+        setStaffList(data.staff || []);
+      } catch (err) { /* ignore */ }
+    };
+    fetchFarmers();
+    fetchStaff();
+  }, [toast]);
+
+  // Fetch dairy default rate rules when component mounts or changes
+  const fetchDairyRates = useCallback(async () => {
+    try {
+      const { data } = await api.get('/owner/dairy-default-rates');
+      if (data.configs) {
+        setDairyRates(data.configs);
+      }
+    } catch (err) {
+      console.error('Failed to load dairy rates:', err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDairyRates();
+  }, [fetchDairyRates]);
+
+  // Fetch next collection number
+  const fetchNextCollectionNumber = useCallback(async () => {
+    try {
+      const { data } = await api.get(`/owner/farmer-collections/next-number?date=${date}`);
+      setCollectionNumber(data.nextNumber);
+    } catch {
+      setCollectionNumber('COL-10001');
+    }
+  }, [date]);
+
+  useEffect(() => {
+    fetchNextCollectionNumber();
+  }, [fetchNextCollectionNumber]);
+
+  // Fetch selected farmer history
+  const fetchFarmerHistory = useCallback(async (farmerId) => {
+    if (!farmerId) return;
+    setLoadingHistory(true);
+    try {
+      const { data } = await api.get(`/owner/farmer-collections?farmerId=${farmerId}`);
+      setHistory(data.collections || []);
+    } catch (err) {
+      console.error('Failed to fetch farmer history:', err.message);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedFarmer) {
+      fetchFarmerHistory(selectedFarmer._id);
+    } else {
+      setHistory([]);
+    }
+  }, [selectedFarmer, fetchFarmerHistory]);
+
+  // Save center name to localStorage
+  const handleCenterNameChange = (val) => {
+    setCenterName(val);
+    localStorage.setItem('amrit_center_name', val);
+  };
+
+  // Farmer Search logic
+  const filteredFarmers = farmers.filter(f => {
+    const query = searchQuery.toLowerCase();
+    const idMatch = f.customerCode ? f.customerCode.toLowerCase().includes(query) : false;
+    const nameMatch = f.name ? f.name.toLowerCase().includes(query) : false;
+    const phoneMatch = f.phone ? f.phone.includes(query) : false;
+    return idMatch || nameMatch || phoneMatch;
+  });
+
+  const selectFarmer = (farmer) => {
+    setSelectedFarmer(farmer);
+    setSearchQuery('');
+    setShowSearchResults(false);
+    // Autofocus on quantity input
+    setTimeout(() => {
+      if (qtyInputRef.current) qtyInputRef.current.focus();
+    }, 100);
+  };
+
+  const clearFarmer = () => {
+    setSelectedFarmer(null);
+    setSavedRecord(null);
+  };
+
+  // Pricing calculations
+  useEffect(() => {
+    // Find active config for selected milkType
+    const activeRateConfig = dairyRates.find(r => r.milkType === milkType);
+    
+    if (!activeRateConfig) {
+      setHasRateConfig(false);
+      setBaseRate(0);
+      setFatBonus(0);
+      setSnfBonus(0);
+      setFinalRate(0);
+      setGrossAmount(0);
+      setBonusAmount(0);
+      setDeductionAmount(0);
+      setNetAmount(0);
+      return;
+    }
+
+    setHasRateConfig(true);
+    const bRate = activeRateConfig.baseRate;
+    const fMult = activeRateConfig.fatMultiplier;
+    const sMult = activeRateConfig.snfMultiplier;
+
+    const fVal = parseFloat(fat) || 0;
+    const sVal = parseFloat(snf) || 0;
+    const qVal = parseFloat(quantity) || 0;
+
+    const calculatedFatValue = fVal * fMult;
+    const calculatedSnfValue = sVal * sMult;
+
+    const calculatedFinalRate = Math.max(0, bRate + calculatedFatValue + calculatedSnfValue);
+    setBaseRate(bRate);
+    setFatBonus(calculatedFatValue); // fat value addition
+    setSnfBonus(calculatedSnfValue); // snf value addition
+    setFinalRate(calculatedFinalRate);
+
+    // Payment Summary Formulas
+    const gross = qVal * calculatedFinalRate;
+    const bonus = qVal * (activeRateConfig.bonusPerLiter || 0);
+    const deduction = qVal * (activeRateConfig.deductionPerLiter || 0);
+    const net = gross + bonus - deduction;
+
+    setGrossAmount(gross);
+    setBonusAmount(bonus);
+    setDeductionAmount(deduction);
+    setNetAmount(net);
+  }, [date, milkType, quantity, fat, snf, dairyRates]);
+
+  // Save transaction handler
+  const handleSave = async (isNew = false) => {
+    if (!selectedFarmer) {
+      toast.error(isMarathi ? 'कृपया शेतकरी निवडा.' : 'Please select a farmer.');
+      return;
+    }
+    if (!quantity || parseFloat(quantity) <= 0) {
+      toast.error(isMarathi ? 'कृपया वैध दूध गुणवत्ता/मात्रा टाका.' : 'Please enter a valid milk quantity.');
+      return;
+    }
+    if (!fat || parseFloat(fat) < 0 || parseFloat(fat) > 15) {
+      toast.error(isMarathi ? 'कृपया वैध फॅट % टाका (० ते १५).' : 'Please enter a valid FAT % (0 to 15).');
+      return;
+    }
+    if (!snf || parseFloat(snf) < 0 || parseFloat(snf) > 15) {
+      toast.error(isMarathi ? 'कृपया वैध एसएनएफ % टाका (० ते १५).' : 'Please enter a valid SNF % (0 to 15).');
+      return;
+    }
+
+    const activeRateConfig = dairyRates.find(r => r.milkType === milkType);
+    if (!activeRateConfig) {
+      toast.error(isMarathi ? 'कृपया प्रथम दर सेटिंग्स पानावर या दूध प्रकारासाठी दर मोजणीचे सूत्र सेट करा.' : 'Please configure pricing formulas for this milk type on the Default Rate page first.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        farmerId: selectedFarmer._id,
+        date,
+        time,
+        shift,
+        milkType,
+        quantity: parseFloat(quantity),
+        fat: parseFloat(fat),
+        snf: parseFloat(snf),
+        clr: clr ? parseFloat(clr) : undefined,
+        ratePerLiter: finalRate,
+        baseRate: activeRateConfig.baseRate,
+        fatValue: parseFloat(fat || 0) * activeRateConfig.fatMultiplier,
+        snfValue: parseFloat(snf || 0) * activeRateConfig.snfMultiplier,
+        grossAmount,
+        bonusAmount,
+        deductionAmount,
+        netAmount,
+        notes: notes.trim()
+      };
+
+      const { data } = await api.post('/owner/farmer-collections', payload);
+      toast.success(isMarathi ? 'दूध संकलन यशस्वीरित्या जतन केले!' : 'Milk collection saved successfully!');
+      
+      // Update running farmer balance locally
+      setSelectedFarmer(prev => ({
+        ...prev,
+        balance: prev.balance + netAmount
+      }));
+
+      setSavedRecord(data.collection);
+      fetchFarmerHistory(selectedFarmer._id);
+      fetchNextCollectionNumber();
+
+      if (isNew) {
+        // Clear forms except center and operator
+        setQuantity('');
+        setFat('');
+        setSnf('');
+        setClr('');
+        setNotes('');
+        setSelectedFarmer(null);
+        setSavedRecord(null);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save collection.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Print Receipt handler
+  const handlePrint = () => {
+    if (!savedRecord && !selectedFarmer) return;
+    const printContent = `
+      ===================================
+             AMRIT DAIRY COLLECTION      
+      ===================================
+      Receipt No   : ${savedRecord ? savedRecord.collectionNumber : collectionNumber}
+      Date         : ${date} (${shift === 'Morning' ? 'MORNING' : 'EVENING'})
+      Center       : ${centerName || 'Main Center'}
+      Operator     : ${user?.name || 'Operator'}
+      -----------------------------------
+      Farmer ID    : ${selectedFarmer.customerCode || 'N/A'}
+      Farmer Name  : ${selectedFarmer.name}
+      Mobile       : ${selectedFarmer.phone}
+      -----------------------------------
+      Milk Type    : ${milkType}
+      Quantity     : ${quantity} Liters
+      FAT %        : ${fat}%
+      SNF %        : ${snf}%
+      CLR          : ${clr || 'N/A'}
+      -----------------------------------
+      Base Rate    : Rs. ${baseRate.toFixed(2)}/L
+      Bonus        : Rs. ${bonusAmount.toFixed(2)}
+      Deductions   : Rs. ${deductionAmount.toFixed(2)}
+      Final Rate   : Rs. ${finalRate.toFixed(2)}/L
+      -----------------------------------
+      NET AMOUNT   : Rs. ${netAmount.toFixed(2)}
+      ===================================
+      Thank you for your delivery!
+    `;
+    const win = window.open('', '_blank');
+    win.document.write(`<pre style="font-family: monospace; font-size: 14px; padding: 20px;">${printContent}</pre>`);
+    win.document.close();
+    win.print();
+  };
+
+  // WhatsApp receipt sender
+  const [sendingWa, setSendingWa] = useState(false);
+  const handleSendWhatsApp = async () => {
+    if (!savedRecord) {
+      toast.error(isMarathi ? 'कृपया संदेश पाठवण्यापूर्वी आधी संकलन जतन करा.' : 'Please save the collection before sending WhatsApp.');
+      return;
+    }
+    setSendingWa(true);
+    try {
+      await api.post('/owner/farmer-collections/send-whatsapp', { collectionId: savedRecord._id });
+      toast.success(isMarathi ? 'व्हाट्सएप पावती यशस्वीरित्या पाठवली!' : 'WhatsApp receipt sent successfully!');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send WhatsApp message.');
+    } finally {
+      setSendingWa(false);
+    }
+  };
+
+  const formattedAmount = (val) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
+  };
+
+  return (
+    <div style={{ maxWidth: '100%', paddingBottom: isMobile ? '80px' : '24px' }}>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{isMarathi ? 'दूध संकलन नोंदणी' : 'Milk Collection Entry'}</h1>
+          <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
+            {isMarathi ? 'शेतकऱ्यांकडून दूध संकलनाची जलद नोंदणी आणि हिशोब' : 'Fast recording and calculations for farmer milk collection'}
+          </div>
+        </div>
+      </div>
+
+      <div className="page-body" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 0.8fr', gap: '20px' }}>
+        
+        {/* Left Column - Form & Inputs */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          {/* Card 1: Page Header Card */}
+          <div className="card">
+            <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={16} color="#0F62FE" /> {isMarathi ? '१. संकलन केंद्र माहिती' : '1. Collection Information'}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <label className="input-label">{isMarathi ? 'संकलन दिनांक' : 'Collection Date'}</label>
+                <input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} />
+              </div>
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <label className="input-label">{isMarathi ? 'वेळ' : 'Time'}</label>
+                <input type="time" className="input" value={time} onChange={e => setTime(e.target.value)} />
+              </div>
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <label className="input-label">{isMarathi ? 'सत्र (शिफ्ट)' : 'Shift'}</label>
+                <select className="input" value={shift} onChange={e => setShift(e.target.value)}>
+                  <option value="Morning">{isMarathi ? 'Morning (सकाळ)' : 'Morning'}</option>
+                  <option value="Evening">{isMarathi ? 'Evening (संध्याकाळ)' : 'Evening'}</option>
+                </select>
+              </div>
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <label className="input-label">{isMarathi ? 'संकलन केंद्र' : 'Collection Center'}</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder={isMarathi ? 'उदा. केंद्र १' : 'e.g. Center 1'}
+                  value={centerName}
+                  onChange={e => handleCenterNameChange(e.target.value)}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px', borderTop: '1px dashed #E0E0E0', paddingTop: '12px', fontSize: '13px', color: '#525252' }}>
+              <div>
+                <strong>{isMarathi ? 'संकलन ऑपरेटर: ' : 'Operator: '}</strong>
+                {user?.name || 'Operator'}
+              </div>
+              <div>
+                <strong>{isMarathi ? 'संकलन क्रमांक: ' : 'Collection Number: '}</strong>
+                <span style={{ color: '#0F62FE', fontWeight: 700 }}>{collectionNumber || 'COL-10001'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Farmer Information Card */}
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontWeight: 700, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <Users size={16} color="#0F62FE" /> {isMarathi ? '२. शेतकरी निवड' : '2. Farmer Information'}
+              </h3>
+              {!selectedFarmer && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setShowAddFarmerModal(true)}
+                  style={{ height: '32px', padding: '0 12px', fontSize: '12px' }}
+                >
+                  <Plus size={14} /> {isMarathi ? 'शेतकरी जोडा' : 'Add Farmer'}
+                </button>
+              )}
+            </div>
+            
+            {!selectedFarmer ? (
+              <div style={{ position: 'relative' }}>
+                <div className="input-group" style={{ marginBottom: 0 }}>
+                  <label className="input-label">{isMarathi ? 'शेतकरी शोधा (नाव / मोबाईल नंबर / आयडी)' : 'Search Farmer (Name / Phone / ID)'}</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="input"
+                      style={{ paddingLeft: '36px' }}
+                      placeholder={isMarathi ? 'शोधा...' : 'Search...'}
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setShowSearchResults(true); }}
+                      onFocus={() => setShowSearchResults(true)}
+                    />
+                    <Search size={16} color="#8D8D8D" style={{ position: 'absolute', left: '12px', top: '14px' }} />
+                  </div>
+                </div>
+
+                {showSearchResults && searchQuery && (
+                  <div style={{
+                    position: 'absolute', top: '56px', left: 0, right: 0,
+                    backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0',
+                    maxHeight: '220px', overflowY: 'auto', zIndex: 10,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                  }}>
+                    {loadingFarmers ? (
+                      <div style={{ padding: '12px', textAlign: 'center', color: '#8D8D8D' }}>Loading farmers...</div>
+                    ) : filteredFarmers.length === 0 ? (
+                      <div style={{ padding: '12px', textAlign: 'center', color: '#8D8D8D' }}>No farmers found.</div>
+                    ) : (
+                      filteredFarmers.map(f => (
+                        <div
+                          key={f._id}
+                          style={{ padding: '10px 12px', borderBottom: '1px solid #F4F4F4', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                          onClick={() => selectFarmer(f)}
+                          className="search-item-hover"
+                        >
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '13px' }}>{f.name}</div>
+                            <div style={{ fontSize: '11px', color: '#8D8D8D' }}>{f.phone} {f.address ? `| ${f.address}` : ''}</div>
+                          </div>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#0F62FE', backgroundColor: '#EDF5FF', padding: '2px 6px' }}>
+                            {f.customerCode || 'N/A'}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#EDF5FF', border: '1.5px solid #0F62FE', padding: '12px 16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '16px', width: '85%' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#0043CE' }}>{isMarathi ? 'शेतकरी आयडी' : 'Farmer ID'}</div>
+                    <div style={{ fontWeight: 700 }}>{selectedFarmer.customerCode || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#0043CE' }}>{isMarathi ? 'शेतकरी नाव' : 'Farmer Name'}</div>
+                    <div style={{ fontWeight: 700 }}>{selectedFarmer.name}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#0043CE' }}>{isMarathi ? 'मोबाईल नंबर' : 'Mobile Number'}</div>
+                    <div style={{ fontWeight: 700 }}>{selectedFarmer.phone}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#0043CE' }}>{isMarathi ? 'गाव / पत्ता' : 'Village / Address'}</div>
+                    <div style={{ fontWeight: 700 }}>{selectedFarmer.address || 'N/A'}</div>
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={clearFarmer} style={{ color: '#DA1E28' }}>
+                  {isMarathi ? 'बदला' : 'Change'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Card 3: Milk Entry Card */}
+          <div className="card">
+            <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Droplets size={16} color="#0F62FE" /> {isMarathi ? '३. दूध संकलन नोंदी' : '3. Milk Collection Entry'}
+            </h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '16px' }}>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'दूध प्रकार' : 'Milk Type'}</label>
+                <select className="input" value={milkType} onChange={e => setMilkType(e.target.value)}>
+                  <option value="Cow">{isMarathi ? 'Cow (गाय)' : 'Cow'}</option>
+                  <option value="Buffalo">{isMarathi ? 'Buffalo (म्हैस)' : 'Buffalo'}</option>
+                  <option value="Mixed">{isMarathi ? 'Mixed (मिश्रित)' : 'Mixed'}</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'मात्रा (लिटर) *' : 'Quantity (Liters) *'}</label>
+                <input
+                  type="number" step="0.01" className="input" ref={qtyInputRef}
+                  placeholder="0.00" value={quantity} onChange={e => setQuantity(e.target.value)}
+                />
+              </div>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'फॅट % (FAT) *' : 'FAT % *'}</label>
+                <input
+                  type="number" step="0.01" className="input"
+                  placeholder="0.00" value={fat} onChange={e => setFat(e.target.value)}
+                />
+              </div>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'एसएनएफ % (SNF) *' : 'SNF % *'}</label>
+                <input
+                  type="number" step="0.01" className="input"
+                  placeholder="0.00" value={snf} onChange={e => setSnf(e.target.value)}
+                />
+              </div>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'सीएलआर (CLR)' : 'CLR (Optional)'}</label>
+                <input
+                  type="number" className="input"
+                  placeholder="0" value={clr} onChange={e => setClr(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 8: Notes Section */}
+          <div className="card">
+            <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '12px' }}>{isMarathi ? '४. नोंदी / शेरा' : '4. Notes & Remarks'}</h3>
+            <textarea
+              className="input"
+              rows={3}
+              placeholder={isMarathi ? 'उदा. दूध दर्जा समस्या, हाताने सुधारित दर इत्यादी...' : 'e.g. Manual correction, milk quality issues...'}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              style={{ fontFamily: 'inherit', resize: 'vertical' }}
+            />
+          </div>
+
+          {/* Card 6: Collection History Card (10 entries table) */}
+          {selectedFarmer && (
+            <div className="card" style={{ marginTop: '12px' }}>
+              <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '16px' }}>
+                {isMarathi ? `शेतकरी पावती इतिहास (${selectedFarmer.name})` : `Collection History (${selectedFarmer.name})`}
+              </h3>
+
+              {loadingHistory ? (
+                <div style={{ padding: '24px', textAlign: 'center' }}>
+                  <div className="spinner" style={{ margin: 'auto' }} />
+                </div>
+              ) : history.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#8D8D8D' }}>
+                  {isMarathi ? 'या शेतकऱ्यासाठी अद्याप कोणतीही संकलन नोंदणी नाही.' : 'No recent milk collection entries for this farmer.'}
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{isMarathi ? 'संकलन क्रमांक' : 'Receipt No'}</th>
+                          <th>{isMarathi ? 'दिनांक' : 'Date'}</th>
+                          <th>{isMarathi ? 'सत्र' : 'Shift'}</th>
+                          <th>{isMarathi ? 'प्रकार' : 'Milk Type'}</th>
+                          <th>{isMarathi ? 'मात्रा (L)' : 'Quantity (L)'}</th>
+                          <th>{isMarathi ? 'FAT %' : 'FAT %'}</th>
+                          <th>{isMarathi ? 'SNF %' : 'SNF %'}</th>
+                          <th>{isMarathi ? 'दर/L' : 'Rate/L'}</th>
+                          <th>{isMarathi ? 'निव्वळ रक्कम' : 'Net Amount'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map(h => (
+                          <tr key={h._id}>
+                            <td style={{ fontWeight: 700, color: '#0F62FE' }}>{h.collectionNumber}</td>
+                            <td>{h.date}</td>
+                            <td>
+                              <span className={`badge ${h.shift === 'Morning' ? 'badge-blue' : 'badge-orange'}`} style={{ fontSize: '10px' }}>
+                                {h.shift === 'Morning' ? (isMarathi ? 'सकाळ' : 'Morning') : (isMarathi ? 'संध्याकाळ' : 'Evening')}
+                              </span>
+                            </td>
+                            <td>{h.milkType === 'Cow' ? (isMarathi ? 'गाय' : 'Cow') : h.milkType === 'Buffalo' ? (isMarathi ? 'म्हैस' : 'Buffalo') : (isMarathi ? 'मिश्रित' : 'Mixed')}</td>
+                            <td>{h.quantity.toFixed(2)} L</td>
+                            <td>{h.fat.toFixed(2)}%</td>
+                            <td>{h.snf.toFixed(2)}%</td>
+                            <td>₹{h.ratePerLiter.toFixed(2)}</td>
+                            <td style={{ fontWeight: 700 }}>{formattedAmount(h.netAmount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+
+        {/* Right Column - Calculations, Summaries, History */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: isMobile ? 'static' : 'sticky', top: '24px', alignSelf: 'flex-start' }}>
+          
+          {/* Card 4: Automatic Rate Calculation */}
+          <div className="card" style={{ borderLeft: '4px solid #8A3FFC' }}>
+            <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '16px', color: '#8A3FFC' }}>
+              {isMarathi ? 'दर गणित (प्रति लिटर)' : 'Automatic Rate Calculation'}
+            </h3>
+            {hasRateConfig ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E0E0E0', paddingBottom: '6px' }}>
+                  <span>{isMarathi ? 'मूळ दर' : 'Base Rate'}</span>
+                  <strong style={{ color: '#161616' }}>₹{baseRate.toFixed(2)}/L</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E0E0E0', paddingBottom: '6px' }}>
+                  <span>{isMarathi ? 'फॅट मूल्य वाढ' : 'FAT Value Addition'}</span>
+                  <span style={{ color: '#24A148', fontWeight: 700 }}>
+                    +₹{fatBonus.toFixed(2)}/L
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E0E0E0', paddingBottom: '6px' }}>
+                  <span>{isMarathi ? 'एसएनएफ मूल्य वाढ' : 'SNF Value Addition'}</span>
+                  <span style={{ color: '#24A148', fontWeight: 700 }}>
+                    +₹{snfBonus.toFixed(2)}/L
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px', fontSize: '16px' }}>
+                  <strong>{isMarathi ? 'अंतिम दर (प्रति लिटर)' : 'Final Rate Per Litre'}</strong>
+                  <strong style={{ color: '#8A3FFC', fontSize: '18px' }}>₹{finalRate.toFixed(2)}/L</strong>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E0E0E0', paddingBottom: '6px' }}>
+                  <span>{isMarathi ? 'मूळ दर' : 'Base Rate'}</span>
+                  <strong style={{ color: '#DA1E28' }}>{isMarathi ? 'डिफॉल्ट दर सेट नाही' : 'no default price set'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px', fontSize: '16px' }}>
+                  <strong>{isMarathi ? 'अंतिम दर (प्रति लिटर)' : 'Final Rate Per Litre'}</strong>
+                  <strong style={{ color: '#DA1E28', fontSize: '15px' }}>{isMarathi ? 'डिफॉल्ट दर सेट नाही' : 'no default price set'}</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 5: Payment Summary */}
+          <div className="card" style={{ borderLeft: '4px solid #0F62FE', backgroundColor: '#F4F7FF' }}>
+            <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '16px', color: '#0F62FE' }}>
+              {isMarathi ? 'पेमेंट सारांश' : 'Payment Summary'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{isMarathi ? 'मात्रा' : 'Quantity'}</span>
+                <span>{quantity ? parseFloat(quantity).toFixed(2) : '0.00'} L</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{isMarathi ? 'मूळ रक्कम (Gross)' : 'Gross Amount'}</span>
+                <span>{formattedAmount(grossAmount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#24A148' }}>
+                <span>{isMarathi ? 'एकूण बोनस' : 'Bonus Amount'}</span>
+                <span>+{formattedAmount(bonusAmount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#DA1E28' }}>
+                <span>{isMarathi ? 'एकूण वजावट' : 'Deduction Amount'}</span>
+                <span>-{formattedAmount(deductionAmount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #0F62FE', paddingTop: '10px', fontSize: '18px' }}>
+                <strong style={{ color: '#0F62FE' }}>{isMarathi ? 'निव्वळ देय रक्कम' : 'Net Payable Amount'}</strong>
+                <strong style={{ color: '#0F62FE' }}>{formattedAmount(netAmount)}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 7: Farmer Ledger Summary */}
+          {selectedFarmer && (
+            <div className="card" style={{ borderLeft: '4px solid #FF832B' }}>
+              <h3 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '16px', color: '#FF832B' }}>
+                {isMarathi ? 'शेतकरी खाते सारांश' : 'Farmer Ledger Summary'}
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E0E0E0', paddingBottom: '6px' }}>
+                  <span>{isMarathi ? 'मागील शिल्लक' : 'Previous Balance'}</span>
+                  <strong style={{ color: selectedFarmer.balance >= 0 ? '#24A148' : '#DA1E28' }}>
+                    {formattedAmount(selectedFarmer.balance)}
+                  </strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E0E0E0', paddingBottom: '6px' }}>
+                  <span>{isMarathi ? 'चालू संकलन रक्कम' : 'Current Collection'}</span>
+                  <strong>{formattedAmount(netAmount)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px', fontSize: '15px' }}>
+                  <strong>{isMarathi ? 'एकूण देय रक्कम' : 'Total Outstanding'}</strong>
+                  <strong style={{ color: '#161616' }}>{formattedAmount(selectedFarmer.balance + netAmount)}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Card 9: Actions Section */}
+          <div className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                className="btn btn-primary" style={{ flex: 1, height: '48px', fontSize: '15px' }}
+                onClick={() => handleSave(false)} disabled={saving || !selectedFarmer}
+              >
+                {saving ? (
+                  <div className="spinner" style={{ width: '18px', height: '18px' }} />
+                ) : (
+                  <><Save size={16} /> {isMarathi ? 'संकलन जतन करा' : 'Save Collection'}</>
+                )}
+              </button>
+              
+              <button
+                className="btn btn-ghost" style={{ flex: 1, height: '48px', border: '1px solid #0F62FE', color: '#0F62FE', fontSize: '15px' }}
+                onClick={() => handleSave(true)} disabled={saving || !selectedFarmer}
+              >
+                <Plus size={16} /> {isMarathi ? 'जतन करा व नवीन' : 'Save & New'}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                className="btn btn-ghost" style={{ flex: 1, border: '1px solid #525252', color: '#525252' }}
+                onClick={handlePrint} disabled={!selectedFarmer}
+              >
+                <Printer size={16} /> {isMarathi ? 'पावती प्रिंट करा' : 'Print Receipt'}
+              </button>
+              
+              <button
+                className="btn btn-ghost" style={{ flex: 1, border: '1px solid #24A148', color: '#24A148', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                onClick={handleSendWhatsApp} disabled={!savedRecord || sendingWa}
+              >
+                {sendingWa ? (
+                  <div className="spinner" style={{ width: '14px', height: '14px' }} />
+                ) : (
+                  <><MessageSquare size={16} /> {isMarathi ? 'व्हॉट्सॲप पावती' : 'WhatsApp Receipt'}</>
+                )}
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      {showAddFarmerModal && (
+        <FarmerModal
+          farmer={null}
+          onClose={() => setShowAddFarmerModal(false)}
+          onSaved={async () => {
+            // Re-fetch farmers
+            try {
+              const { data } = await api.get('/owner/farmers', { params: { active: 'true', limit: 1000 } });
+              setFarmers(data.customers || []);
+              toast.success(isMarathi ? 'नवीन शेतकरी यशस्वीरित्या जोडला गेला!' : 'New farmer added successfully!');
+            } catch (err) { /* ignore */ }
+          }}
+        />
+      )}
+
+      {/* Mobile Sticky Bottom Bar */}
+      {isMobile && selectedFarmer && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: '#FFFFFF',
+          boxShadow: '0 -4px 12px rgba(0,0,0,0.15)',
+          padding: '12px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          zIndex: 999,
+          borderTop: '1px solid #E0E0E0'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '11px', color: '#6F6F6F', fontWeight: 500 }}>
+              {milkType === 'Cow' ? (isMarathi ? 'गाय' : 'Cow') : milkType === 'Buffalo' ? (isMarathi ? 'म्हैस' : 'Buffalo') : (isMarathi ? 'मिश्रित' : 'Mixed')} {quantity ? `${parseFloat(quantity).toFixed(2)}L` : ''}
+            </span>
+            <span style={{ fontSize: '18px', fontWeight: 700, color: '#0F62FE' }}>
+              {formattedAmount(netAmount)}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn btn-ghost"
+              onClick={() => handleSave(true)}
+              disabled={saving}
+              style={{ height: '40px', padding: '0 12px', border: '1px solid #0F62FE', color: '#0F62FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Plus size={16} />
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              style={{ height: '40px', padding: '0 20px', fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              {saving ? <div className="spinner" style={{ width: '14px', height: '14px' }} /> : <><Save size={14} /> {isMarathi ? 'जतन' : 'Save'}</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── ORIGINAL MILK SUPPLIER / GENERAL DAILY COLLECTION ──────────────────────────
+const DailyCollectionMilkSupplier = () => {
   const toast = useToast();
   const { isMarathi } = useMarathi();
   const L = isMarathi ? 'ली.' : 'L';
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
-  const [expandedId, setExpandedId] = useState(null);
 
-  // Date navigation
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  // Safe date helper functions
+  const toDateStr = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split('-');
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  };
+
+  const [date, setDate] = useState(() => toDateStr(new Date()));
   const [collection, setCollection] = useState(null);
   const [staff, setStaff] = useState([]);
   const [deliveredByStaff, setDeliveredByStaff] = useState({});
@@ -67,9 +939,11 @@ const DailyCollection = () => {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, toast]);
 
-  useEffect(() => { fetchCollection(); }, [fetchCollection]);
+  useEffect(() => {
+    fetchCollection();
+  }, [fetchCollection]);
 
   const throttledRefresh = useThrottle(fetchCollection);
 
@@ -115,13 +989,13 @@ const DailyCollection = () => {
   };
 
   const shiftDate = (days) => {
-    const d = new Date(date);
+    const d = parseLocalDate(date);
     d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(toDateStr(d));
   };
 
-  const isToday = date === new Date().toISOString().split('T')[0];
-  const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-IN', {
+  const isToday = date === toDateStr(new Date());
+  const displayDate = parseLocalDate(date).toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
 
@@ -519,6 +1393,25 @@ const DailyCollection = () => {
       </div>
     </div>
   );
+};
+
+// ── MAIN ENTRY SWITCHER ─────────────────────────────────────────────────────────
+const DailyCollection = () => {
+  const { user } = useAuth();
+
+  if (!user) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <div className="spinner" style={{ margin: 'auto' }} />
+      </div>
+    );
+  }
+
+  if (user.ownerRole === 'dairy_owner') {
+    return <DailyCollectionDailyOwner />;
+  }
+
+  return <DailyCollectionMilkSupplier />;
 };
 
 export default DailyCollection;

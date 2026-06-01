@@ -173,6 +173,51 @@ const Requests = () => {
                           }}>
                             {req.plan} — {req.billingCycle === 'yearly' ? '12 mo' : `${req.months} mo`}
                           </span>
+
+                          {req.isRenewal ? (
+                            <span style={{
+                              fontSize: '11px', fontWeight: 700, padding: '2px 8px',
+                              backgroundColor: '#EDF5FF',
+                              color: '#0043CE',
+                              border: '1px solid rgba(15,98,254,0.3)',
+                              textTransform: 'capitalize'
+                            }}>
+                              🔄 Renewal
+                            </span>
+                          ) : (
+                            <span style={{
+                              fontSize: '11px', fontWeight: 700, padding: '2px 8px',
+                              backgroundColor: '#E5F6FF',
+                              color: '#0053DE',
+                              border: '1px solid rgba(0,83,222,0.3)',
+                              textTransform: 'capitalize'
+                            }}>
+                              🌱 New Purchase
+                            </span>
+                          )}
+
+                          {req.isRenewal && req.changeType && (
+                            <span style={{
+                              fontSize: '11px', fontWeight: 700, padding: '2px 8px',
+                              backgroundColor: req.changeType === 'upgrade' ? '#DEFBE6' : req.changeType === 'downgrade' ? '#FFF1F1' : '#F4F4F4',
+                              color: req.changeType === 'upgrade' ? '#0E6027' : req.changeType === 'downgrade' ? '#DA1E28' : '#525252',
+                              border: `1px solid ${req.changeType === 'upgrade' ? '#24A148' : req.changeType === 'downgrade' ? '#DA1E28' : '#E0E0E0'}`,
+                              textTransform: 'capitalize'
+                            }}>
+                              {req.changeType === 'upgrade' ? '📈 Upgrade' : req.changeType === 'downgrade' ? '📉 Downgrade' : '⚖️ Same Plan'} 
+                              {req.currentPlan && ` (from ${req.currentPlan})`}
+                            </span>
+                          )}
+
+                          <span style={{
+                            fontSize: '11px', fontWeight: 700, padding: '2px 8px',
+                            backgroundColor: req.source === 'ads_landing' ? '#FFF3E0' : '#F4F4F4',
+                            color: req.source === 'ads_landing' ? '#E65100' : '#525252',
+                            border: `1px solid ${req.source === 'ads_landing' ? '#FFB74D' : '#E0E0E0'}`,
+                            textTransform: 'uppercase'
+                          }}>
+                            {req.source === 'ads_landing' ? '📢 Ads Landing' : `Source: ${req.source || 'organic'}`}
+                          </span>
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '6px', fontSize: '13px', color: '#525252' }}>
@@ -232,6 +277,7 @@ const Requests = () => {
                                 plan:         req.plan         || 'gold',
                                 billingCycle: req.billingCycle || 'monthly',
                                 months:       req.months       || 1,
+                                source:       req.source       || 'organic',
                                 _requestId:   req._id
                               });
                             }}

@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Multi-Device Linker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary-color: #10b981;
+      --primary-hover: #059669;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --error-color: #ef4444;
+      --warning-color: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-gradient);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--text-main);
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 500px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.05) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .content-wrapper {
+      position: relative;
+      z-index: 1;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo-container {
+      width: 64px;
+      height: 64px;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .logo-icon {
+      color: var(--primary-color);
+      width: 32px;
+      height: 32px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #ffffff 0%, #a7f3d0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      color: var(--text-muted);
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    input {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-size: 16px;
+      color: var(--text-main);
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    .input-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .btn {
+      width: 100%;
+      background: var(--primary-color);
+      color: #0f172a;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(15, 23, 42, 0.1);
+      border-top-color: #0f172a;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .status-card {
+      margin-top: 28px;
+      border-radius: 16px;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--border-color);
+      display: none;
+      animation: fadeIn 0.4s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .status-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .timer {
+      font-size: 12px;
+      color: var(--warning-color);
+      font-weight: 600;
+      background: rgba(245, 158, 11, 0.1);
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .code-display {
+      font-family: 'Outfit', monospace;
+      font-size: 36px;
+      letter-spacing: 0.15em;
+      text-align: center;
+      font-weight: 700;
+      margin: 16px 0;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.05);
+      border: 1px dashed rgba(56, 189, 248, 0.3);
+      padding: 16px;
+      border-radius: 12px;
+      text-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+
+    .instruction {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .instruction ol {
+      padding-left: 18px;
+      margin-top: 8px;
+    }
+
+    .instruction li {
+      margin-bottom: 6px;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .alert-danger {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    .alert-success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #a7f3d0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="content-wrapper">
+      <div class="header">
+        <div class="logo-container">
+          <svg class="logo-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+        <h1>WhatsApp Linker</h1>
+        <p class="subtitle">Link your WhatsApp account via Pairing Code without scan. Optimized for shared web hosting.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <div class="input-wrapper">
+          <input type="tel" id="phone" placeholder="919876543210" autocomplete="off">
+        </div>
+        <div class="input-hint">Include country code, digits only (e.g. 91 for India, 1 for US)</div>
+      </div>
+
+      <button id="get-code-btn" class="btn">
+        <span class="spinner" id="btn-spinner"></span>
+        <span id="btn-text">Request Pairing Code</span>
+      </button>
+
+      <div id="alert-danger" class="alert alert-danger"></div>
+      <div id="alert-success" class="alert alert-success"></div>
+
+      <div id="status-card" class="status-card">
+        <div class="status-header">
+          <span class="status-title" id="status-state">Fetching pairing code...</span>
+          <span class="timer" id="countdown-timer">90s</span>
+        </div>
+        
+        <div id="code-box" style="display: none;">
+          <div class="code-display" id="pairing-code">---- ----</div>
+        </div>
+
+        <div class="instruction" id="instructions-box">
+          <strong>How to link:</strong>
+          <ol>
+            <li>Open WhatsApp on your mobile phone.</li>
+            <li>Go to <strong>Settings</strong> > <strong>Linked Devices</strong>.</li>
+            <li>Tap on <strong>Link a Device</strong>, then choose <strong>Link with phone number instead</strong>.</li>
+            <li>Enter the pairing code shown above on your phone.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const phoneInput = document.getElementById('phone');
+    const getCodeBtn = document.getElementById('get-code-btn');
+    const btnSpinner = document.getElementById('btn-spinner');
+    const btnText = document.getElementById('btn-text');
+    const statusCard = document.getElementById('status-card');
+    const statusState = document.getElementById('status-state');
+    const countdownTimer = document.getElementById('countdown-timer');
+    const codeBox = document.getElementById('code-box');
+    const pairingCode = document.getElementById('pairing-code');
+    const instructionsBox = document.getElementById('instructions-box');
+    const alertDanger = document.getElementById('alert-danger');
+    const alertSuccess = document.getElementById('alert-success');
+
+    let pollInterval = null;
+    let countdownInterval = null;
+    let timerValue = 90;
+    let currentJobId = null;
+    let buttonCooldownInterval = null;
+    let buttonCooldownValue = 0;
+
+    // Reset UI State
+    function resetUIState() {
+      if (buttonCooldownValue <= 0) {
+        getCodeBtn.disabled = false;
+        btnText.textContent = 'Request Pairing Code';
+      }
+      btnSpinner.style.display = 'none';
+      clearInterval(pollInterval);
+      clearInterval(countdownInterval);
+    }
+
+    // Show error alert helper
+    function showError(message) {
+      alertDanger.textContent = message;
+      alertDanger.style.display = 'block';
+      alertSuccess.style.display = 'none';
+    }
+
+    // Show success alert helper
+    function showSuccess(message) {
+      alertSuccess.textContent = message;
+      alertSuccess.style.display = 'block';
+      alertDanger.style.display = 'none';
+    }
+
+    // Start Button Cooldown Timer
+    function startButtonCooldown(seconds) {
+      buttonCooldownValue = seconds;
+      getCodeBtn.disabled = true;
+      btnSpinner.style.display = 'none';
+      btnText.textContent = `Please wait ${buttonCooldownValue}s...`;
+      
+      clearInterval(buttonCooldownInterval);
+      buttonCooldownInterval = setInterval(() => {
+        buttonCooldownValue--;
+        if (buttonCooldownValue <= 0) {
+          clearInterval(buttonCooldownInterval);
+          getCodeBtn.disabled = false;
+          btnText.textContent = 'Request Pairing Code';
+        } else {
+          btnText.textContent = `Please wait ${buttonCooldownValue}s...`;
+        }
+      }, 1000);
+    }
+
+    // Start Countdown Timer (for pairing window safety)
+    function startCountdown() {
+      timerValue = 90;
+      countdownTimer.style.display = 'inline-block';
+      countdownTimer.textContent = `${timerValue}s`;
+      
+      clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        timerValue--;
+        countdownTimer.textContent = `${timerValue}s`;
+        if (timerValue <= 0) {
+          clearInterval(countdownInterval);
+          showError('Pairing process timed out. Please try again.');
+          resetUIState();
+        }
+      }, 1000);
+    }
+
+    // Poll status from server
+    function startPolling(jobId) {
+      clearInterval(pollInterval);
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/whatsapp/pairing-status/${jobId}`);
+          
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.message || 'Error tracking pairing code status.');
+          }
+
+          const data = await res.json();
+          
+          if (data.status === 'code_ready') {
+            statusState.textContent = 'Enter this code in WhatsApp:';
+            pairingCode.textContent = data.code;
+            codeBox.style.display = 'block';
+            instructionsBox.style.display = 'block';
+          } 
+          
+          else if (data.status === 'connected') {
+            clearInterval(pollInterval);
+            clearInterval(countdownInterval);
+            statusState.textContent = 'Successfully Connected!';
+            showSuccess('Your device is now linked and active! You can close this window.');
+            codeBox.style.display = 'none';
+            instructionsBox.style.display = 'none';
+            countdownTimer.style.display = 'none';
+            
+            // Clear button cooldown on successful connection
+            clearInterval(buttonCooldownInterval);
+            buttonCooldownValue = 0;
+            resetUIState();
+          } 
+          
+          else if (data.status === 'failed') {
+            clearInterval(pollInterval);
+            clearInterval(countdownInterval);
+            showError(data.error || 'Failed to generate pairing code. Please make sure the number is correct.');
+            statusCard.style.display = 'none';
+            
+            // Allow retry if connection failed completely
+            clearInterval(buttonCooldownInterval);
+            buttonCooldownValue = 0;
+            resetUIState();
+          } 
+          
+          else if (data.status === 'expired') {
+            clearInterval(pollInterval);
+            clearInterval(countdownInterval);
+            showError('Pairing code has expired. Please request a new one.');
+            statusCard.style.display = 'none';
+            
+            clearInterval(buttonCooldownInterval);
+            buttonCooldownValue = 0;
+            resetUIState();
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
+        }
+      }, 3000);
+    }
+
+    // Handle form submit
+    getCodeBtn.addEventListener('click', async () => {
+      if (buttonCooldownValue > 0) return;
+
+      const phone = phoneInput.value.replace(/\D/g, '');
+      if (!phone || phone.length < 8) {
+        showError('Please enter a valid phone number (minimum 8 digits, country code first).');
+        return;
+      }
+
+      // 1. Disable button immediately and show loading
+      getCodeBtn.disabled = true;
+      btnSpinner.style.display = 'inline-block';
+      btnText.textContent = 'Requesting...';
+      alertDanger.style.display = 'none';
+      alertSuccess.style.display = 'none';
+
+      // Show initial status card state
+      statusCard.style.display = 'block';
+      statusState.textContent = 'Initiating request...';
+      codeBox.style.display = 'none';
+      instructionsBox.style.display = 'none';
+      countdownTimer.style.display = 'none';
+
+      try {
+        const response = await fetch('/api/whatsapp/request-pairing', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ phone })
+        });
+
+        if (response.status === 429) {
+          const data = await response.json();
+          const retryAfter = data.retryAfter || 90;
+          startButtonCooldown(retryAfter);
+          throw new Error(data.message || `Too many requests. Please wait ${retryAfter} seconds before trying again.`);
+        }
+
+        const data = await response.json();
+        
+        if (response.status === 200 && data.status === 'connected') {
+          // Already connected
+          showSuccess('This device is already connected and active!');
+          statusCard.style.display = 'none';
+          resetUIState();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to request pairing.');
+        }
+
+        // Success: start cooldown, countdown & poll status
+        currentJobId = data.jobId;
+        statusState.textContent = 'Requesting pairing code from WhatsApp...';
+        startCountdown();
+        startPolling(currentJobId);
+        startButtonCooldown(90); // Disable requesting again for 90 seconds
+
+      } catch (err) {
+        showError(err.message);
+        statusCard.style.display = 'none';
+        if (buttonCooldownValue <= 0) {
+          resetUIState();
+        } else {
+          btnSpinner.style.display = 'none';
+        }
+      }
+    });
+  </script>
+</body>
+</html>

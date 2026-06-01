@@ -1,9 +1,10 @@
 /**
  * AdsLanding — /landing
  * Meta-ads optimised landing page. Bilingual (English / Marathi).
+ * Meta Pixel + CAPI tracking for ads_landing source ONLY.
  * Do NOT modify Landing.jsx — this is a separate ad-traffic page.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Check, Phone, CheckCircle, ShieldCheck,
@@ -15,6 +16,56 @@ import { useMarathi } from '../../i18n/marathi';
 import LanguageToggle from '../../i18n/marathi/LanguageToggle';
 import SiteFooter from '../../components/SiteFooter';
 import amritLogo from '../../assets/Amritmanagelogo.png';
+
+const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || '2219545345248014';
+
+// ── Meta Pixel helpers ────────────────────────────────────────
+// Only fire events on ads_landing page — never on landing.jsx
+
+const initPixel = () => {
+  if (typeof window === 'undefined') return;
+  if (window.fbq) return; // already loaded
+  /* eslint-disable */
+  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  /* eslint-enable */
+  window.fbq('init', PIXEL_ID);
+  window.fbq('track', 'PageView', {}, { eventID: crypto.randomUUID() });
+};
+
+const trackLead = (userData, eventId) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  window.fbq('track', 'Lead', {
+    em: userData.email || '',
+    ph: userData.phone || '',
+    fn: userData.firstName || '',
+  }, { eventID: eventId });
+};
+
+const trackCompleteRegistration = (userData, eventId) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  window.fbq('track', 'CompleteRegistration', {
+    em:      userData.email || '',
+    ph:      userData.phone || '',
+    fn:      userData.firstName || '',
+    ct:      userData.city || '',
+    st:      userData.state || '',
+    zp:      userData.zipCode || '',
+    country: 'IN',
+  }, { eventID: eventId });
+};
+
+// Read Meta attribution cookies
+const getMetaAttribution = () => {
+  if (typeof document === 'undefined') return {};
+  const getCookie = (name) => {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? match[2] : null;
+  };
+  return {
+    fbc: getCookie('_fbc'),
+    fbp: getCookie('_fbp'),
+  };
+};
 
 const INDIAN_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
@@ -29,6 +80,7 @@ const INDIAN_STATES = [
 // ── Multi-step lead form ──────────────────────────────────────
 const LeadForm = ({ utmParams, mr }) => {
   const [step, setStep] = useState(1);
+  const [leadId, setLeadId] = useState(null); // DB record ID from step 1
   const [form, setForm] = useState({
     name: '', phone: '', businessName: '',
     address: '', city: '', district: '', state: '', pincode: ''
@@ -68,11 +120,47 @@ const LeadForm = ({ utmParams, mr }) => {
     return e;
   };
 
-  const handleNext = (e) => {
+  const handleNext = async (e) => {
     e.preventDefault();
     const errs = validateStep1();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    setStep(2);
+    setLoading(true);
+    try {
+      // Generate unique event ID for Lead event (same ID used in browser + CAPI)
+      const leadEventId = crypto.randomUUID();
+      const { fbc, fbp } = getMetaAttribution();
+
+      // Fire browser Pixel Lead event
+      trackLead({
+        email:     '',
+        phone:     form.phone.trim(),
+        firstName: form.name.trim().split(' ')[0],
+      }, leadEventId);
+
+      // Save lead to DB + fire CAPI Lead event from backend
+      const { data } = await api.post('/payment/request-subscription', {
+        contactName:  form.name.trim(),
+        contactPhone: form.phone.trim(),
+        companyName:  form.businessName.trim(),
+        plan: 'gold', billingCycle: 'monthly', months: 1,
+        source: 'ads_landing',
+        leadEventId,
+        fbc,
+        fbp,
+        ...utmParams,
+      });
+
+      setLeadId(data.leadId || data.request?._id);
+      setStep(2);
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setStep(2); // still proceed to step 2
+      } else {
+        setErrors({ submit: err.response?.data?.error || mr('Something went wrong. Please try again.', 'काहीतरी चुकले. पुन्हा प्रयत्न करा.') });
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -81,18 +169,30 @@ const LeadForm = ({ utmParams, mr }) => {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true);
     try {
-      await api.post('/payment/request-subscription', {
-        contactName:  form.name.trim(),
-        contactPhone: form.phone.trim(),
-        companyName:  form.businessName.trim(),
-        address:      form.address.trim(),
-        city:         form.city.trim(),
-        district:     form.district.trim(),
-        state:        form.state,
-        pincode:      form.pincode.trim(),
-        plan: 'gold', billingCycle: 'monthly', months: 1,
-        ...utmParams
-      });
+      // Generate unique event ID for CompleteRegistration (different from Lead event ID)
+      const registrationEventId = crypto.randomUUID();
+
+      // Fire browser Pixel CompleteRegistration event
+      trackCompleteRegistration({
+        phone:     form.phone.trim(),
+        firstName: form.name.trim().split(' ')[0],
+        city:      form.city.trim(),
+        state:     form.state,
+        zipCode:   form.pincode.trim(),
+      }, registrationEventId);
+
+      // Update existing lead record with address + fire CAPI CompleteRegistration
+      if (leadId) {
+        await api.patch(`/payment/update-lead/${leadId}`, {
+          address:             form.address.trim(),
+          city:                form.city.trim(),
+          district:            form.district.trim(),
+          state:               form.state,
+          pincode:             form.pincode.trim(),
+          registrationEventId,
+        });
+      }
+
       setSubmitted(true);
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 403) {
@@ -199,7 +299,7 @@ const LeadForm = ({ utmParams, mr }) => {
               value={form.phone}
               inputMode="numeric"
               maxLength={10}
-              onChange={e => set('phone', e.target.value)}
+              onChange={e => set('phone', e.target.value.replace(/[^0-9]/g, ''))}
               style={inputStyle('phone')}
               autoComplete="tel"
             />
@@ -257,7 +357,7 @@ const LeadForm = ({ utmParams, mr }) => {
                 type="text"
                 placeholder={mr('Pune', 'पुणे')}
                 value={form.city}
-                onChange={e => set('city', e.target.value)}
+                onChange={e => set('city', e.target.value.replace(/[^a-zA-Z\u0900-\u097F\s]/g, ''))}
                 style={inputStyle('city')}
               />
               {errors.city && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{errors.city}</div>}
@@ -269,7 +369,7 @@ const LeadForm = ({ utmParams, mr }) => {
                 placeholder="411001"
                 value={form.pincode}
                 inputMode="numeric"
-                onChange={e => set('pincode', e.target.value)}
+                onChange={e => set('pincode', e.target.value.replace(/[^0-9]/g, ''))}
                 style={inputStyle('pincode')}
               />
               {errors.pincode && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{errors.pincode}</div>}
@@ -282,7 +382,7 @@ const LeadForm = ({ utmParams, mr }) => {
               type="text"
               placeholder={mr('Pune', 'पुणे')}
               value={form.district}
-              onChange={e => set('district', e.target.value)}
+              onChange={e => set('district', e.target.value.replace(/[^a-zA-Z\u0900-\u097F\s]/g, ''))}
               style={inputStyle('district')}
             />
           </div>
@@ -377,11 +477,23 @@ const AdsLanding = () => {
     utm_campaign: searchParams.get('utm_campaign'),
     utm_content:  searchParams.get('utm_content'),
     utm_term:     searchParams.get('utm_term'),
+    fbclid:       searchParams.get('fbclid'),
   };
 
   const scrollToForm = () => {
     document.getElementById('ads-lead-form')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // Initialize Meta Pixel on mount — ads_landing only
+  useEffect(() => {
+    initPixel();
+    // Store fbclid in cookie as _fbc if present in URL
+    const fbclid = searchParams.get('fbclid');
+    if (fbclid) {
+      const ts = Math.floor(Date.now() / 1000);
+      document.cookie = `_fbc=fb.1.${ts}.${fbclid}; path=/; max-age=7776000; SameSite=Lax`;
+    }
+  }, []);
 
   const TRUST_ITEMS = [
     { en: 'Simple mobile-friendly system',    mr: 'सोपी मोबाइल-फ्रेंडली प्रणाली' },

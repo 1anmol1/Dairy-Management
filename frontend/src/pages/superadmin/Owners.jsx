@@ -20,9 +20,9 @@ const PLAN_FEATURES = {
 };
 
 const PLAN_LIMITS = {
-  silver:   { customers: '30–50', users: '1–2', billing: 'Manual', support: 'Minimal' },
-  gold:     { customers: '200–300', users: '5–7', billing: 'Auto', support: 'Standard' },
-  platinum: { customers: 'Unlimited', users: 'Unlimited', billing: 'Auto + Export', support: 'Priority' }
+  silver:   { customers: '50', users: '2', billing: 'Manual', support: 'Minimal' },
+  gold:     { customers: '150', users: '5', billing: 'Auto', support: 'Standard' },
+  platinum: { customers: 'Unlimited', users: '15', billing: 'Auto + Export', support: 'Priority' }
 };
 
 const PLAN_COLORS = {
@@ -98,6 +98,14 @@ const Owners = () => {
     }
   };
 
+  const handleStatusChange = (ownerId, newStatus) => {
+    if (newStatus === 'active') {
+      const confirmed = window.confirm("Are you sure you want to change status to Active (Paid)? This will activate the paid subscription and trigger the Meta subscribe event (if the user is from ads landing page).");
+      if (!confirmed) return;
+    }
+    updateSubscription(ownerId, { status: newStatus });
+  };
+
   const updateFeatures = async (ownerId, features) => {
     try {
       const { data } = await api.patch(`/superadmin/owners/${ownerId}/features`, { features });
@@ -110,7 +118,7 @@ const Owners = () => {
 
   const statusBadge = (status) => {
     const map = { active: 'badge-green', trial: 'badge-blue', inactive: 'badge-red', expired: 'badge-yellow' };
-    return <span className={`badge ${map[status] || 'badge-gray'}`}>{status?.toUpperCase()}</span>;
+    return <span className={`badge ${map[status] || 'badge-gray'}`}>{status === 'active' ? 'ACTIVE (PAID)' : status?.toUpperCase()}</span>;
   };
 
   const planBadge = (plan) => {
@@ -159,7 +167,7 @@ const Owners = () => {
           <select className="input" style={{ width: 'auto', minWidth: '140px' }}
             value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
-            {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+            {STATUSES.map(s => <option key={s} value={s}>{s === 'active' ? 'Active (Paid)' : s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
           </select>
         </div>
 
@@ -267,13 +275,80 @@ const Owners = () => {
                               })}
                             </div>
                             <div style={{ fontWeight: 700, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', color: '#525252' }}>Status</div>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
                               {STATUSES.map(s => (
                                 <button key={s} className={`btn btn-sm ${owner.subscription?.status === s ? 'btn-dark' : 'btn-ghost'}`}
-                                  onClick={() => updateSubscription(owner._id, { status: s })}>
-                                  {s}
+                                  onClick={() => handleStatusChange(owner._id, s)}>
+                                  {s === 'active' ? 'active (paid)' : s}
                                 </button>
                               ))}
+                            </div>
+                            <div style={{ fontWeight: 700, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', color: '#525252' }}>Owner Role</div>
+                            <select
+                              className="input"
+                              style={{ height: '36px', width: '100%', fontSize: '13px', marginBottom: '12px' }}
+                              value={owner.ownerRole || 'milk_supplier'}
+                              onChange={async (e) => {
+                                try {
+                                  const newRole = e.target.value;
+                                  const { data } = await api.patch(`/superadmin/owners/${owner._id}/role`, { ownerRole: newRole });
+                                  setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, ownerRole: data.owner.ownerRole } : o));
+                                  toast.success('Owner role updated successfully.');
+                                } catch {
+                                  toast.error('Failed to update owner role.');
+                                }
+                              }}
+                            >
+                              <option value="dairy_owner">Dairy Owner</option>
+                              <option value="milk_supplier">Milk Supplier</option>
+                            </select>
+
+                            <div style={{ fontWeight: 700, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', color: '#525252' }}>Manage Limits</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label style={{ fontSize: '11px', color: '#525252', display: 'block', marginBottom: '4px' }}>Max Customers</label>
+                                <input
+                                  type="number"
+                                  className="input"
+                                  style={{ height: '36px', fontSize: '13px' }}
+                                  value={owner.maxCustomers ?? 150}
+                                  onChange={async (e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, maxCustomers: val } : o));
+                                  }}
+                                  onBlur={async (e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    try {
+                                      await api.patch(`/superadmin/owners/${owner._id}/subscription`, { maxCustomers: val });
+                                      toast.success('Customer limit updated.');
+                                    } catch {
+                                      toast.error('Failed to update customer limit.');
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: '11px', color: '#525252', display: 'block', marginBottom: '4px' }}>Max Staff</label>
+                                <input
+                                  type="number"
+                                  className="input"
+                                  style={{ height: '36px', fontSize: '13px' }}
+                                  value={owner.maxStaff ?? 5}
+                                  onChange={async (e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, maxStaff: val } : o));
+                                  }}
+                                  onBlur={async (e) => {
+                                    const val = parseInt(e.target.value) || 0;
+                                    try {
+                                      await api.patch(`/superadmin/owners/${owner._id}/subscription`, { maxStaff: val });
+                                      toast.success('Staff limit updated.');
+                                    } catch {
+                                      toast.error('Failed to update staff limit.');
+                                    }
+                                  }}
+                                />
+                              </div>
                             </div>
                           </div>
                         )}
@@ -374,10 +449,84 @@ const Owners = () => {
                                   {STATUSES.map(s => (
                                     <button key={s}
                                       className={`btn btn-sm ${owner.subscription?.status === s ? 'btn-dark' : 'btn-ghost'}`}
-                                      onClick={() => updateSubscription(owner._id, { status: s })}>
-                                      {s}
+                                      onClick={() => handleStatusChange(owner._id, s)}>
+                                      {s === 'active' ? 'active (paid)' : s}
                                     </button>
                                   ))}
+                                </div>
+
+                                {/* Owner Role Selector */}
+                                <div style={{ fontWeight: 700, fontSize: '12px', marginTop: '16px', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#525252' }}>
+                                  Owner Role / Business Mode
+                                </div>
+                                <select
+                                  className="input"
+                                  style={{ height: '36px', width: '100%', fontSize: '13px', marginBottom: '16px' }}
+                                  value={owner.ownerRole || 'milk_supplier'}
+                                  onChange={async (e) => {
+                                    try {
+                                      const newRole = e.target.value;
+                                      const { data } = await api.patch(`/superadmin/owners/${owner._id}/role`, { ownerRole: newRole });
+                                      setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, ownerRole: data.owner.ownerRole } : o));
+                                      toast.success('Owner role updated successfully.');
+                                    } catch {
+                                      toast.error('Failed to update owner role.');
+                                    }
+                                  }}
+                                >
+                                  <option value="dairy_owner">Dairy Owner</option>
+                                  <option value="milk_supplier">Milk Supplier</option>
+                                </select>
+
+                                {/* Account Limits Selector */}
+                                <div style={{ fontWeight: 700, fontSize: '12px', marginTop: '16px', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#525252' }}>
+                                  Manage Account Limits
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                                  <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '11px', color: '#525252', display: 'block', marginBottom: '4px' }}>Max Customers (999999 = unlimited)</label>
+                                    <input
+                                      type="number"
+                                      className="input"
+                                      style={{ height: '36px', fontSize: '13px' }}
+                                      value={owner.maxCustomers ?? 150}
+                                      onChange={async (e) => {
+                                        const val = parseInt(e.target.value) || 0;
+                                        setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, maxCustomers: val } : o));
+                                      }}
+                                      onBlur={async (e) => {
+                                        const val = parseInt(e.target.value) || 0;
+                                        try {
+                                          await api.patch(`/superadmin/owners/${owner._id}/subscription`, { maxCustomers: val });
+                                          toast.success('Customer limit updated.');
+                                        } catch {
+                                          toast.error('Failed to update customer limit.');
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                  <div style={{ flex: 1 }}>
+                                    <label style={{ fontSize: '11px', color: '#525252', display: 'block', marginBottom: '4px' }}>Max Staff</label>
+                                    <input
+                                      type="number"
+                                      className="input"
+                                      style={{ height: '36px', fontSize: '13px' }}
+                                      value={owner.maxStaff ?? 5}
+                                      onChange={async (e) => {
+                                        const val = parseInt(e.target.value) || 0;
+                                        setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, maxStaff: val } : o));
+                                      }}
+                                      onBlur={async (e) => {
+                                        const val = parseInt(e.target.value) || 0;
+                                        try {
+                                          await api.patch(`/superadmin/owners/${owner._id}/subscription`, { maxStaff: val });
+                                          toast.success('Staff limit updated.');
+                                        } catch {
+                                          toast.error('Failed to update staff limit.');
+                                        }
+                                      }}
+                                    />
+                                  </div>
                                 </div>
                               </div>
 
@@ -461,7 +610,8 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
     phone: prefillData?.contactPhone || '',
     email: prefillData?.contactEmail || '',
     password: '',
-    businessName: prefillData?.companyName || ''
+    businessName: prefillData?.companyName || '',
+    ownerRole: 'milk_supplier'
   });
   const [sub, setSub] = useState({
     plan: prefillData?.plan || 'gold',
@@ -473,7 +623,9 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
     useCustomEnd: false,
     amountPaid: '',
     setupFeePaid: '',
-    notes: ''
+    notes: '',
+    maxCustomers: prefillData?.plan === 'silver' ? 50 : prefillData?.plan === 'platinum' ? 999999 : 150,
+    maxStaff: prefillData?.plan === 'silver' ? 2 : prefillData?.plan === 'platinum' ? 15 : 5
   });
   const [planConfigs, setPlanConfigs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -551,6 +703,9 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
         amountPaid: parseFloat(sub.amountPaid) || 0,
         setupFeePaid: parseFloat(sub.setupFeePaid) || 0,
         notes: sub.notes,
+        source: prefillData?.source || 'organic',
+        maxCustomers: sub.maxCustomers,
+        maxStaff: sub.maxStaff,
       };
       await api.post('/superadmin/owners', payload);
       toast.success('Owner account created.');
@@ -571,8 +726,8 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
 
   const planFeatures = {
     silver:   ['Up to 50 customers', 'Up to 2 staff', 'Manual billing'],
-    gold:     ['Up to 300 customers', 'Up to 7 staff', 'Auto billing', 'WhatsApp alerts', 'PDF bills'],
-    platinum: ['Unlimited customers', 'Unlimited staff', 'All Gold features', 'Advanced reports', 'Data export'],
+    gold:     ['Up to 150 customers', 'Up to 5 staff', 'Auto billing', 'WhatsApp alerts', 'PDF bills'],
+    platinum: ['Unlimited customers', 'Up to 15 staff', 'All Gold features', 'Advanced reports', 'Data export'],
   };
 
   return (
@@ -607,12 +762,20 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
               <div key={f.key} className="input-group">
                 <label className="input-label">{f.label}</label>
                 <input type={f.type} className="input" placeholder={f.placeholder}
-                  value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                  value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
                   required={f.key !== 'businessName'} autoComplete="off"
                   {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
               </div>
             ))}
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <div className="input-group">
+              <label className="input-label">Owner Role / Business Mode</label>
+              <select className="input" value={form.ownerRole}
+                onChange={e => setForm(p => ({ ...p, ownerRole: e.target.value }))}>
+                <option value="dairy_owner">Dairy Owner</option>
+                <option value="milk_supplier">Milk Supplier</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
               <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>Cancel</button>
               <button type="button" className="btn btn-primary btn-full"
                 onClick={() => { if (validateDetails()) setStep('subscription'); }}>
@@ -636,7 +799,15 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
                   const active = sub.plan === p;
                   return (
                     <button key={p} type="button"
-                      onClick={() => setSub(s => ({ ...s, plan: p }))}
+                      onClick={() => {
+                        const DEFAULT_LIMITS = {
+                          silver: { maxCustomers: 50, maxStaff: 2 },
+                          gold: { maxCustomers: 150, maxStaff: 5 },
+                          platinum: { maxCustomers: 999999, maxStaff: 15 }
+                        };
+                        const lim = DEFAULT_LIMITS[p];
+                        setSub(s => ({ ...s, plan: p, maxCustomers: lim.maxCustomers, maxStaff: lim.maxStaff }));
+                      }}
                       style={{
                         border: `2px solid ${active ? c.border : '#E0E0E0'}`,
                         backgroundColor: active ? c.bg : '#FFFFFF',
@@ -653,6 +824,32 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Custom Limits Control */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <label className="input-label">Max Customers Limit</label>
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="e.g. 150"
+                  value={sub.maxCustomers}
+                  onChange={e => setSub(s => ({ ...s, maxCustomers: parseInt(e.target.value) || 0 }))}
+                />
+                <span style={{ fontSize: '10px', color: '#8D8D8D' }}>Use 999999 for unlimited</span>
+              </div>
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <label className="input-label">Max Staff Limit</label>
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="e.g. 5"
+                  value={sub.maxStaff}
+                  onChange={e => setSub(s => ({ ...s, maxStaff: parseInt(e.target.value) || 0 }))}
+                />
+                <span style={{ fontSize: '10px', color: '#8D8D8D' }}>Default plan limit pre-set</span>
               </div>
             </div>
 
@@ -821,7 +1018,7 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
               </button>
               <button type="button" className="btn btn-primary btn-full"
                 onClick={handleSubmit} disabled={loading}>
-                {loading ? 'Creating...' : 'Create Account'}
+                {loading ? 'Creating...' : `Create Account (${sub.status === 'trial' ? 'Trial' : sub.status === 'active' ? 'Paid' : 'Inactive'})`}
               </button>
             </div>
           </div>
@@ -1051,8 +1248,8 @@ export const PricingCalculatorModal = ({ onClose, onAddOwner, context, onViewReq
 
   const planFeatures = {
     silver:   ['Up to 50 customers', 'Up to 2 staff', 'Manual billing'],
-    gold:     ['Up to 300 customers', 'Up to 7 staff', 'Auto billing', 'WhatsApp alerts', 'PDF bills'],
-    platinum: ['Unlimited customers', 'Unlimited staff', 'All Gold features', 'Advanced reports', 'Data export'],
+    gold:     ['Up to 150 customers', 'Up to 5 staff', 'Auto billing', 'WhatsApp alerts', 'PDF bills'],
+    platinum: ['Unlimited customers', 'Up to 15 staff', 'All Gold features', 'Advanced reports', 'Data export'],
   };
 
   return (

@@ -10,6 +10,12 @@ import useThrottle from '../../hooks/useThrottle';
 import ExportButton from '../../components/ExportButton';
 import { useMarathi } from '../../i18n/marathi';
 
+const parseLocalDate = (dateStr) => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('-');
+  return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+};
+
 // ── Generate ration-card style bill text for WhatsApp ─────────
 const generateBillText = (bill, monthName, year, businessName) => {
   const logs = bill.logSnapshot || [];
@@ -29,7 +35,7 @@ const generateBillText = (bill, monthName, year, businessName) => {
     const dates = Object.keys(byDate).sort();
     dateRows = '\n' + dates.map(d => {
       const r = byDate[d];
-      const day = new Date(d + 'T00:00:00').getDate();
+      const day = parseLocalDate(d).getDate();
       return `${String(day).padStart(2)} | ${r.morning > 0 ? r.morning.toFixed(1) : '-'} | ${r.evening > 0 ? r.evening.toFixed(1) : '-'} | ${r.extra > 0 ? r.extra.toFixed(1) : '-'} | ₹${r.amount.toFixed(0)}`;
     }).join('\n');
   }
@@ -67,7 +73,7 @@ const buildBillHTML = (bill, monthName, year, businessName) => {
 
   const rows = dates.map(d => {
     const r = byDate[d];
-    const day = new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    const day = parseLocalDate(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
     return `<tr>
       <td>${day}</td>
       <td>${r.morning > 0 ? r.morning.toFixed(1) : '—'}</td>
@@ -316,6 +322,8 @@ const Billing = () => {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
+  const [whatsappConnected, setWhatsappConnected] = useState(false);
+
   const fetchBills = useCallback(async () => {
     setLoading(true);
     try {
@@ -329,6 +337,18 @@ const Billing = () => {
   }, [month, year]);
 
   useEffect(() => { fetchBills(); }, [fetchBills]);
+
+  useEffect(() => {
+    const checkWhatsapp = async () => {
+      try {
+        const { data } = await api.get('/whatsapp/status');
+        setWhatsappConnected(data.status === 'connected');
+      } catch {
+        setWhatsappConnected(false);
+      }
+    };
+    if (isPlatinum) checkWhatsapp();
+  }, [isPlatinum]);
 
   const throttledRefresh = useThrottle(fetchBills);
 
@@ -360,10 +380,25 @@ const Billing = () => {
   const L = isMarathi ? 'ली.' : 'L';
 
   const handleSendPDFWhatsApp = async (bill) => {
+    const monthName = MONTHS[bill.month - 1];
+    const businessName = user?.businessName || 'Dairy';
+
+    if (!whatsappConnected) {
+      const text = generateBillText(bill, monthName, bill.year, businessName);
+      const phone = bill.customerId?.phone;
+      if (!phone) { toast.error('Customer phone not available.'); return; }
+      let clean = phone.replace(/\D/g, '');
+      if (clean.length === 10)          clean = '91' + clean;
+      else if (clean.startsWith('0'))   clean = '91' + clean.slice(1);
+      
+      const url = `https://api.whatsapp.com/send?phone=${clean}&text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank');
+      toast.success(isMarathi ? 'WhatsApp उघडले.' : 'Opened WhatsApp with bill.');
+      return;
+    }
+
     setSendingBill(bill._id);
     try {
-      const monthName = MONTHS[bill.month - 1];
-      const businessName = user?.businessName || 'Dairy';
       const html = buildBillHTML(bill, monthName, bill.year, businessName);
       const safeCompany = businessName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
       const filename = `${safeCompany}_billing_${monthName}_${bill.year}.pdf`;
@@ -505,7 +540,7 @@ const Billing = () => {
                     {isExpanded && (
                       <div style={{ borderTop: '1px solid #F4F4F4', padding: '12px 14px', backgroundColor: '#FAFAFA' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px', marginBottom: '12px' }}>
-                          <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'ली.' : 'Liters'}: </span><strong>{bill.totalLiters.toFixed(1)}L</strong></div>
+                          <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'ली.' : 'Liters'}: </span><strong>{bill.totalLiters.toFixed(1)}{L}</strong></div>
                           <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'रक्कम' : 'Amount'}: </span><strong>₹{bill.totalAmount.toFixed(0)}</strong></div>
                           <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'मागील' : 'Prev Bal'}: </span><strong style={{ color: bill.previousBalance > 0 ? '#DA1E28' : '#8D8D8D' }}>₹{(bill.previousBalance || 0).toFixed(0)}</strong></div>
                           <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'एकूण' : 'Grand Total'}: </span><strong>₹{(bill.grandTotal ?? bill.totalAmount).toFixed(0)}</strong></div>
@@ -527,8 +562,8 @@ const Billing = () => {
                             </button>
                           )}
                           {isPlatinum && (
-                            <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => handleSendPDFWhatsApp(bill)} disabled={sendingBill === bill._id}>
-                              <MessageSquare size={13} /> WA
+                            <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => handleSendPDFWhatsApp(bill)} disabled={sendingBill === bill._id} title={whatsappConnected ? "Send PDF via WhatsApp" : "Send Bill via WhatsApp (wa.me)"}>
+                              <MessageSquare size={13} color={whatsappConnected ? undefined : "#0F62FE"} /> WA
                             </button>
                           )}
                         </div>
@@ -621,11 +656,11 @@ const Billing = () => {
                               className="btn btn-ghost btn-sm"
                               onClick={() => handleSendPDFWhatsApp(bill)}
                               disabled={sendingBill === bill._id}
-                              title="Send PDF via WhatsApp"
+                              title={whatsappConnected ? "Send PDF via WhatsApp" : "Send Bill via WhatsApp (wa.me)"}
                             >
                               {sendingBill === bill._id
                                 ? <div className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
-                                : <MessageSquare size={13} />}
+                                : <MessageSquare size={13} color={whatsappConnected ? undefined : "#0F62FE"} />}
                             </button>
                           )}
                         </div>

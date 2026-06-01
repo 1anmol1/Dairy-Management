@@ -36,6 +36,7 @@ const OwnerDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { isMarathi } = useMarathi();
+  const isDairyOwner = user?.ownerRole === 'dairy_owner';
 
   // Dashboard stats — 60s TTL (live data, but no need to refetch every visit)
   const { data: stats, loading } = useApi('/owner/dashboard', { ttl: 60 * 1000 });
@@ -104,7 +105,16 @@ const OwnerDashboard = () => {
   ] : [];
 
   const navCards = [
-    {
+    isDairyOwner ? {
+      to: '/app/owner/farmers',
+      icon: Users,
+      label: isMarathi ? 'शेतकरी' : 'Farmers',
+      value: stats?.activeCustomers ?? null,
+      sub: stats
+        ? (isMarathi ? `${stats.totalCustomers} एकूण` : `${stats.totalCustomers} total`)
+        : (isMarathi ? 'शेतकरी व्यवस्थापन' : 'Manage farmers'),
+      color: '#0F62FE'
+    } : {
       to: '/app/owner/customers',
       icon: Users,
       label: isMarathi ? 'ग्राहक' : 'Customers',
@@ -114,7 +124,16 @@ const OwnerDashboard = () => {
         : (isMarathi ? 'ग्राहक व्यवस्थापन' : 'Manage customers'),
       color: '#0F62FE'
     },
-    {
+    isDairyOwner ? {
+      to: '/app/owner/collection',
+      icon: ClipboardList,
+      label: isMarathi ? 'दैनिक संकलन' : 'Daily Collection',
+      value: stats?.todayDeliveries ?? null,
+      sub: stats
+        ? (isMarathi ? `${stats.todayLiters?.toFixed(1)}ली. आज संकलित` : `${stats.todayLiters?.toFixed(1)}L collected today`)
+        : (isMarathi ? 'संकलन नोंदी पाहा' : 'View collection logs'),
+      color: '#24A148'
+    } : {
       to: '/app/owner/logs',
       icon: ClipboardList,
       label: isMarathi ? 'दैनिक नोंदी' : 'Daily Logs',
@@ -129,7 +148,9 @@ const OwnerDashboard = () => {
       icon: Receipt,
       label: isMarathi ? 'बिलिंग' : 'Billing',
       value: null,
-      sub: isMarathi ? 'बिले तयार करा व ट्रॅक करा' : 'Generate & track bills',
+      sub: isDairyOwner
+        ? (isMarathi ? 'शेतकरी पेमेंट व लेजर' : 'Farmer payments & ledger')
+        : (isMarathi ? 'बिले तयार करा व ट्रॅक करा' : 'Generate & track bills'),
       color: '#FF832B'
     },
     {
@@ -143,9 +164,13 @@ const OwnerDashboard = () => {
     {
       to: '/app/owner/default-rate',
       icon: Milk,
-      label: isMarathi ? 'डिफॉल्ट दर' : 'Default Rate',
+      label: isDairyOwner
+        ? (isMarathi ? 'डिफॉल्ट दर (सूत्र)' : 'Default Rates (Formula)')
+        : (isMarathi ? 'डिफॉल्ट दर' : 'Default Rate'),
       value: null,
-      sub: isMarathi ? 'दूध दर सेट करा' : 'Set milk rate',
+      sub: isDairyOwner
+        ? (isMarathi ? 'मोजणीचे सूत्र सेट करा' : 'Configure pricing formulas')
+        : (isMarathi ? 'दूध दर सेट करा' : 'Set milk rate'),
       color: '#8A3FFC'
     },
     ...(user?.features?.whatsapp_alerts ? [{
@@ -153,7 +178,9 @@ const OwnerDashboard = () => {
       icon: MessageSquare,
       label: 'WhatsApp',
       value: null,
-      sub: isMarathi ? 'वितरण अलर्ट' : 'Delivery alerts',
+      sub: isDairyOwner
+        ? (isMarathi ? 'संकलन अलर्ट' : 'Collection alerts')
+        : (isMarathi ? 'वितरण अलर्ट' : 'Delivery alerts'),
       color: '#25D366'
     }] : []),
     ...(user?.features?.whatsapp_alerts || user?.features?.custom_message_templates ? [{
@@ -220,8 +247,8 @@ const OwnerDashboard = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginTop: '4px' }}>
                 {[
                   { key: 'silver', color: '#8D8D8D', bg: '#F4F4F4', border: '#8D8D8D', label: 'Silver', price: '₹99/mo', features: ['50 customers', '2 staff', 'Manual billing'] },
-                  { key: 'gold',   color: '#B8860B', bg: '#FFF8E1', border: '#D4AF37', label: 'Gold ⭐', price: '₹199/mo', features: ['300 customers', '7 staff', 'WhatsApp alerts', 'PDF bills'], popular: true },
-                  { key: 'platinum', color: '#6929C4', bg: '#F3F0FF', border: '#8A3FFC', label: 'Platinum', price: '₹399/mo', features: ['Unlimited', 'All features', 'Advanced reports'] }
+                  { key: 'gold',   color: '#B8860B', bg: '#FFF8E1', border: '#D4AF37', label: 'Gold ⭐', price: '₹199/mo', features: ['150 customers', '5 staff', 'WhatsApp alerts', 'PDF bills'], popular: true },
+                  { key: 'platinum', color: '#6929C4', bg: '#F3F0FF', border: '#8A3FFC', label: 'Platinum', price: '₹399/mo', features: ['Unlimited', '15 staff', 'Advanced reports'] }
                 ].map(plan => (
                   <button key={plan.key} onClick={() => navigate('/app/owner/upgrade')} style={{
                     border: `2px solid ${plan.border}`, backgroundColor: plan.bg,

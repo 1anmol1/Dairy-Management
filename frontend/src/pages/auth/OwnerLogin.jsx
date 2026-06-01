@@ -300,12 +300,9 @@ const OwnerLogin = () => {
     </LoginShell>
   );
 };
-
 const OwnerLoginForm = ({ onForgot }) => {
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
-  const [showPass, setShowPass] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -315,8 +312,8 @@ const OwnerLoginForm = ({ onForgot }) => {
 
   const handleSignIn = async (e) => {
     e.preventDefault();
-    if (!phone || !password) {
-      toast.error(isMarathi ? 'फोन आणि पासवर्ड टाका.' : 'Enter phone and password.');
+    if (!phone) {
+      toast.error(isMarathi ? 'फोन नंबर टाका.' : 'Enter phone number.');
       return;
     }
 
@@ -327,10 +324,10 @@ const OwnerLoginForm = ({ onForgot }) => {
       }
       setLoading(true);
       try {
-        await api.post('/auth/validate-credentials', { phone: phone.trim(), password, role: 'owner' });
+        await api.post('/auth/check-account', { identifier: phone.trim(), role: 'owner' });
         setShowCode(true);
       } catch (err) {
-        toast.error(isMarathi ? 'फोन नंबर किंवा पासवर्ड चुकीचा आहे.' : 'Phone number or password is incorrect.');
+        toast.error(err.response?.data?.error || (isMarathi ? 'खाते सापडले नाही.' : 'Account not found.'));
       } finally {
         setLoading(false);
       }
@@ -347,24 +344,24 @@ const OwnerLoginForm = ({ onForgot }) => {
   const doLogin = async () => {
     setLoading(true);
     try {
-      const user = await login(phone.trim(), password, code.trim());
+      // Direct login without password!
+      const user = await login(phone.trim(), '', code.trim());
       if (user.role !== 'owner') {
         localStorage.removeItem('amrit_token');
         localStorage.removeItem('amrit_user');
         toast.error(isMarathi ? 'हे क्रेडेन्शियल मालक खात्याचे नाहीत.' : 'These credentials do not belong to an owner account.');
         return;
       }
+      localStorage.setItem('amrit_last_role', 'owner');
       toast.success(isMarathi ? `परत स्वागत आहे, ${user.name}!` : `Welcome back, ${user.name}!`);
-      // First-time login → show onboarding; subsequent logins → dashboard
       if (!user.onboardingDone) {
         navigate('/app/owner/onboarding');
       } else {
         navigate('/app/owner');
       }
     } catch (err) {
-      toast.error(isMarathi ? 'लॉगिन अयशस्वी. पुन्हा प्रयत्न करा.' : 'Login failed. Please try again.');
+      toast.error(err.response?.data?.error || (isMarathi ? 'व्हेरिफिकेशन कोड चुकीचा आहे.' : 'Incorrect verification code.'));
       setCode('');
-      setShowCode(false);
     } finally {
       setLoading(false);
     }
@@ -378,30 +375,13 @@ const OwnerLoginForm = ({ onForgot }) => {
           <div style={{ position: 'relative' }}>
             <Phone size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8D8D8D' }} />
             <input type="tel" className="input" style={{ paddingLeft: '38px' }}
-              placeholder="" value={phone} onChange={e => setPhone(e.target.value)}
+              placeholder="" value={phone} onChange={e => { setPhone(e.target.value.replace(/[^0-9]/g, '')); setShowCode(false); }}
               autoComplete="off" inputMode="numeric" maxLength={10} />
           </div>
         </div>
 
-        <div className="input-group">
-          <label className="input-label">{isMarathi ? 'पासवर्ड' : 'Password'}</label>
-          <div style={{ position: 'relative' }}>
-            <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8D8D8D' }} />
-            <input type={showPass ? 'text' : 'password'} className="input"
-              style={{ paddingLeft: '38px', paddingRight: '44px' }}
-              placeholder="" value={password} onChange={e => setPassword(e.target.value)}
-              autoComplete="off" />
-            <button type="button" onClick={() => setShowPass(!showPass)} style={{
-              position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
-              background: 'none', border: 'none', cursor: 'pointer', color: '#8D8D8D', padding: '4px'
-            }}>
-              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
-
         {showCode && (
-          <div className="input-group" style={{ animation: 'fadeSlideIn 0.2s ease' }}>
+          <div className="input-group" style={{ animation: 'fadeSlideIn 0.2s ease', marginTop: '16px' }}>
             <label className="input-label">{isMarathi ? 'व्हेरिफिकेशन कोड' : 'Verification Code'}</label>
             <input type="password" className="input" autoFocus
               placeholder="" value={code} onChange={e => setCode(e.target.value)}
@@ -409,19 +389,12 @@ const OwnerLoginForm = ({ onForgot }) => {
           </div>
         )}
 
-        <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={loading} style={{ marginTop: '8px' }}>
+        <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={loading} style={{ marginTop: '16px' }}>
           {loading
             ? <><div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> {isMarathi ? 'साइन इन होत आहे...' : 'Signing in...'}</>
             : showCode
               ? (isMarathi ? 'साइन इन करा' : 'Sign In')
               : (isMarathi ? 'पुढे' : 'Continue')}
-        </button>
-
-        <button type="button" onClick={onForgot} style={{
-          width: '100%', marginTop: '14px', background: 'none', border: 'none',
-          color: '#0F62FE', fontSize: '13px', cursor: 'pointer', textAlign: 'center', padding: '4px'
-        }}>
-          {isMarathi ? 'पासवर्ड विसरलात?' : 'Forgot password?'}
         </button>
       </form>
       <style>{`@keyframes fadeSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }`}</style>

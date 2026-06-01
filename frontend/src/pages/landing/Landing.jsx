@@ -43,7 +43,7 @@ const LandingPage = () => {
     },
     {
       q: t('faqShort.q7.q', 'How many customers can I add?'),
-      a: t('faqShort.q7.a', 'Silver plan allows 50 customers. Gold allows 300. Platinum is unlimited. During the trial you get Gold limits.')
+      a: t('faqShort.q7.a', 'Silver plan allows 50 customers. Gold allows 150. Platinum is unlimited. During the trial you get Gold limits.')
     },
     {
       q: t('faqShort.q8.q', 'Is the setup fee a monthly charge?'),
@@ -110,6 +110,24 @@ const LandingPage = () => {
       fontFamily: isMarathi ? '"Noto Sans Devanagari", sans-serif' : 'Inter, sans-serif'
     }}>
       <Navbar />
+
+      {/* Promotion Announcement Bar */}
+      <div style={{
+        backgroundColor: '#EDF5FF',
+        color: '#0F62FE',
+        padding: '10px 24px',
+        textAlign: 'center',
+        fontSize: '13px',
+        fontWeight: 600,
+        borderBottom: '1px solid #D0E2FF',
+        fontFamily: isMarathi ? '"Noto Sans Devanagari", sans-serif' : 'Inter, sans-serif'
+      }}>
+        {isMarathi ? (
+          <span>अम्रित मॅनेजचा प्रचार करा आणि मिळवा ४०% कमिशन! <Link to="/promote" style={{ color: '#0F62FE', textDecoration: 'underline', marginLeft: '6px', fontWeight: 700 }}>अधिक जाणून घ्या →</Link></span>
+        ) : (
+          <span>Promote Amrit Manage & Earn 40% Commission! <Link to="/promote" style={{ color: '#0F62FE', textDecoration: 'underline', marginLeft: '6px', fontWeight: 700 }}>Learn More →</Link></span>
+        )}
+      </div>
 
       {/* Hero */}
       <section style={{ maxWidth: '1120px', margin: '0 auto', padding: '96px 24px 80px' }}>

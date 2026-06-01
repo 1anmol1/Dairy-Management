@@ -74,6 +74,12 @@ const customerSchema = new mongoose.Schema({
   showCodeToStaff: {
     type: Boolean,
     default: false
+  },
+  // Customer preferred language for notifications
+  language: {
+    type: String,
+    enum: ['en', 'mr'],
+    default: 'en'
   }
 }, {
   timestamps: true

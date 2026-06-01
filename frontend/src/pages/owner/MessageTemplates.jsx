@@ -79,13 +79,254 @@ const VARIABLE_CATEGORIES = [
   },
 ];
 
+// ── Variable Color & Background mapping ───────────────────────
+const VAR_MAP = {
+  '{{customerName}}': { label: 'Customer Name', color: '#0F62FE', bg: '#EDF5FF' },
+  '{{customerPhone}}': { label: 'Customer Phone', color: '#0F62FE', bg: '#EDF5FF' },
+  '{{quantity}}': { label: 'Quantity', color: '#FF832B', bg: '#FFF3E0' },
+  '{{extraQty}}': { label: 'Extra Qty', color: '#FF832B', bg: '#FFF3E0' },
+  '{{slot}}': { label: 'Slot', color: '#FF832B', bg: '#FFF3E0' },
+  '{{date}}': { label: 'Date', color: '#FF832B', bg: '#FFF3E0' },
+  '{{time}}': { label: 'Time', color: '#FF832B', bg: '#FFF3E0' },
+  '{{amountDue}}': { label: 'Amount Due', color: '#24A148', bg: '#DEFBE6' },
+  '{{totalPaid}}': { label: 'Total Paid', color: '#24A148', bg: '#DEFBE6' },
+  '{{balance}}': { label: 'Balance', color: '#24A148', bg: '#DEFBE6' },
+  '{{grandTotal}}': { label: 'Grand Total', color: '#24A148', bg: '#DEFBE6' },
+  '{{monthName}}': { label: 'Month', color: '#24A148', bg: '#DEFBE6' },
+  '{{ownerPhone}}': { label: 'Owner Phone', color: '#6929C4', bg: '#F3F0FF' },
+  '{{businessName}}': { label: 'Business Name', color: '#6929C4', bg: '#F3F0FF' },
+};
+
+// ── Translated Variable labels ────────────────────────────────
+const getVarLabel = (key, language) => {
+  const isMr = language === 'mr';
+  switch (key) {
+    case '{{customerName}}': return isMr ? 'ग्राहकाचे नाव' : 'Customer Name';
+    case '{{customerPhone}}': return isMr ? 'ग्राहकाचा फोन' : 'Customer Phone';
+    case '{{quantity}}': return isMr ? 'प्रमाण' : 'Quantity';
+    case '{{extraQty}}': return isMr ? 'अतिरिक्त प्रमाण' : 'Extra Qty';
+    case '{{slot}}': return isMr ? 'वेळ' : 'Slot';
+    case '{{date}}': return isMr ? 'तारीख' : 'Date';
+    case '{{time}}': return isMr ? 'वेळ (नक्की)' : 'Time';
+    case '{{amountDue}}': return isMr ? 'देय रक्कम' : 'Amount Due';
+    case '{{totalPaid}}': return isMr ? 'भरलेली रक्कम' : 'Total Paid';
+    case '{{balance}}': return isMr ? 'शिल्लक' : 'Balance';
+    case '{{grandTotal}}': return isMr ? 'एकूण रक्कम' : 'Grand Total';
+    case '{{monthName}}': return isMr ? 'महिना' : 'Month';
+    case '{{ownerPhone}}': return isMr ? 'डेअरी फोन' : 'Dairy Phone';
+    case '{{businessName}}': return isMr ? 'डेअरीचे नाव' : 'Dairy Name';
+    default: return key;
+  }
+};
+
+// Convert raw text into styled HTML elements inside ContentEditable editor
+const rawToHtml = (rawText, language) => {
+  if (!rawText) return '';
+  let html = rawText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+    
+  Object.keys(VAR_MAP).forEach(key => {
+    const meta = VAR_MAP[key];
+    const label = getVarLabel(key, language);
+    const regex = new RegExp(key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g');
+    const chip = `<span class="var-chip" contenteditable="false" data-var="${key}" style="background-color: ${meta.bg}; color: ${meta.color}; padding: 2px 8px; margin: 0 4px; font-weight: 600; border-radius: 4px; border: 1px solid ${meta.color}40; font-size: 13px; display: inline-flex; align-items: center; user-select: none;">${label}</span>`;
+    html = html.replace(regex, chip);
+  });
+  
+  html = html.replace(/\n/g, '<br>');
+  return html;
+};
+
+// Extracts plain text representation with variable keys from styled editor HTML
+const getRawTextFromHtml = (element) => {
+  if (!element) return '';
+  let text = '';
+  
+  const traverse = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.nodeValue;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.classList.contains('var-chip') || node.getAttribute('data-var')) {
+        text += node.getAttribute('data-var');
+      } else {
+        if (node.nodeName === 'BR') {
+          text += '\n';
+        } else if (node.nodeName === 'DIV' || node.nodeName === 'P') {
+          if (text.length > 0 && !text.endsWith('\n')) {
+            text += '\n';
+          }
+          for (let child of node.childNodes) {
+            traverse(child);
+          }
+        } else {
+          for (let child of node.childNodes) {
+            traverse(child);
+          }
+        }
+      }
+    }
+  };
+
+  for (let child of element.childNodes) {
+    traverse(child);
+  }
+  return text;
+};
+
+// ── Rich Template Editor Component with Double Backspace Behavior ──
+const RichTemplateEditor = React.forwardRef(({ value, onChange, placeholder, language }, ref) => {
+  const editorRef = React.useRef(null);
+  const [backspacePressed, setBackspacePressed] = useState(false);
+
+  useEffect(() => {
+    if (editorRef.current) {
+      const currentRaw = getRawTextFromHtml(editorRef.current);
+      if (currentRaw !== value) {
+        editorRef.current.innerHTML = rawToHtml(value, language);
+      }
+    }
+  }, [value, language]);
+
+  const handleInput = () => {
+    if (editorRef.current) {
+      const raw = getRawTextFromHtml(editorRef.current);
+      onChange(raw);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Backspace') {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      
+      let nodeToDelete = null;
+      if (range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset === 0) {
+        let prev = range.startContainer.previousSibling;
+        if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList.contains('var-chip')) {
+          nodeToDelete = prev;
+        }
+      } else if (range.startContainer.nodeType === Node.ELEMENT_NODE) {
+        let child = range.startContainer.childNodes[range.startOffset - 1];
+        if (child && child.nodeType === Node.ELEMENT_NODE && child.classList.contains('var-chip')) {
+          nodeToDelete = child;
+        }
+      }
+
+      if (nodeToDelete) {
+        e.preventDefault();
+        if (!backspacePressed) {
+          nodeToDelete.style.outline = '2px solid #DA1E28';
+          setBackspacePressed(true);
+          const clearHighlight = () => {
+            if (nodeToDelete) nodeToDelete.style.outline = 'none';
+            setBackspacePressed(false);
+            document.removeEventListener('click', clearHighlight);
+          };
+          document.addEventListener('click', clearHighlight);
+        } else {
+          nodeToDelete.remove();
+          setBackspacePressed(false);
+          handleInput();
+        }
+        return;
+      }
+    }
+    setBackspacePressed(false);
+  };
+
+  React.useImperativeHandle(ref, () => ({
+    insertChip: (varKey) => {
+      const el = editorRef.current;
+      if (!el) return;
+      el.focus();
+
+      const meta = VAR_MAP[varKey] || { label: varKey, color: '#525252', bg: '#F4F4F4' };
+      const label = getVarLabel(varKey, language);
+      const chipHtml = `<span class="var-chip" contenteditable="false" data-var="${varKey}" style="background-color: ${meta.bg}; color: ${meta.color}; padding: 2px 8px; margin: 0 4px; font-weight: 600; border-radius: 4px; border: 1px solid ${meta.color}40; font-size: 13px; display: inline-flex; align-items: center; user-select: none;">${label}</span>&nbsp;`;
+
+      const selection = window.getSelection();
+      if (selection.rangeCount) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = chipHtml;
+        
+        const fragment = document.createDocumentFragment();
+        let lastNode;
+        while (tempDiv.firstChild) {
+          lastNode = tempDiv.firstChild;
+          fragment.appendChild(lastNode);
+        }
+        range.insertNode(fragment);
+        
+        if (lastNode) {
+          range.setStartAfter(lastNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      } else {
+        el.innerHTML += chipHtml;
+      }
+      
+      handleInput();
+    }
+  }));
+
+  return (
+    <>
+      <style>{`
+        .rich-template-editor:empty:before {
+          content: attr(data-placeholder);
+          color: #8D8D8D;
+          pointer-events: none;
+          display: block;
+        }
+      `}</style>
+      <div
+        ref={editorRef}
+        contentEditable={true}
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        style={{
+          minHeight: '120px',
+          maxHeight: '300px',
+          overflowY: 'auto',
+          border: '1px solid #8D8D8D',
+          padding: '12px 16px',
+          backgroundColor: '#FFFFFF',
+          fontFamily: 'inherit',
+          fontSize: '14px',
+          lineHeight: 1.6,
+          outline: 'none'
+        }}
+        data-placeholder={placeholder}
+        className="rich-template-editor input"
+      />
+    </>
+  );
+});
+
 // ── Default bodies per message type ──────────────────────────
-const DEFAULT_BODIES = {
-  delivery:         'Hi {{customerName}}, {{quantity}}L of milk delivered today ({{slot}}). Contact: {{ownerPhone}}',
-  extra_delivery:   'Hi {{customerName}}, {{quantity}}L delivered today ({{extraQty}}L extra). Contact: {{ownerPhone}}',
+const DEFAULT_BODIES_EN = {
+  delivery:         'Hi {{customerName}}, {{quantity}} of milk has been delivered today ({{slot}}). Contact: {{ownerPhone}}',
+  extra_delivery:   'Hi {{customerName}}, {{quantity}} delivered today ({{extraQty}} extra). Contact: {{ownerPhone}}',
   no_delivery:      'Hi {{customerName}}, no milk delivery today. Contact: {{ownerPhone}}',
-  payment_reminder: 'Dear {{customerName}}, your milk bill for {{monthName}} is ₹{{grandTotal}}. Paid: ₹{{totalPaid}}. Balance due: ₹{{balance}}. Please pay at your earliest. — {{businessName}}',
-  monthly_bill:     'Hi {{customerName}}, your milk statement for {{monthName}}:\nTotal: ₹{{grandTotal}}\nPaid: ₹{{totalPaid}}\nBalance: ₹{{balance}}\nContact: {{ownerPhone}}',
+  payment_reminder: 'Dear {{customerName}}, your milk bill for {{monthName}} is {{grandTotal}}. Paid: {{totalPaid}}. Balance due: {{balance}}. Please pay at your earliest. — {{businessName}}',
+  monthly_bill:     'Hi {{customerName}}, your milk statement for {{monthName}}:\nTotal: {{grandTotal}}\nPaid: {{totalPaid}}\nBalance: {{balance}}\nContact: {{ownerPhone}}',
+  custom:           '',
+};
+
+const DEFAULT_BODIES_MR = {
+  delivery:         'नमस्कार {{customerName}}, आज तुम्हाला {{quantity}} दूध वितरित केले गेले आहे ({{slot}}). संपर्क: {{ownerPhone}}',
+  extra_delivery:   'नमस्कार {{customerName}}, आज तुम्हाला {{quantity}} दूध वितरित केले गेले आहे (अतिरिक्त: {{extraQty}}). संपर्क: {{ownerPhone}}',
+  no_delivery:      'नमस्कार {{customerName}}, आज कोणतेही दूध वितरण नाही. संपर्क: {{ownerPhone}}',
+  payment_reminder: 'प्रिय {{customerName}}, तुमचे {{monthName}} महिन्याचे दूध बिल {{grandTotal}} आहे. भरलेले: {{totalPaid}}. थकीत रक्कम: {{balance}}. कृपया लवकरात लवकर भरणा करावा. — {{businessName}}',
+  monthly_bill:     'नमस्कार {{customerName}}, तुमचे {{monthName}} महिन्याचे बिल विवरण:\nएकूण: {{grandTotal}}\nभरलेले: {{totalPaid}}\nथकीत: {{balance}}\nसंपर्क: {{ownerPhone}}',
   custom:           '',
 };
 
@@ -107,83 +348,97 @@ const TYPE_LABELS = {
   custom:           { label: 'Custom',            color: '#0F62FE', bg: '#EDF5FF' },
 };
 
-// ── Default templates (seeded on first load) ──────────────────
-const DEFAULT_TEMPLATES = [
-  {
-    name: 'Regular Delivery',
-    type: 'delivery',
-    body: 'Hi {{customerName}}, {{quantity}}L of milk has been delivered to you today. Have any questions? Contact: {{ownerPhone}}',
-    isDefault: true
-  },
-  {
-    name: 'Extra Delivery',
-    type: 'extra_delivery',
-    body: 'Hi {{customerName}}, {{quantity}}L of milk (including {{extraQty}}L extra) has been delivered to you today. Have any questions? Contact: {{ownerPhone}}',
-    isDefault: true
-  },
-  {
-    name: 'No Delivery Today',
-    type: 'no_delivery',
-    body: 'Hi {{customerName}}, no milk delivery is scheduled for you today. Have any questions? Contact: {{ownerPhone}}',
-    isDefault: true
-  },
-  {
-    name: 'Pending Payment Reminder',
-    type: 'payment_reminder',
-    body: 'Dear {{customerName}}, your milk bill for {{monthName}} is ₹{{grandTotal}}. Paid: ₹{{totalPaid}}. Balance due: ₹{{balance}}. Please pay at your earliest. — {{businessName}}',
-    isDefault: true
-  },
-];
+// Translate variable category and variable labels
+const getCategoryLabel = (label, isMr) => {
+  if (!isMr) return label;
+  switch (label) {
+    case '👤 Customer': return '👤 ग्राहक';
+    case '📦 Delivery': return '📦 वितरण';
+    case '💰 Billing': return '💰 बिलिंग';
+    case '📞 Contact': return '📞 संपर्क';
+    default: return label;
+  }
+};
+
+const getVarLabelMR = (label, isMr) => {
+  if (!isMr) return label;
+  switch (label) {
+    case 'Name': return 'नाव';
+    case 'Phone': return 'फोन';
+    case 'Qty': return 'प्रमाण';
+    case 'Extra Qty': return 'अतिरिक्त';
+    case 'Slot': return 'वेळ';
+    case 'Date': return 'तारीख';
+    case 'Time': return 'वेळ (नक्की)';
+    case 'Amount Due': return 'देय रक्कम';
+    case 'Total Paid': return 'भरलेली रक्कम';
+    case 'Balance': return 'शिल्लक';
+    case 'Grand Total': return 'एकूण';
+    case 'Month': return 'महिना';
+    case 'Owner Phone': return 'डेअरी फोन';
+    case 'Business Name': return 'डेअरीचे नाव';
+    default: return label;
+  }
+};
 
 // ── Preview helper — replaces variables with sample values ────
-const previewMessage = (body, ownerPhone) => {
+const previewMessage = (body, ownerPhone, language) => {
+  const isMr = language === 'mr';
+  const qtyStr = `2${isMr ? ' लीटर' : ' L'}`;
+  const extraStr = `0.5${isMr ? ' लीटर' : ' L'}`;
+  const formatAmount = (amt) => `₹${amt}`;
+
   return body
-    .replace(/{{customerName}}/g, 'Ramesh')
-    .replace(/{{quantity}}/g, '2')
-    .replace(/{{extraQty}}/g, '0.5')
+    .replace(/{{customerName}}/g, isMr ? 'रमेश' : 'Ramesh')
+    .replace(/{{quantity}}/g, qtyStr)
+    .replace(/{{extraQty}}/g, extraStr)
     .replace(/{{ownerPhone}}/g, ownerPhone || '9876543210')
-    .replace(/{{slot}}/g, 'Morning')
+    .replace(/{{slot}}/g, isMr ? 'सकाळ' : 'Morning')
     .replace(/{{date}}/g, new Date().toLocaleDateString('en-IN'))
     .replace(/{{time}}/g, '7:30 AM')
-    .replace(/{{amountDue}}/g, '1200')
-    .replace(/{{totalPaid}}/g, '800')
-    .replace(/{{balance}}/g, '400')
-    .replace(/{{grandTotal}}/g, '1200')
-    .replace(/{{monthName}}/g, new Date().toLocaleString('en-IN', { month: 'long' }))
-    .replace(/{{businessName}}/g, 'Amrit Dairy')
+    .replace(/₹?{{amountDue}}/g, formatAmount('1200'))
+    .replace(/₹?{{totalPaid}}/g, formatAmount('800'))
+    .replace(/₹?{{balance}}/g, formatAmount('400'))
+    .replace(/₹?{{grandTotal}}/g, formatAmount('1200'))
+    .replace(/{{monthName}}/g, isMr ? 'मे' : 'May')
+    .replace(/{{businessName}}/g, isMr ? 'अमृत डेअरी' : 'Amrit Dairy')
     .replace(/{{customerPhone}}/g, '9876543210');
 };
 
 // ── Smart Message Builder (Platinum only) ────────────────────
 const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
   const [selectedType, setSelectedType] = useState('delivery');
-  const [body, setBody] = useState(DEFAULT_BODIES['delivery']);
+  const [language, setLanguage] = useState('en'); // 'en' or 'mr'
+  const [body, setBody] = useState(DEFAULT_BODIES_EN['delivery']);
   const [name, setName] = useState('Regular Delivery');
   const [isDefault, setIsDefault] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState('');
   const [bodyError, setBodyError] = useState('');
-  const textareaRef = React.useRef(null);
+  const editorRef = React.useRef(null);
   const toast = useToast();
 
   const handleTypeSelect = (type) => {
     setSelectedType(type);
-    setBody(DEFAULT_BODIES[type] || '');
+    const defaults = language === 'mr' ? DEFAULT_BODIES_MR : DEFAULT_BODIES_EN;
+    setBody(defaults[type] || '');
     const found = MESSAGE_TYPES.find(t => t.type === type);
     setName(found ? found.label.replace(/^[^\s]+\s/, '') : 'Custom');
   };
 
+  const handleLanguageChange = (lang) => {
+    setLanguage(lang);
+    const currentDefaults = language === 'mr' ? DEFAULT_BODIES_MR : DEFAULT_BODIES_EN;
+    const nextDefaults = lang === 'mr' ? DEFAULT_BODIES_MR : DEFAULT_BODIES_EN;
+    if (!body || body === currentDefaults[selectedType]) {
+      setBody(nextDefaults[selectedType] || '');
+    }
+  };
+
   const insertVariable = (v) => {
-    const el = textareaRef.current;
-    if (!el) { setBody(b => b + v); return; }
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const newBody = body.slice(0, start) + v + body.slice(end);
-    setBody(newBody);
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + v.length, start + v.length);
-    }, 0);
+    if (editorRef.current) {
+      editorRef.current.insertChip(v);
+    }
   };
 
   const handleSave = async () => {
@@ -193,11 +448,12 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
     if (hasError) return;
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), type: selectedType, body: body.trim(), isDefault });
+      await onSave({ name: name.trim(), type: selectedType, body: body.trim(), isDefault, language });
       toast.success('Template saved.');
       // Reset to default state
       setSelectedType('delivery');
-      setBody(DEFAULT_BODIES['delivery']);
+      setLanguage('en');
+      setBody(DEFAULT_BODIES_EN['delivery']);
       setName('Regular Delivery');
       setIsDefault(false);
       setNameError('');
@@ -210,25 +466,47 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
   };
 
   const typeMeta = TYPE_LABELS[selectedType] || TYPE_LABELS.custom;
+  const isMr = language === 'mr';
 
   return (
     <div style={{ backgroundColor: '#FFFFFF', border: '2px solid #8A3FFC', padding: '20px 24px', marginBottom: '28px' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
         <span style={{ fontSize: '18px' }}>✨</span>
-        <h3 style={{ fontWeight: 700, fontSize: '16px', color: '#6929C4', margin: 0 }}>Smart Message Builder</h3>
+        <h3 style={{ fontWeight: 700, fontSize: '16px', color: '#6929C4', margin: 0 }}>
+          {isMr ? 'स्मार्ट संदेश निर्माता' : 'Smart Message Builder'}
+        </h3>
         <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', backgroundColor: '#F3F0FF', color: '#8A3FFC', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PLATINUM</span>
+      </div>
+
+      {/* Language Selector */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+          {isMr ? 'भाषा निवडा' : 'Language / भाषा'}
+        </div>
+        <select
+          className="input"
+          value={language}
+          onChange={e => handleLanguageChange(e.target.value)}
+          style={{ maxWidth: '200px' }}
+        >
+          <option value="en">English</option>
+          <option value="mr">मराठी (Marathi)</option>
+        </select>
       </div>
 
       {/* Message type selector */}
       <div style={{ marginBottom: '16px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-          Message Type
+          {isMr ? 'संदेश प्रकार' : 'Message Type'}
         </div>
         <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
           {MESSAGE_TYPES.map(t => {
             const meta = TYPE_LABELS[t.type] || TYPE_LABELS.custom;
             const isSelected = selectedType === t.type;
+            const label = isMr 
+              ? t.label.replace('Regular Delivery', 'नियमित वितरण').replace('Extra Delivery', 'अतिरिक्त वितरण').replace('No Delivery', 'वितरण नाही').replace('Pending Payment', 'थकीत पेमेंट').replace('Monthly Bill', 'मासिक बिल').replace('Custom', 'कस्टम')
+              : t.label;
             return (
               <button
                 key={t.type}
@@ -243,7 +521,7 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
                   transition: 'all 0.1s', borderRadius: '20px'
                 }}
               >
-                {t.label}
+                {label}
               </button>
             );
           })}
@@ -253,12 +531,14 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
       {/* Variable categories */}
       <div style={{ marginBottom: '14px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-          Tap to Insert Variable
+          {isMr ? 'व्हेरिएबल समाविष्ट करण्यासाठी टॅप करा' : 'Tap to Insert Variable'}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {VARIABLE_CATEGORIES.map(cat => (
             <div key={cat.label} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: cat.color, minWidth: '90px', paddingTop: '4px' }}>{cat.label}</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: cat.color, minWidth: '90px', paddingTop: '4px' }}>
+                {getCategoryLabel(cat.label, isMr)}
+              </span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                 {cat.vars.map(v => (
                   <button
@@ -274,7 +554,7 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
                     }}
                     title={v.key}
                   >
-                    {v.label}
+                    {getVarLabelMR(v.label, isMr)}
                   </button>
                 ))}
               </div>
@@ -285,11 +565,11 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
 
       {/* Template name */}
       <div className="input-group" style={{ marginBottom: '12px' }}>
-        <label className="input-label">Template Name *</label>
+        <label className="input-label">{isMr ? 'टेम्पलेटचे नाव *' : 'Template Name *'}</label>
         <input
           type="text"
           className="input"
-          placeholder="e.g. Monthly Bill Reminder"
+          placeholder={isMr ? 'उदा. मासिक बिल स्मरणपत्र' : 'e.g. Monthly Bill Reminder'}
           value={name}
           onChange={e => { setName(e.target.value); setNameError(''); }}
         />
@@ -298,15 +578,13 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
 
       {/* Message body */}
       <div className="input-group" style={{ marginBottom: '12px' }}>
-        <label className="input-label">Message Body *</label>
-        <textarea
-          ref={textareaRef}
-          className="input"
-          rows={5}
-          style={{ height: 'auto', resize: 'vertical', padding: '10px 12px', lineHeight: 1.6 }}
-          placeholder="Type your message or select a type above to pre-fill..."
+        <label className="input-label">{isMr ? 'संदेश मजकूर *' : 'Message Body *'}</label>
+        <RichTemplateEditor
+          ref={editorRef}
+          placeholder={isMr ? 'तुमचा संदेश टाइप करा किंवा निवडलेला प्रकार पूर्व-भरण्यासाठी निवडा...' : 'Type your message or select a type above to pre-fill...'}
           value={body}
-          onChange={e => { setBody(e.target.value); setBodyError(''); }}
+          onChange={val => { setBody(val); setBodyError(''); }}
+          language={language}
         />
         {bodyError && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{bodyError}</div>}
         <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>{body.length}/1000 characters</div>
@@ -316,19 +594,19 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
       {body && (
         <div style={{ backgroundColor: '#F4F4F4', border: '1px solid #E0E0E0', padding: '12px 16px', marginBottom: '14px' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-            📱 Live Preview (sample values)
+            📱 {isMr ? 'थेट पूर्वावलोकन (नमुना मूल्ये)' : 'Live Preview (sample values)'}
           </div>
           <div style={{ fontSize: '13px', color: '#161616', lineHeight: 1.7, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-            {previewMessage(body, ownerPhone)}
+            {previewMessage(body, ownerPhone, language)}
           </div>
         </div>
       )}
 
       {/* Set as default + Save */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifySpace: 'between', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#525252' }}>
           <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} />
-          Set as default for this type
+          {isMr ? 'या प्रकारासाठी डिफॉल्ट म्हणून सेट करा' : 'Set as default for this type'}
         </label>
         <button
           type="button"
@@ -337,7 +615,7 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
           disabled={saving}
           style={{ backgroundColor: '#6929C4', borderColor: '#6929C4', minWidth: '160px' }}
         >
-          {saving ? 'Saving...' : '💾 Save Template'}
+          {saving ? (isMr ? 'जतन होत आहे...' : 'Saving...') : (isMr ? '💾 टेम्पलेट जतन करा' : '💾 Save Template')}
         </button>
       </div>
     </div>
@@ -348,23 +626,34 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
 const TemplateForm = ({ initial, onSave, onCancel, ownerPhone }) => {
   const [name, setName] = useState(initial?.name || '');
   const [type, setType] = useState(initial?.type || 'custom');
+  const [language, setLanguage] = useState(initial?.language || 'en');
   const [body, setBody] = useState(initial?.body || '');
   const [isDefault, setIsDefault] = useState(initial?.isDefault || false);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
-  const textareaRef = React.useRef(null);
+  const editorRef = React.useRef(null);
+
+  const handleLanguageChange = (lang) => {
+    setLanguage(lang);
+    const currentDefaults = language === 'mr' ? DEFAULT_BODIES_MR : DEFAULT_BODIES_EN;
+    const nextDefaults = lang === 'mr' ? DEFAULT_BODIES_MR : DEFAULT_BODIES_EN;
+    if (!body || body === currentDefaults[type]) {
+      setBody(nextDefaults[type] || '');
+    }
+  };
+
+  const handleTypeChange = (newType) => {
+    setType(newType);
+    const defaults = language === 'mr' ? DEFAULT_BODIES_MR : DEFAULT_BODIES_EN;
+    if (!body || body === defaults[type]) {
+      setBody(defaults[newType] || '');
+    }
+  };
 
   const insertVariable = (v) => {
-    const el = textareaRef.current;
-    if (!el) { setBody(b => b + v); return; }
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const newBody = body.slice(0, start) + v + body.slice(end);
-    setBody(newBody);
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + v.length, start + v.length);
-    }, 0);
+    if (editorRef.current) {
+      editorRef.current.insertChip(v);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -372,73 +661,81 @@ const TemplateForm = ({ initial, onSave, onCancel, ownerPhone }) => {
     if (!name.trim() || !body.trim()) { toast.error('Name and message body are required.'); return; }
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), type, body: body.trim(), isDefault });
+      await onSave({ name: name.trim(), type, body: body.trim(), isDefault, language });
     } finally {
       setSaving(false);
     }
   };
 
+  const isMr = language === 'mr';
+
   return (
     <form onSubmit={handleSubmit}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
         <div className="input-group" style={{ marginBottom: 0 }}>
-          <label className="input-label">Template Name *</label>
-          <input type="text" className="input" placeholder="e.g. Morning Delivery"
+          <label className="input-label">{isMr ? 'टेम्पलेटचे नाव *' : 'Template Name *'}</label>
+          <input type="text" className="input" placeholder={isMr ? 'उदा. सकाळचे वितरण' : 'e.g. Morning Delivery'}
             value={name} onChange={e => setName(e.target.value)} required />
         </div>
         <div className="input-group" style={{ marginBottom: 0 }}>
-          <label className="input-label">Type</label>
-          <select className="input" value={type} onChange={e => setType(e.target.value)}>
-            <option value="delivery">Regular Delivery</option>
-            <option value="extra_delivery">Extra Delivery</option>
-            <option value="no_delivery">No Delivery</option>
-            <option value="payment_reminder">Payment Reminder</option>
-            <option value="monthly_bill">Monthly Bill</option>
-            <option value="custom">Custom</option>
+          <label className="input-label">{isMr ? 'प्रकार' : 'Type'}</label>
+          <select className="input" value={type} onChange={e => handleTypeChange(e.target.value)}>
+            <option value="delivery">{isMr ? 'नियमित वितरण' : 'Regular Delivery'}</option>
+            <option value="extra_delivery">{isMr ? 'अतिरिक्त वितरण' : 'Extra Delivery'}</option>
+            <option value="no_delivery">{isMr ? 'वितरण नाही' : 'No Delivery'}</option>
+            <option value="payment_reminder">{isMr ? 'थकीत पेमेंट' : 'Payment Reminder'}</option>
+            <option value="monthly_bill">{isMr ? 'मालिक बिल' : 'Monthly Bill'}</option>
+            <option value="custom">{isMr ? 'कस्टम' : 'Custom'}</option>
+          </select>
+        </div>
+        <div className="input-group" style={{ marginBottom: 0 }}>
+          <label className="input-label">{isMr ? 'भाषा' : 'Language'}</label>
+          <select className="input" value={language} onChange={e => handleLanguageChange(e.target.value)}>
+            <option value="en">English</option>
+            <option value="mr">मराठी (Marathi)</option>
           </select>
         </div>
       </div>
 
-      {/* Variable chips */}
+      {/* Variable categories for Form */}
       <div style={{ marginBottom: '10px' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-          Insert Variable
+          {isMr ? 'व्हेरिएबल समाविष्ट करा' : 'Insert Variable'}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {VARIABLES.map(v => (
-            <button
-              key={v.key}
-              type="button"
-              title={v.desc}
-              onClick={() => insertVariable(v.key)}
-              style={{
-                padding: '4px 10px', fontSize: '12px', fontWeight: 600,
-                backgroundColor: '#EDF5FF', color: '#0F62FE',
-                border: '1px solid rgba(15,98,254,0.3)',
-                cursor: 'pointer', fontFamily: 'monospace',
-                transition: 'background-color 0.1s'
-              }}
-              onMouseOver={e => { e.currentTarget.style.backgroundColor = '#D0E2FF'; }}
-              onMouseOut={e => { e.currentTarget.style.backgroundColor = '#EDF5FF'; }}
-            >
-              {v.key}
-            </button>
-          ))}
+          {Object.keys(VAR_MAP).map(key => {
+            const meta = VAR_MAP[key];
+            const label = getVarLabel(key, language);
+            return (
+              <button
+                key={key}
+                type="button"
+                title={key}
+                onClick={() => insertVariable(key)}
+                style={{
+                  padding: '4px 10px', fontSize: '12px', fontWeight: 600,
+                  backgroundColor: meta.bg, color: meta.color,
+                  border: `1px solid ${meta.color}40`,
+                  cursor: 'pointer', fontFamily: 'monospace',
+                  transition: 'background-color 0.1s'
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Message body */}
       <div className="input-group">
-        <label className="input-label">Message Body *</label>
-        <textarea
-          ref={textareaRef}
-          className="input"
-          rows={4}
-          style={{ height: 'auto', resize: 'vertical', padding: '10px 12px', lineHeight: 1.6 }}
-          placeholder="Type your message here. Click variables above to insert them."
+        <label className="input-label">{isMr ? 'संदेश मजकूर *' : 'Message Body *'}</label>
+        <RichTemplateEditor
+          ref={editorRef}
+          placeholder={isMr ? 'तुमचा संदेश लिहा. व्हेरिएबल्स टाकण्यासाठी वरील बटणांवर क्लिक करा.' : 'Type your message here. Click variables above to insert them.'}
           value={body}
-          onChange={e => setBody(e.target.value)}
-          required
+          onChange={setBody}
+          language={language}
         />
         <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
           {body.length}/1000 characters
@@ -449,10 +746,10 @@ const TemplateForm = ({ initial, onSave, onCancel, ownerPhone }) => {
       {body && (
         <div style={{ backgroundColor: '#F4F4F4', border: '1px solid #E0E0E0', padding: '12px 16px', marginBottom: '16px' }}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-            Preview (sample values)
+            {isMr ? 'पूर्वावलोकन (नमुना मूल्ये)' : 'Preview (sample values)'}
           </div>
           <div style={{ fontSize: '14px', color: '#161616', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-            {previewMessage(body, ownerPhone)}
+            {previewMessage(body, ownerPhone, language)}
           </div>
         </div>
       )}
@@ -460,14 +757,16 @@ const TemplateForm = ({ initial, onSave, onCancel, ownerPhone }) => {
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#525252' }}>
           <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} />
-          Set as default for this type
+          {isMr ? 'या प्रकारासाठी डिफॉल्ट म्हणून सेट करा' : 'Set as default for this type'}
         </label>
       </div>
 
       <div style={{ display: 'flex', gap: '12px' }}>
-        <button type="button" className="btn btn-ghost btn-full" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-ghost btn-full" onClick={onCancel}>
+          {isMr ? 'रद्द करा' : 'Cancel'}
+        </button>
         <button type="submit" className="btn btn-primary btn-full" disabled={saving}>
-          {saving ? 'Saving...' : initial ? 'Update Template' : 'Create Template'}
+          {saving ? (isMr ? 'जतन होत आहे...' : 'Saving...') : initial ? (isMr ? 'अपडेट करा' : 'Update Template') : (isMr ? 'टेम्पलेट तयार करा' : 'Create Template')}
         </button>
       </div>
     </form>
@@ -486,12 +785,11 @@ const MessageTemplates = () => {
   const [seeding, setSeeding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Feature flag checks — driven by user.features, not plan name
-  const hasWhatsApp        = user?.features?.whatsapp_alerts;
-  const hasCustomTemplates = user?.features?.custom_message_templates;
   const plan = user?.subscription?.plan || 'silver';
-  const isPlatinum = hasCustomTemplates;
-  const isGoldOrAbove = hasWhatsApp || hasCustomTemplates || user?.subscription?.status === 'trial';
+  const hasWhatsApp        = user?.features?.whatsapp_alerts || plan === 'gold' || plan === 'platinum';
+  const hasCustomTemplates = user?.features?.custom_message_templates || plan === 'platinum';
+  const isPlatinum = hasCustomTemplates || plan === 'platinum';
+  const isGoldOrAbove = hasWhatsApp || hasCustomTemplates || plan === 'gold' || plan === 'platinum' || user?.subscription?.status === 'trial';
 
   const GOLD_DEFAULT_TEMPLATE = {
     name: 'Regular Delivery',
@@ -641,7 +939,7 @@ const MessageTemplates = () => {
                 {GOLD_DEFAULT_TEMPLATE.body}
               </div>
               <div style={{ marginTop: '8px', fontSize: '12px', color: '#8D8D8D' }}>
-                {isMarathi ? 'पूर्वावलोकन' : 'Preview'}: <span style={{ color: '#161616' }}>{previewMessage(GOLD_DEFAULT_TEMPLATE.body, user?.phone)}</span>
+                {isMarathi ? 'पूर्वावलोकन' : 'Preview'}: <span style={{ color: '#161616' }}>{previewMessage(GOLD_DEFAULT_TEMPLATE.body, user?.phone, isMarathi ? 'mr' : 'en')}</span>
               </div>
             </div>
 
@@ -684,13 +982,34 @@ const MessageTemplates = () => {
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0043CE', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <BookOpen size={14} /> {isMarathi ? 'उपलब्ध व्हेरिएबल्स' : 'Available Variables'}
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {VARIABLES.map(v => (
-                  <div key={v.key} style={{ fontSize: '12px' }}>
-                    <code style={{ backgroundColor: '#FFFFFF', padding: '2px 6px', border: '1px solid rgba(15,98,254,0.3)', color: '#0F62FE', fontWeight: 700 }}>{v.key}</code>
-                    <span style={{ color: '#525252', marginLeft: '4px' }}>{v.desc}</span>
-                  </div>
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
+                {Object.keys(VAR_MAP).map(key => {
+                  const getVarDesc = (k, isMr) => {
+                    switch (k) {
+                      case '{{customerName}}': return isMr ? "ग्राहकाचे नाव (उपलब्ध नसल्यास 'नमस्कार' वापरले जाईल)" : "Customer's name";
+                      case '{{customerPhone}}': return isMr ? "ग्राहकाचा फोन नंबर" : "Customer's phone number";
+                      case '{{quantity}}': return isMr ? "वितरित केलेले एकूण दूध" : "Delivered quantity";
+                      case '{{extraQty}}': return isMr ? "वितरित केलेले अतिरिक्त दूध" : "Extra quantity";
+                      case '{{slot}}': return isMr ? "सकाळ किंवा संध्याकाळ" : "Morning or Evening slot";
+                      case '{{date}}': return isMr ? "वितरणाची तारीख" : "Delivery date";
+                      case '{{time}}': return isMr ? "वितरणाची वेळ" : "Delivery time";
+                      case '{{amountDue}}': return isMr ? "देय रक्कम" : "Amount due";
+                      case '{{totalPaid}}': return isMr ? "एकूण भरलेली रक्कम" : "Total amount paid";
+                      case '{{balance}}': return isMr ? "शिल्लक रक्कम" : "Outstanding balance";
+                      case '{{grandTotal}}': return isMr ? "एकूण बिल" : "Grand total bill amount";
+                      case '{{monthName}}': return isMr ? "महिन्याचे नाव" : "Month name";
+                      case '{{ownerPhone}}': return isMr ? "डेअरीचा संपर्क क्रमांक" : "Dairy contact number";
+                      case '{{businessName}}': return isMr ? "डेअरीचे नाव" : "Dairy business name";
+                      default: return "";
+                    }
+                  };
+                  return (
+                    <div key={key} style={{ fontSize: '12px', display: 'flex', alignItems: 'center' }}>
+                      <code style={{ backgroundColor: '#FFFFFF', padding: '2px 6px', border: '1px solid rgba(15,98,254,0.3)', color: '#0F62FE', fontWeight: 700, fontFamily: 'monospace' }}>{key}</code>
+                      <span style={{ color: '#525252', marginLeft: '6px' }}>{getVarDesc(key, isMarathi)}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -803,7 +1122,7 @@ const MessageTemplates = () => {
                               {tmpl.body}
                             </div>
                             <div style={{ marginTop: '8px', fontSize: '12px', color: '#8D8D8D' }}>
-                              {isMarathi ? 'पूर्वावलोकन' : 'Preview'}: <span style={{ color: '#161616' }}>{previewMessage(tmpl.body, user?.phone)}</span>
+                              {isMarathi ? 'पूर्वावलोकन' : 'Preview'}: <span style={{ color: '#161616' }}>{previewMessage(tmpl.body, user?.phone, tmpl.language || 'en')}</span>
                             </div>
                           </div>
                         ))}

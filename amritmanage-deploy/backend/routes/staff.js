@@ -6,34 +6,38 @@ const User = require('../models/User');
 const DailyCollection = require('../models/DailyCollection');
 const MessageTemplate = require('../models/MessageTemplate');
 const { protect, authorize, requireActiveSubscription } = require('../middleware/auth');
-const { sendDeliveryNotification } = require('../services/whatsappService');
+const { sendDeliveryNotification, getSessionStatusDb } = require('../services/whatsappService');
 
-router.use(protect, authorize('staff'), requireActiveSubscription);
+// Allow both staff and owner to access these delivery endpoints
+router.use(protect, authorize('staff', 'owner'), requireActiveSubscription);
 
 // ── GET /api/staff/today ──────────────────────────────────────
 // Get today's customer list with delivery status
-// Shows customers assigned to this staff member, OR all customers if unassigned
 router.get('/today', async (req, res, next) => {
   try {
-    const ownerId = req.user.ownerId;
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
     const staffId = req.user._id;
     const today = new Date().toISOString().split('T')[0];
 
-    // Customers assigned to this staff OR unassigned (assignedStaffId is null/undefined)
+    // Get WhatsApp status of owner
+    const wsStatus = await getSessionStatusDb(ownerId);
+
+    // If owner, fetch all active customers. If staff, fetch assigned or unassigned.
+    const query = { ownerId, isActive: true };
+    if (req.user.role === 'staff') {
+      query.$or = [
+        { assignedStaffId: staffId },
+        { assignedStaffId: null },
+        { assignedStaffId: { $exists: false } }
+      ];
+    }
+
     const [customers, todayLogs] = await Promise.all([
-      Customer.find({
-        ownerId,
-        isActive: true,
-        $or: [
-          { assignedStaffId: staffId },
-          { assignedStaffId: null },
-          { assignedStaffId: { $exists: false } }
-        ]
-      })
+      Customer.find(query)
         .select('name phone address base_requirement assignedStaffId customerCode showCodeToStaff')
         .sort({ name: 1 })
         .lean(),
-      DailyLog.find({ ownerId, date: today, staffId }).lean()
+      DailyLog.find({ ownerId, date: today, ...(req.user.role === 'staff' ? { staffId } : {}) }).lean()
     ]);
 
     // Map delivery status onto each customer
@@ -45,30 +49,38 @@ router.get('/today', async (req, res, next) => {
 
     const enriched = customers.map(c => ({
       ...c,
-      // Only expose customerCode to staff if owner has enabled it
-      customerCode: c.showCodeToStaff ? c.customerCode : undefined,
-      showCodeToStaff: undefined, // don't leak this flag to staff
+      // Owners always see codes; staff only if flag is enabled
+      customerCode: req.user.role === 'owner' ? c.customerCode : (c.showCodeToStaff ? c.customerCode : undefined),
+      showCodeToStaff: undefined, // hide flag
       morning: logMap[`${c._id}_morning`] || null,
       evening: logMap[`${c._id}_evening`] || null
     }));
 
-    // Fetch today's quota for this staff member
-    const collection = await DailyCollection.findOne({ ownerId, date: today }).lean();
-    const quota = collection?.staffQuotas?.find(q => q.staffId.toString() === staffId.toString());
+    // Fetch today's quota for staff members only
+    let quota = null;
     const totalDelivered = todayLogs.reduce((s, l) => s + l.delivered_qty, 0);
 
-    // Fetch owner plan to pass minimal info to staff (plan tier only, no phone/features)
+    if (req.user.role === 'staff') {
+      const collection = await DailyCollection.findOne({ ownerId, date: today }).lean();
+      const staffQuota = collection?.staffQuotas?.find(q => q.staffId.toString() === staffId.toString());
+      if (staffQuota) {
+        quota = {
+          assignedLiters: staffQuota.assignedLiters,
+          deliveredLiters: totalDelivered,
+          remainingLiters: Math.max(0, staffQuota.assignedLiters - totalDelivered)
+        };
+      }
+    }
+
+    // Fetch owner plan
     const owner = await User.findById(ownerId).select('subscription').lean();
 
     res.json({
       customers: enriched,
       date: today,
       ownerPlan: owner?.subscription?.plan || 'silver',
-      quota: quota ? {
-        assignedLiters: quota.assignedLiters,
-        deliveredLiters: totalDelivered,
-        remainingLiters: Math.max(0, quota.assignedLiters - totalDelivered)
-      } : null
+      whatsappStatus: wsStatus.status,
+      quota
     });
   } catch (err) {
     next(err);
@@ -76,7 +88,7 @@ router.get('/today', async (req, res, next) => {
 });
 
 // ── POST /api/staff/deliver ───────────────────────────────────
-// Mark a delivery (the core staff action)
+// Mark a delivery
 router.post('/deliver', async (req, res, next) => {
   try {
     const { customerId, slot, extra_qty = 0, notes } = req.body;
@@ -84,7 +96,7 @@ router.post('/deliver', async (req, res, next) => {
       return res.status(400).json({ error: 'customerId and slot are required.' });
     }
 
-    const ownerId = req.user.ownerId;
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
     const today = new Date().toISOString().split('T')[0];
 
     // Verify customer belongs to this owner
@@ -102,23 +114,24 @@ router.post('/deliver', async (req, res, next) => {
     const price_per_liter = customer.custom_price !== null ? customer.custom_price : customer.default_price;
     const amount_calculated = delivered_qty * price_per_liter;
 
-    // ── Quota enforcement ─────────────────────────────────────
-    // If owner has set a daily quota for this staff, enforce it
-    const collection = await DailyCollection.findOne({ ownerId, date: today }).lean();
-    if (collection) {
-      const quota = collection.staffQuotas?.find(q => q.staffId.toString() === req.user._id.toString());
-      if (quota) {
-        const alreadyDelivered = await DailyLog.aggregate([
-          { $match: { ownerId, staffId: req.user._id, date: today } },
-          { $group: { _id: null, total: { $sum: '$delivered_qty' } } }
-        ]);
-        const totalSoFar = alreadyDelivered[0]?.total || 0;
-        if (totalSoFar + delivered_qty > quota.assignedLiters) {
-          return res.status(400).json({
-            error: `Quota exceeded. You have ${(quota.assignedLiters - totalSoFar).toFixed(1)}L remaining out of your ${quota.assignedLiters}L quota for today.`,
-            quotaExceeded: true,
-            remaining: Math.max(0, quota.assignedLiters - totalSoFar)
-          });
+    // Quota enforcement (staff only)
+    if (req.user.role === 'staff') {
+      const collection = await DailyCollection.findOne({ ownerId, date: today }).lean();
+      if (collection) {
+        const quota = collection.staffQuotas?.find(q => q.staffId.toString() === req.user._id.toString());
+        if (quota) {
+          const alreadyDelivered = await DailyLog.aggregate([
+            { $match: { ownerId, staffId: req.user._id, date: today } },
+            { $group: { _id: null, total: { $sum: '$delivered_qty' } } }
+          ]);
+          const totalSoFar = alreadyDelivered[0]?.total || 0;
+          if (totalSoFar + delivered_qty > quota.assignedLiters) {
+            return res.status(400).json({
+              error: `Quota exceeded. You have ${(quota.assignedLiters - totalSoFar).toFixed(1)}L remaining out of your ${quota.assignedLiters}L quota for today.`,
+              quotaExceeded: true,
+              remaining: Math.max(0, quota.assignedLiters - totalSoFar)
+            });
+          }
         }
       }
     }
@@ -153,14 +166,15 @@ router.post('/deliver', async (req, res, next) => {
   }
 });
 
-// ── PATCH /api/staff/logs/:id — staff can edit their own log entry
+// ── PATCH /api/staff/logs/:id — edit log entry
 router.patch('/logs/:id', async (req, res, next) => {
   try {
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
     const { extra_qty, notes } = req.body;
     const log = await DailyLog.findOne({
       _id: req.params.id,
-      ownerId: req.user.ownerId,
-      staffId: req.user._id  // staff can only edit their own logs
+      ownerId,
+      ...(req.user.role === 'staff' ? { staffId: req.user._id } : {})
     });
     if (!log) return res.status(404).json({ error: 'Log entry not found.' });
 
@@ -174,7 +188,7 @@ router.patch('/logs/:id', async (req, res, next) => {
     await log.save();
 
     const populated = await DailyLog.findById(log._id)
-      .populate('customerId', 'name phone')
+      .populate('customerId', 'name phone language')
       .lean();
     res.json({ log: populated });
   } catch (err) {
@@ -182,22 +196,23 @@ router.patch('/logs/:id', async (req, res, next) => {
   }
 });
 
-// ── POST /api/staff/send-whatsapp — staff sends WhatsApp message to customer
+// ── POST /api/staff/send-whatsapp
 router.post('/send-whatsapp', async (req, res, next) => {
   try {
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
     const { customerId, message } = req.body;
     if (!customerId || !message) {
       return res.status(400).json({ error: 'customerId and message are required.' });
     }
 
-    const customer = await Customer.findOne({ _id: customerId, ownerId: req.user.ownerId });
+    const customer = await Customer.findOne({ _id: customerId, ownerId });
     if (!customer) return res.status(404).json({ error: 'Customer not found.' });
 
-    const owner = await User.findById(req.user.ownerId);
+    const owner = await User.findById(ownerId);
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
 
     const { sendMessage } = require('../services/whatsappService');
-    await sendMessage(req.user.ownerId.toString(), customer.phone, message);
+    await sendMessage(ownerId.toString(), customer.phone, message);
 
     res.json({ success: true, message: 'Message sent.' });
   } catch (err) {
@@ -205,22 +220,20 @@ router.post('/send-whatsapp', async (req, res, next) => {
   }
 });
 
-// ── GET /api/staff/message-templates — get owner's templates for staff use
-// Gold plan: delivery + extra_delivery templates only (no no_delivery, no custom)
-// Platinum plan: all templates
+// ── GET /api/staff/message-templates
 router.get('/message-templates', async (req, res, next) => {
   try {
-    const owner = await User.findById(req.user.ownerId).select('features subscription').lean();
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const owner = await User.findById(ownerId).select('features subscription').lean();
     const hasCustomTemplates = owner?.features?.custom_message_templates;
 
-    const query = { ownerId: req.user.ownerId, isActive: true };
-    if (!hasCustomTemplates) {
-      // Gold plan: only delivery-related templates — no 'no_delivery', no 'custom'
-      // Staff should be able to send regular + extra delivery messages
-      query.type = { $in: ['delivery', 'extra_delivery'] };
-    } else {
-      // Platinum: all except 'no_delivery' — that's owner-only
-      query.type = { $in: ['delivery', 'extra_delivery', 'custom'] };
+    const query = { ownerId, isActive: true };
+    if (req.user.role === 'staff') {
+      if (!hasCustomTemplates) {
+        query.type = { $in: ['delivery', 'extra_delivery'] };
+      } else {
+        query.type = { $in: ['delivery', 'extra_delivery', 'custom'] };
+      }
     }
 
     const templates = await MessageTemplate.find(query)
@@ -230,15 +243,18 @@ router.get('/message-templates', async (req, res, next) => {
     next(err);
   }
 });
+
+// ── GET /api/staff/history
 router.get('/history', async (req, res, next) => {
   try {
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
     const today = new Date().toISOString().split('T')[0];
     const logs = await DailyLog.find({
-      ownerId: req.user.ownerId,
-      staffId: req.user._id,
+      ownerId,
+      ...(req.user.role === 'staff' ? { staffId: req.user._id } : {}),
       date: today
     })
-      .populate('customerId', 'name phone')
+      .populate('customerId', 'name phone language')
       .sort({ createdAt: -1 })
       .lean();
 

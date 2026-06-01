@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AmritManage — Credential Setup</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d0d;
+      --surface:   #161616;
+      --border:    #262626;
+      --border-hi: #333;
+      --text:      #e0e0e0;
+      --muted:     #888;
+      --dim:       #555;
+      --accent:    #0f62fe;
+      --accent-hi: #1a6fff;
+      --green:     #24a148;
+      --green-bg:  #071a0e;
+      --red:       #da1e28;
+      --red-bg:    #1a0000;
+      --orange:    #f97316;
+      --orange-bg: #1a0a00;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 40px 16px 80px;
+    }
+
+    .container { max-width: 700px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .header { text-align: center; margin-bottom: 32px; }
+    .header h1 { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+    .header p  { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Alert banner ── */
+    .alert {
+      padding: 12px 16px;
+      font-size: 12px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+      border-left: 4px solid var(--orange);
+      background: var(--orange-bg);
+      color: var(--orange);
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      padding: 11px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .status-bar.ok   { background: var(--green-bg);  border: 1px solid var(--green);  color: var(--green);  display: block; }
+    .status-bar.warn { background: var(--orange-bg); border: 1px solid var(--orange); color: var(--orange); display: block; }
+    .status-bar.err  { background: var(--red-bg);    border: 1px solid var(--red);    color: var(--red);    display: block; }
+
+    /* ── Current-info strip ── */
+    .current-info {
+      background: #111;
+      border: 1px solid var(--border);
+      padding: 12px 16px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 20px;
+      line-height: 1.8;
+      display: none;
+    }
+    .current-info strong { color: #ccc; }
+
+    /* ── Card section ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--dim);
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Fields ── */
+    .field { margin-bottom: 16px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .field input {
+      width: 100%;
+      background: #0d0d0d;
+      border: 1px solid var(--border-hi);
+      color: #fff;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      -webkit-appearance: none;
+    }
+    .field input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(15,98,254,0.18);
+    }
+    .field input.invalid { border-color: var(--red); }
+    .field-hint {
+      font-size: 11px;
+      color: var(--dim);
+      margin-top: 4px;
+    }
+
+    /* ── Grid layouts ── */
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+    /* ── OTP inputs ── */
+    .otp-input {
+      letter-spacing: 10px;
+      font-size: 22px;
+      text-align: center;
+      font-weight: 700;
+    }
+    .otp-sub {
+      font-size: 11px;
+      color: var(--dim);
+      text-align: center;
+      margin-top: 5px;
+    }
+
+    /* ── Security badge ── */
+    .security-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: #0a0f1a;
+      border: 1px solid #1a2a4a;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: #6a9fd8;
+      margin-bottom: 18px;
+      line-height: 1.6;
+    }
+    .security-note .icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Actions ── */
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .btn {
+      padding: 13px 22px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: opacity 0.15s, background 0.15s;
+      min-width: 120px;
+      letter-spacing: 0.2px;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.88; }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+    .btn-primary   { background: var(--accent); color: #fff; flex: 2; }
+    .btn-secondary { background: #222; color: #bbb; border: 1px solid var(--border-hi); flex: 1; }
+    .btn-ghost     { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 8px 14px; font-size: 12px; min-width: auto; }
+
+    /* ── Result box ── */
+    .result {
+      margin-top: 20px;
+      padding: 16px 18px;
+      font-size: 13px;
+      line-height: 1.75;
+      display: none;
+    }
+    .result.success { background: var(--green-bg);  border: 1px solid var(--green); color: var(--green);  display: block; }
+    .result.error   { background: var(--red-bg);    border: 1px solid var(--red);   color: var(--red);    display: block; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ── */
+    @media (max-width: 520px) {
+      .row-2, .row-3 { grid-template-columns: 1fr; }
+      .actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>🔐 AmritManage — Credential Setup</h1>
+    <p>Saves credentials directly to MongoDB. Accessible from localhost only.</p>
+  </div>
+
+  <div class="alert">
+    ⚠️ <strong>LOCALHOST ONLY.</strong> This page is only reachable from this machine.
+    All credentials are hashed with bcrypt before being stored — plaintext is never written to the database.
+  </div>
+
+  <div class="status-bar" id="statusBar"></div>
+  <div class="current-info" id="currentInfo"></div>
+
+  <!-- ── Superadmin Account ── -->
+  <div class="card">
+    <div class="card-title">Superadmin Account</div>
+
+    <div class="field">
+      <label>Full Name</label>
+      <input type="text" id="sa_name" placeholder="Super Admin" autocomplete="off" />
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>Phone Number</label>
+        <input type="tel" id="sa_phone" placeholder="10-digit phone" maxlength="10" inputmode="numeric" />
+      </div>
+      <div class="field">
+        <label>Email Address</label>
+        <input type="email" id="sa_email" placeholder="admin@yourdomain.com" />
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="sa_username" placeholder="admin_username" autocomplete="off" />
+        <div class="field-hint">Letters, numbers, dots, dashes, underscores</div>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="sa_password" placeholder="Min 8 characters" autocomplete="new-password" />
+        <div class="field-hint">Hashed with bcrypt (cost 12) before saving</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Login Verification Codes ── -->
+  <div class="card">
+    <div class="card-title">Login Verification Codes</div>
+
+    <div class="security-note">
+      <span class="icon">🔒</span>
+      <span>
+        Each role requires its own 6-digit code on every login.
+        Codes are hashed with bcrypt (cost 10) and stored as hashes — the plaintext is never saved.
+        All three codes must be unique.
+      </span>
+    </div>
+
+    <div class="row-3">
+      <div class="field">
+        <label>Superadmin Code</label>
+        <input type="text" id="otp_superadmin" class="otp-input" placeholder="000000"
+               maxlength="6" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)" />
+        <div class="otp-sub">Super Admin</div>
+      </div>
+      <div class="field">
+        <label>Owner Code</label>
+        <input type="text" id="otp_owner" class="otp-input" placeholder="000000"
+               maxlength="6" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)" />
+        <div class="otp-sub">Owner</div>
+      </div>
+      <div class="field">
+        <label>Staff Code</label>
+        <input type="text" id="otp_staff" class="otp-input" placeholder="000000"
+               maxlength="6" inputmode="numeric"
+               oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)" />
+        <div class="otp-sub">Staff</div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px">
+      <button type="button" class="btn btn-ghost" onclick="generateOTPs()">
+        🎲 Auto-generate all 3 codes
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Actions ── -->
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" onclick="clearAll()">Clear All</button>
+    <button type="button" class="btn btn-primary" id="saveBtn" onclick="saveCredentials()">
+      Save to Database
+    </button>
+  </div>
+
+  <div class="result" id="result"></div>
+
+</div><!-- /container -->
+
+<script>
+(function () {
+  'use strict';
+
+  var API = '/api/setup';
+
+  /* ── Helpers ── */
+  function $(id) { return document.getElementById(id); }
+  function val(id) { return $(id).value.trim(); }
+
+  function showStatus(type, msg) {
+    var bar = $('statusBar');
+    bar.className = 'status-bar ' + type;
+    bar.textContent = msg;
+  }
+
+  function showResult(type, html) {
+    var r = $('result');
+    r.className = 'result ' + type;
+    r.innerHTML = html;
+  }
+
+  function hideResult() {
+    var r = $('result');
+    r.className = 'result';
+    r.style.display = 'none';
+  }
+
+  function markInvalid(id) {
+    $(id).classList.add('invalid');
+    $(id).focus();
+  }
+
+  function clearInvalid() {
+    ['sa_name','sa_phone','sa_email','sa_username','sa_password',
+     'otp_superadmin','otp_owner','otp_staff'].forEach(function(id) {
+      $(id).classList.remove('invalid');
+    });
+  }
+
+  /* ── Load current status on page load ── */
+  window.addEventListener('load', function () {
+    fetch(API + '/status')
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, d: d }; }); })
+      .then(function (r) {
+        if (!r.ok) {
+          showStatus('err', '✗ ' + (r.d.error || 'Server error — check backend logs.'));
+          return;
+        }
+        var d = r.d;
+        if (d.isInitialized) {
+          showStatus('ok', '✓ System initialized on ' + new Date(d.configuredAt).toLocaleString());
+          if (d.superadmin) {
+            var info = $('currentInfo');
+            info.style.display = 'block';
+            info.innerHTML =
+              '<strong>Stored Superadmin (use these exact values to log in):</strong><br>' +
+              'Phone: <strong>' + esc(d.superadmin.phone) + '</strong><br>' +
+              'Email: <strong>' + esc(d.superadmin.email) + '</strong><br>' +
+              'Username: <strong>' + esc(d.superadmin.username) + '</strong><br>' +
+              'Name: ' + esc(d.superadmin.name) +
+              '<br><span style="color:var(--dim);font-size:11px">' +
+              'Fill the form below to update credentials. Leave password blank to keep the existing one.</span>';
+            $('sa_name').value     = d.superadmin.name     || '';
+            $('sa_phone').value    = d.superadmin.phone    || '';
+            $('sa_email').value    = d.superadmin.email    || '';
+            $('sa_username').value = d.superadmin.username || '';
+          }
+        } else {
+          showStatus('warn', '⚠ System not yet initialized. Fill in the form below.');
+        }
+      })
+      .catch(function (e) {
+        showStatus('err', '✗ Could not reach server: ' + e.message);
+      });
+  });
+
+  /* ── Auto-generate OTPs ── */
+  window.generateOTPs = function () {
+    var ids = ['otp_superadmin', 'otp_owner', 'otp_staff'];
+    var codes = [];
+    // Keep regenerating until all three are unique
+    while (new Set(codes).size !== 3) {
+      codes = ids.map(function () {
+        var arr = new Uint32Array(1);
+        crypto.getRandomValues(arr);
+        return String(100000 + (arr[0] % 900000));
+      });
+    }
+    ids.forEach(function (id, i) { $(id).value = codes[i]; });
+  };
+
+  /* ── Validate ── */
+  function validate() {
+    clearInvalid();
+
+    if (!val('sa_name'))     { markInvalid('sa_name');     showResult('error', '✗ Please enter the superadmin name.'); return false; }
+    if (!val('sa_phone'))    { markInvalid('sa_phone');    showResult('error', '✗ Please enter the phone number.'); return false; }
+    if (!val('sa_email'))    { markInvalid('sa_email');    showResult('error', '✗ Please enter the email address.'); return false; }
+    if (!val('sa_username')) { markInvalid('sa_username'); showResult('error', '✗ Please enter the username.'); return false; }
+
+    var pwd = $('sa_password').value;
+    // Password is optional on update (blank = keep existing), required on first setup
+    var isInitialized = $('currentInfo').style.display !== 'none';
+    if (!isInitialized && !pwd) {
+      markInvalid('sa_password');
+      showResult('error', '✗ Please enter a password.');
+      return false;
+    }
+    if (pwd && pwd.length < 8) {
+      markInvalid('sa_password');
+      showResult('error', '✗ Password must be at least 8 characters.');
+      return false;
+    }
+
+    if (!/^\d{10}$/.test(val('sa_phone'))) {
+      markInvalid('sa_phone');
+      showResult('error', '✗ Phone must be exactly 10 digits.');
+      return false;
+    }
+    if (!val('sa_email').includes('@')) {
+      markInvalid('sa_email');
+      showResult('error', '✗ Enter a valid email address.');
+      return false;
+    }
+
+    var otpIds = ['otp_superadmin', 'otp_owner', 'otp_staff'];
+    for (var i = 0; i < otpIds.length; i++) {
+      if (!val(otpIds[i])) {
+        markInvalid(otpIds[i]);
+        showResult('error', '✗ Please fill in all three verification codes.');
+        return false;
+      }
+      if (!/^\d{6}$/.test(val(otpIds[i]))) {
+        markInvalid(otpIds[i]);
+        showResult('error', '✗ Each verification code must be exactly 6 digits.');
+        return false;
+      }
+    }
+
+    var otpValues = otpIds.map(function (id) { return val(id); });
+    if (new Set(otpValues).size !== 3) {
+      otpIds.forEach(function (id) { markInvalid(id); });
+      showResult('error', '✗ All three verification codes must be different.');
+      return false;
+    }
+
+    return true;
+  }
+
+  /* ── Save credentials ── */
+  window.saveCredentials = function () {
+    hideResult();
+    if (!validate()) return;
+
+    var btn = $('saveBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Saving…';
+
+    var body = {
+      name:         val('sa_name'),
+      phone:        val('sa_phone'),
+      email:        val('sa_email').toLowerCase(),
+      username:     val('sa_username').toLowerCase(),
+      password:     $('sa_password').value,   // may be blank on update
+      otpSuperadmin: val('otp_superadmin'),
+      otpOwner:      val('otp_owner'),
+      otpStaff:      val('otp_staff')
+    };
+
+    // Strip blank password so backend knows to keep existing
+    if (!body.password) delete body.password;
+
+    fetch(API + '/initialize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, status: res.status, d: d }; }); })
+      .then(function (r) {
+        if (r.ok) {
+          var sa = r.d.superadmin;
+          showResult('success',
+            '✓ <strong>Credentials saved successfully!</strong><br><br>' +
+            'Superadmin: <strong>' + esc(sa.name) + '</strong>' +
+            ' (' + esc(sa.phone) + ' / ' + esc(sa.email) + ')<br>' +
+            'Username: <strong>@' + esc(sa.username) + '</strong><br><br>' +
+            '🔒 Password hashed with bcrypt (cost 12). OTPs hashed with bcrypt (cost 10).<br>' +
+            'You can now log in. This page will reload in 4 seconds.'
+          );
+          $('sa_password').value = '';
+          setTimeout(function () { window.location.reload(); }, 4000);
+        } else {
+          showResult('error', '✗ ' + (r.d.error || 'Unknown error (HTTP ' + r.status + ')'));
+        }
+      })
+      .catch(function (e) {
+        showResult('error', '✗ Request failed: ' + e.message);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.innerHTML = 'Save to Database';
+      });
+  };
+
+  /* ── Clear all fields ── */
+  window.clearAll = function () {
+    if (!confirm('Clear all fields?')) return;
+    ['sa_name','sa_phone','sa_email','sa_username','sa_password',
+     'otp_superadmin','otp_owner','otp_staff'].forEach(function (id) {
+      $(id).value = '';
+    });
+    clearInvalid();
+    hideResult();
+  };
+
+  /* ── XSS-safe text escaping ── */
+  function esc(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+}());
+</script>
+</body>
+</html>

@@ -70,8 +70,8 @@ const protect = async (req, res, next) => {
       }
       return res.status(401).json({ error: 'Invalid token. Please log in again.' });
     }
-
     const user = await User.findById(decoded.id).select('-password');
+
     if (!user) {
       return res.status(401).json({ error: 'User no longer exists.' });
     }
@@ -122,18 +122,33 @@ const requireActiveSubscription = async (req, res, next) => {
       });
     }
 
-    if (status === 'trial' && trialEndsAt && new Date() > trialEndsAt) {
-      return res.status(403).json({
-        error: 'Trial period has ended. Please upgrade your plan.',
-        code: 'TRIAL_EXPIRED'
-      });
-    }
+    const isTrialExpired = status === 'trial' && trialEndsAt && new Date() > new Date(trialEndsAt);
+    const isSubExpired = status === 'expired' || (expiresAt && new Date() > new Date(expiresAt));
 
-    if (status === 'expired' || (expiresAt && new Date() > expiresAt)) {
-      return res.status(403).json({
-        error: 'Subscription has expired. Please renew.',
-        code: 'SUBSCRIPTION_EXPIRED'
-      });
+    if (isTrialExpired || isSubExpired) {
+      if (user.role === 'staff') {
+        return res.status(403).json({
+          error: 'Plan expired contact owner',
+          code: 'SUBSCRIPTION_EXPIRED'
+        });
+      }
+      if (user.role === 'owner') {
+        if (req.method === 'GET') {
+          // Allow GET requests for read-only viewing of dashboard/data
+          if (status === 'trial') {
+            const goldFeatures = await getGoldFeatures();
+            req.effectiveFeatures = { ...goldFeatures };
+          } else {
+            req.effectiveFeatures = { ...owner.features.toObject?.() || owner.features };
+          }
+          return next();
+        } else {
+          return res.status(403).json({
+            error: 'Subscription has expired. Please renew.',
+            code: 'SUBSCRIPTION_EXPIRED'
+          });
+        }
+      }
     }
 
     // ── Trial users get Gold plan features ────────────────────

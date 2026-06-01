@@ -10,17 +10,21 @@ const User = require('../models/User');
 const PlanConfig = require('../models/PlanConfig');
 const SubscriptionRequest = require('../models/SubscriptionRequest');
 const { protect, authorize } = require('../middleware/auth');
+const {
+  sendLeadEvent,
+  sendCompleteRegistrationEvent,
+} = require('../services/metaCapiService');
 
 const PLAN_PRICES = {
-  silver:   { monthly: 99,  setup: 499 },
-  gold:     { monthly: 199, setup: 1499 },
+  silver: { monthly: 99, setup: 499 },
+  gold: { monthly: 199, setup: 1499 },
   platinum: { monthly: 399, setup: 1999 }
 };
 
 const PLAN_FEATURES = {
-  silver:   { whatsapp_alerts: false, pdf_billing: false, advanced_reports: false },
-  gold:     { whatsapp_alerts: true,  pdf_billing: true,  advanced_reports: false },
-  platinum: { whatsapp_alerts: true,  pdf_billing: true,  advanced_reports: true  }
+  silver: { whatsapp_alerts: false, pdf_billing: false, advanced_reports: false },
+  gold: { whatsapp_alerts: true, pdf_billing: true, advanced_reports: false },
+  platinum: { whatsapp_alerts: true, pdf_billing: true, advanced_reports: true }
 };
 
 // ── GET /api/payment/plans ────────────────────────────────────
@@ -62,14 +66,14 @@ router.get('/plans', async (req, res, next) => {
         gold: {
           monthly: 199, setup: 1499,
           features: PLAN_FEATURES.gold,
-          limits: { maxCustomers: 300, maxStaff: 7 },
+          limits: { maxCustomers: 150, maxStaff: 5 },
           description: 'Main plan – full working system', label: 'Amrit Gold',
           recommended: true
         },
         platinum: {
           monthly: 399, setup: 1999,
           features: PLAN_FEATURES.platinum,
-          limits: { maxCustomers: 999999, maxStaff: 999999 },
+          limits: { maxCustomers: 999999, maxStaff: 15 },
           description: 'Premium plan – advanced usage', label: 'Amrit Platinum'
         }
       }
@@ -86,43 +90,161 @@ const leadLimiter = rateLimit({
 });
 
 // ── POST /api/payment/request-subscription ───────────────────
-// Public lead capture — visitor submits their details from /start
+// Public lead capture — visitor submits their details from /start or /landing
 // No auth required. Superadmin will review and call to activate.
+// For ads_landing source: fires Meta CAPI Lead event.
 router.post('/request-subscription', leadLimiter, async (req, res, next) => {
   try {
     const {
       contactName, contactEmail, contactPhone,
       address, state, pincode, companyName,
-      plan, billingCycle = 'monthly', months = 1
+      city, district,
+      plan, billingCycle = 'monthly', months = 1,
+      // Ads attribution
+      source = 'organic',
+      fbclid, fbc, fbp,
+      leadEventId,
+      // UTM
+      utm_source, utm_medium, utm_campaign, utm_content, utm_term,
     } = req.body;
 
-    if (!contactName || !contactEmail || !contactPhone || !address || !state || !pincode || !plan) {
-      return res.status(400).json({ error: 'All required fields must be filled.' });
-    }
-    if (!/^\d{6}$/.test(pincode)) {
-      return res.status(400).json({ error: 'Enter a valid 6-digit pincode.' });
+    if (!contactName || !contactPhone || !plan) {
+      return res.status(400).json({ error: 'Name, phone, and plan are required.' });
     }
     if (!['silver', 'gold', 'platinum'].includes(plan)) {
       return res.status(400).json({ error: 'Invalid plan selected.' });
     }
 
-    const request = await SubscriptionRequest.create({
-      // No ownerId — this is a pre-signup lead
+    // Link ownerId if user is authenticated
+    let ownerId = null;
+    let isRenewal = false;
+    let currentPlan = null;
+    let changeType = null;
+
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        ownerId = decoded.id;
+
+        const User = require('../models/User');
+        const ownerUser = await User.findById(ownerId);
+        if (ownerUser) {
+          isRenewal = true;
+          currentPlan = ownerUser.subscription?.plan || 'gold';
+          
+          const planRanks = { silver: 1, gold: 2, platinum: 3 };
+          const requestedRank = planRanks[plan] || 2;
+          const currentRank = planRanks[currentPlan] || 2;
+          
+          if (requestedRank > currentRank) changeType = 'upgrade';
+          else if (requestedRank < currentRank) changeType = 'downgrade';
+          else changeType = 'none';
+        }
+      }
+    } catch (_) { }
+
+    // For ads_landing step 1: address/state/pincode are optional (filled in step 2)
+    const isAdsLanding = source === 'ads_landing';
+
+    const requestData = {
+      ownerId,
       contactName: contactName.trim(),
-      contactEmail: contactEmail.trim().toLowerCase(),
+      contactEmail: contactEmail?.trim().toLowerCase() || '',
       contactPhone: contactPhone.trim(),
-      address: address.trim(),
-      state: state.trim(),
-      pincode: pincode.trim(),
+      address: address?.trim() || '',
+      state: state?.trim() || '',
+      pincode: pincode?.trim() || '',
       companyName: companyName?.trim() || '',
+      city: city?.trim() || '',
+      district: district?.trim() || '',
       plan,
       billingCycle,
-      months: parseInt(months) || 1
-    });
+      months: parseInt(months) || 1,
+      isRenewal,
+      currentPlan,
+      changeType,
+      source,
+      // Attribution
+      fbclid: fbclid || null,
+      fbc: fbc || null,
+      fbp: fbp || null,
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent'] || null,
+      externalId: contactPhone.trim(), // phone as external ID
+      leadEventId: leadEventId || null,
+      // UTM
+      utm_source: utm_source || null,
+      utm_medium: utm_medium || null,
+      utm_campaign: utm_campaign || null,
+      utm_content: utm_content || null,
+      utm_term: utm_term || null,
+    };
+
+    const request = await SubscriptionRequest.create(requestData);
+
+    // Fire CAPI Lead event for ads_landing source only
+    if (isAdsLanding && leadEventId) {
+      setImmediate(() => {
+        sendLeadEvent(request, leadEventId, req).catch(err => {
+          console.error('[META CAPI] Lead event failed:', err.message);
+        });
+      });
+    }
 
     res.status(201).json({
       request,
-      message: 'Your request has been received. Our team will contact you shortly to discuss your requirements and get you started.'
+      leadId: request._id,
+      message: 'Your request has been received. Our team will contact you shortly.',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/payment/update-lead/:id ───────────────────────
+// Step 2 of ads_landing form: update existing lead with address details.
+// Fires CAPI CompleteRegistration event.
+// Does NOT create a duplicate record.
+router.patch('/update-lead/:id', leadLimiter, async (req, res, next) => {
+  try {
+    const {
+      address, state, pincode, city, district,
+      registrationEventId,
+    } = req.body;
+
+    const request = await SubscriptionRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Lead not found.' });
+
+    // Only update ads_landing leads
+    if (request.source !== 'ads_landing') {
+      return res.status(400).json({ error: 'Invalid request.' });
+    }
+
+    // Update address fields
+    if (address) request.address = address.trim();
+    if (state) request.state = state.trim();
+    if (pincode) request.pincode = pincode.trim();
+    if (city) request.city = city.trim();
+    if (district) request.district = district.trim();
+    if (registrationEventId) request.registrationEventId = registrationEventId;
+
+    await request.save();
+
+    // Fire CAPI CompleteRegistration event
+    if (registrationEventId) {
+      setImmediate(() => {
+        sendCompleteRegistrationEvent(request, registrationEventId, req).catch(err => {
+          console.error('[META CAPI] CompleteRegistration event failed:', err.message);
+        });
+      });
+    }
+
+    res.json({
+      request,
+      message: 'Lead updated successfully.',
     });
   } catch (err) {
     next(err);
@@ -167,8 +289,8 @@ router.patch('/requests/:id/activate', protect, authorize('superadmin'), async (
 
     // Check if owner account exists
     if (!request.ownerId) {
-      return res.status(200).json({ 
-        needsOwnerCreation: true, 
+      return res.status(200).json({
+        needsOwnerCreation: true,
         message: 'Owner account needs to be created first.',
         request
       });
@@ -176,8 +298,8 @@ router.patch('/requests/:id/activate', protect, authorize('superadmin'), async (
 
     const owner = await User.findById(request.ownerId);
     if (!owner) {
-      return res.status(200).json({ 
-        needsOwnerCreation: true, 
+      return res.status(200).json({
+        needsOwnerCreation: true,
         message: 'Owner account needs to be created first.',
         request
       });
@@ -199,12 +321,36 @@ router.patch('/requests/:id/activate', protect, authorize('superadmin'), async (
     owner.subscription.plan = request.plan;
     owner.subscription.expiresAt = newExpiry;
     owner.features = planFeatures;
+    if (request.source === 'ads_landing') {
+      owner.source = 'ads_landing';
+    }
     await owner.save();
 
     request.status = 'activated';
     request.activatedAt = now;
     request.adminNotes = adminNotes || '';
     await request.save();
+
+    // Fire Meta CAPI Subscribe if this is an ads_landing lead
+    if (request.source === 'ads_landing') {
+      setImmediate(async () => {
+        try {
+          if (owner.source === 'ads_landing') {
+            const { sendSubscribeEvent } = require('../services/metaCapiService');
+            const subscribeEventId = require('crypto').randomUUID();
+            const planPrices = { silver: 99, gold: 199, platinum: 399 };
+            await SubscriptionRequest.findByIdAndUpdate(request._id, { subscribeEventId });
+            await sendSubscribeEvent(request, subscribeEventId, {
+              value: planPrices[request.plan] || 199,
+              planName: request.plan,
+              billingCycle: request.billingCycle || 'monthly',
+            });
+          }
+        } catch (err) {
+          console.error('[META CAPI] Subscribe event (activate) failed:', err.message);
+        }
+      });
+    }
 
     res.json({
       message: `Subscription activated for ${owner.name}. Valid until ${newExpiry.toLocaleDateString('en-IN')}.`,
@@ -226,88 +372,6 @@ router.patch('/requests/:id/status', protect, authorize('superadmin'), async (re
     if (adminNotes !== undefined) request.adminNotes = adminNotes;
     await request.save();
     res.json({ request });
-  } catch (err) {
-    next(err);
-  }
-});
-router.post('/create-order', protect, authorize('owner'), async (req, res, next) => {
-  try {
-    const { plan, months = 1 } = req.body;
-    if (!PLAN_PRICES[plan]) {
-      return res.status(400).json({ error: 'Invalid plan.' });
-    }
-
-    const price = PLAN_PRICES[plan];
-    const isFirstTime = req.user.subscription?.status === 'trial';
-    const amount = (price.monthly * months) + (isFirstTime ? price.setup : 0);
-
-    // Simulate Razorpay order ID
-    const orderId = `order_sim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    res.json({
-      orderId,
-      amount,
-      currency: 'INR',
-      plan,
-      months,
-      breakdown: {
-        monthly: price.monthly * months,
-        setup: isFirstTime ? price.setup : 0,
-        total: amount
-      },
-      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_simulation'
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ── POST /api/payment/verify ──────────────────────────────────
-// Simulate payment verification and activate subscription
-router.post('/verify', protect, authorize('owner'), async (req, res, next) => {
-  try {
-    const { orderId, paymentId, plan, months = 1 } = req.body;
-
-    // In production: verify Razorpay signature here
-    // For simulation: any paymentId starting with 'pay_' is valid
-    if (!paymentId || !paymentId.startsWith('pay_')) {
-      return res.status(400).json({ error: 'Invalid payment ID. Use pay_test_xxxx for simulation.' });
-    }
-
-    const owner = await User.findById(req.user._id);
-    if (!owner) return res.status(404).json({ error: 'Owner not found.' });
-
-    // Calculate new expiry
-    const now = new Date();
-    const currentExpiry = owner.subscription?.expiresAt;
-    const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
-    const newExpiry = new Date(base);
-    newExpiry.setMonth(newExpiry.getMonth() + parseInt(months));
-
-    owner.subscription.status = 'active';
-    owner.subscription.plan = plan;
-    owner.subscription.expiresAt = newExpiry;
-
-    // Apply CURRENT plan config features (not hardcoded defaults)
-    // This ensures renewed owners get the latest plan feature set
-    const planConfig = await PlanConfig.findOne({ plan });
-    if (planConfig) {
-      owner.features = { ...planConfig.features.toObject() };
-    } else {
-      // Fallback to hardcoded if PlanConfig not seeded yet
-      if (PLAN_FEATURES[plan]) {
-        Object.assign(owner.features, PLAN_FEATURES[plan]);
-      }
-    }
-
-    await owner.save();
-
-    res.json({
-      success: true,
-      message: `Subscription activated. Valid until ${newExpiry.toLocaleDateString('en-IN')}.`,
-      subscription: owner.subscription,
-      features: owner.features
-    });
   } catch (err) {
     next(err);
   }

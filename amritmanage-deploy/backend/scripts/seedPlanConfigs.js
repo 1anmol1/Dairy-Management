@@ -24,7 +24,7 @@ const defaults = [
     monthlyPrice: 199,
     setupFee: 1499,
     features: { whatsapp_alerts: true, pdf_billing: true, advanced_reports: false, custom_message_templates: false },
-    limits: { maxCustomers: 300, maxStaff: 7 }
+    limits: { maxCustomers: 150, maxStaff: 5 }
   },
   {
     plan: 'platinum',
@@ -33,7 +33,7 @@ const defaults = [
     monthlyPrice: 399,
     setupFee: 1999,
     features: { whatsapp_alerts: true, pdf_billing: true, advanced_reports: true, custom_message_templates: true },
-    limits: { maxCustomers: 999999, maxStaff: 999999 }
+    limits: { maxCustomers: 999999, maxStaff: 15 }
   }
 ];
 
@@ -46,11 +46,11 @@ async function seedPlanConfigs(existingConnection = null) {
   for (const cfg of defaults) {
     const result = await PlanConfig.findOneAndUpdate(
       { plan: cfg.plan },
-      { $setOnInsert: cfg },
+      { $set: cfg },
       { upsert: true, new: true }
     );
     if (result) seeded++;
-    console.log(`✓ ${cfg.plan} plan config seeded.`);
+    console.log(`✓ ${cfg.plan} plan config seeded/updated.`);
   }
   if (shouldDisconnect) {
     await mongoose.disconnect();

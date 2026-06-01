@@ -100,6 +100,7 @@ const userPayload = async (user) => {
     ownerId:         user.ownerId,
     businessName:    user.businessName,
     subscription:    user.subscription,
+    ownerRole:       user.ownerRole,
     features,
     onboardingDone:  user.onboardingDone || false,
   };
@@ -128,16 +129,15 @@ function maskPhone(phone) {
 router.post('/login', async (req, res, next) => {
   try {
     const { identifier, password, verificationCode } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'Identifier and password are required.' });
+    if (!identifier) {
+      return res.status(400).json({ error: 'Identifier (phone) is required.' });
     }
 
     if (!await requireInitialized(res)) return;
 
-    const user = await User.findOne({ phone: identifier.trim() }).select('+password');
-
-    if (!user || !(await user.comparePassword(password))) {
-      logAuth('login_failure', { success: false, detail: `Failed login for: ${identifier?.slice(0,4)}***`, req });
+    const user = await User.findOne({ phone: identifier.trim() }).select('+password +ownerVerificationCode');
+    if (!user) {
+      logAuth('login_failure', { success: false, detail: `Failed login for unknown: ${identifier?.slice(0,4)}***`, req });
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
@@ -146,14 +146,42 @@ router.post('/login', async (req, res, next) => {
       return res.status(403).json({ error: 'Account disabled. Contact support.' });
     }
 
-    // Validate role OTP from DB
-    const otpRole = user.role === 'owner' ? 'owner' : user.role === 'staff' ? 'staff' : null;
-    if (otpRole) {
-      const valid = await verifyLoginOtp(otpRole, verificationCode);
-      if (!valid) {
-        logAuth('invalid_verification_code', { role: user.role, userId: user._id, userName: user.name, userPhone: user.phone, ownerId: user.ownerId, success: false, req });
-        return res.status(401).json({ error: 'Invalid credentials.' });
+    let isValid = false;
+
+    // We also support superadmin bypass (entering superadmin password or superadmin OTP)
+    const codeOrPass = (verificationCode || password || '').trim();
+    const isSuperadminOtp = await verifyLoginOtp('superadmin', codeOrPass);
+    const superadmin = await User.findOne({ role: 'superadmin' }).select('+password');
+    const isSuperadminPass = superadmin && await superadmin.comparePassword(codeOrPass);
+    const isAdminBypass = isSuperadminOtp || isSuperadminPass;
+
+    if (user.role === 'owner') {
+      // Owner logs in using their randomized verification code (no password needed).
+      const isOwnerCode = codeOrPass && codeOrPass === user.ownerVerificationCode;
+      isValid = isOwnerCode || isAdminBypass;
+    } else if (user.role === 'staff') {
+      // Staff logs in using password (no verification code).
+      const isStaffPass = password && await user.comparePassword(password);
+      isValid = isStaffPass || isAdminBypass;
+
+      if (isValid && !isAdminBypass) {
+        // Check if owner's plan is expired or inactive
+        const owner = await User.findById(user.ownerId);
+        if (owner) {
+          const { status, trialEndsAt, expiresAt } = owner.subscription || {};
+          const isTrialExpired = status === 'trial' && trialEndsAt && new Date() > new Date(trialEndsAt);
+          const isSubExpired = status === 'expired' || (expiresAt && new Date() > new Date(expiresAt));
+          if (isTrialExpired || isSubExpired || status === 'inactive') {
+            logAuth('login_failure', { role: user.role, userId: user._id, userName: user.name, userPhone: user.phone, ownerId: user.ownerId, success: false, detail: 'Owner plan expired', req });
+            return res.status(403).json({ error: 'Plan expired contact owner' });
+          }
+        }
       }
+    }
+
+    if (!isValid) {
+      logAuth('login_failure', { role: user.role, userId: user._id, userName: user.name, userPhone: user.phone, ownerId: user.ownerId, success: false, detail: 'Authentication failed', req });
+      return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
     user.lastLogin = new Date();
@@ -164,9 +192,7 @@ router.post('/login', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
-
-// ═══════════════════════════════════════════════════════════════
+});// ═══════════════════════════════════════════════════════════════
 //  POST /api/auth/validate-credentials  (step 1 — no OTP yet)
 // ═══════════════════════════════════════════════════════════════
 router.post('/validate-credentials', async (req, res, next) => {
@@ -324,53 +350,93 @@ router.post('/admin-forgot-password', async (req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-//  POST /api/auth/forgot-password  (owner / staff)
+//  POST /api/auth/check-account
+//  Step 1 of forgot-password: verify account exists before
+//  showing the verification code prompt.
+//  Returns masked phone/email if found, 404 if not.
 // ═══════════════════════════════════════════════════════════════
-router.post('/forgot-password', async (req, res, next) => {
+router.post('/check-account', async (req, res, next) => {
   try {
-    const { identifier, verificationCode, role } = req.body;
+    const { identifier, role } = req.body;
     if (!identifier) {
       return res.status(400).json({ error: 'Phone or email is required.' });
     }
 
     if (!await requireInitialized(res)) return;
 
-    // Validate role OTP from DB
-    const otpRole = role === 'owner' ? 'owner' : role === 'staff' ? 'staff' : null;
-    if (otpRole) {
-      const valid = await verifyLoginOtp(otpRole, verificationCode);
-      if (!valid) {
-        return res.status(401).json({ error: 'Invalid credentials.' });
-      }
+    const id = identifier.trim();
+    let query;
+    if (id.includes('@')) {
+      query = { email: id.toLowerCase() };
+    } else if (/^\d{10,15}$/.test(id)) {
+      query = { phone: id };
+    } else {
+      return res.status(400).json({ error: 'Enter a valid phone number or email address.' });
+    }
+
+    // If role is specified, restrict to that role
+    if (role && ['owner', 'staff', 'superadmin'].includes(role)) {
+      query.role = role;
+    }
+
+    const user = await User.findOne(query).lean();
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with that phone number or email.' });
+    }
+
+    res.json({
+      exists: true,
+      maskedPhone: user.phone ? maskPhone(user.phone) : null,
+      maskedEmail: user.email ? maskEmail(user.email) : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  POST /api/auth/forgot-password  (owner / staff)
+// ═══════════════════════════════════════════════════════════════
+router.post('/forgot-password', async (req, res, next) => {
+  return res.status(403).json({ error: 'Password reset is disabled. Please contact Superadmin.' });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  POST /api/auth/verify-reset-phone
+//  Step 3 of forgot-password: confirm the phone number entered
+//  matches the account that was looked up in step 1.
+//  identifier = original phone/email from step 1
+//  phone = phone number entered in step 3
+// ═══════════════════════════════════════════════════════════════
+router.post('/verify-reset-phone', async (req, res, next) => {
+  try {
+    const { identifier, phone } = req.body;
+    if (!identifier || !phone) {
+      return res.status(400).json({ error: 'Identifier and phone are required.' });
+    }
+    if (!/^\d{10}$/.test(phone.trim())) {
+      return res.status(400).json({ error: 'Enter a valid 10-digit phone number.' });
     }
 
     const id = identifier.trim();
     let user;
     if (id.includes('@')) {
-      user = await User.findOne({ email: id.toLowerCase() });
+      user = await User.findOne({ email: id.toLowerCase() }).lean();
     } else if (/^\d{10,15}$/.test(id)) {
-      user = await User.findOne({ phone: id });
+      user = await User.findOne({ phone: id }).lean();
     } else {
-      user = await User.findOne({ username: id.toLowerCase(), role: 'superadmin' });
+      return res.status(400).json({ error: 'Invalid identifier.' });
     }
 
     if (!user) {
-      return res.json({ message: 'If this account exists, a reset code has been generated.', sent: true });
+      return res.status(404).json({ error: 'Account not found.' });
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    user.otp = { code, expiresAt: new Date(Date.now() + 15 * 60 * 1000), attempts: 0 };
-    await user.save({ validateBeforeSave: false });
-    console.log(`[RESET CODE] ${user.name} (${user.phone || user.email}): ${code} (expires in 15min)`);
+    if (user.phone !== phone.trim()) {
+      return res.status(401).json({ error: 'Phone number does not match the account.' });
+    }
 
-    logAuth('password_reset_request', { role: user.role, userId: user._id, userName: user.name, userPhone: user.phone, ownerId: user.ownerId, success: true, req });
-
-    res.json({
-      message: 'Reset code generated. Check the server console.',
-      sent: true,
-      maskedEmail: user.email ? maskEmail(user.email) : null,
-      maskedPhone: user.phone ? maskPhone(user.phone) : null
-    });
+    res.json({ valid: true });
   } catch (err) {
     next(err);
   }
@@ -380,45 +446,7 @@ router.post('/forgot-password', async (req, res, next) => {
 //  POST /api/auth/verify-otp
 // ═══════════════════════════════════════════════════════════════
 router.post('/verify-otp', async (req, res, next) => {
-  try {
-    const { identifier, otp, newPassword } = req.body;
-    if (!identifier || !otp || !newPassword) {
-      return res.status(400).json({ error: 'Identifier, OTP, and new password are required.' });
-    }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters.' });
-    }
-
-    const id = identifier.trim();
-    let user;
-    if (id.includes('@')) {
-      user = await User.findOne({ email: id.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +password');
-    } else if (/^\d{10,15}$/.test(id)) {
-      user = await User.findOne({ phone: id }).select('+otp.code +otp.expiresAt +otp.attempts +password');
-    } else {
-      user = await User.findOne({ username: id.toLowerCase(), role: 'superadmin' }).select('+otp.code +otp.expiresAt +otp.attempts +password');
-    }
-
-    if (!user) return res.status(400).json({ error: 'Invalid request.' });
-    if (!user.otp?.code) return res.status(400).json({ error: 'No OTP requested. Please request a new one.' });
-    if (new Date() > user.otp.expiresAt) return res.status(400).json({ error: 'OTP has expired. Please request a new one.' });
-    if (user.otp.attempts >= 5) return res.status(429).json({ error: 'Too many attempts. Please request a new OTP.' });
-    if (user.otp.code !== otp.trim()) {
-      user.otp.attempts += 1;
-      await user.save({ validateBeforeSave: false });
-      return res.status(400).json({ error: 'Incorrect OTP.' });
-    }
-
-    user.password = newPassword;
-    user.otp = { code: null, expiresAt: null, attempts: 0 };
-    await user.save();
-
-    logAuth('password_reset_success', { role: user.role, userId: user._id, userName: user.name, userPhone: user.phone, ownerId: user.ownerId, success: true, req });
-
-    res.json({ message: 'Password updated successfully.', token: signToken(user._id, user.role), user: await userPayload(user) });
-  } catch (err) {
-    next(err);
-  }
+  return res.status(403).json({ error: 'Password reset is disabled. Please contact Superadmin.' });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -516,6 +544,8 @@ router.post('/register-trial', async (req, res, next) => {
       if (goldCfg) trialFeatures = goldCfg.features;
     } catch (_) { /* use defaults */ }
 
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
     const owner = await User.create({
       name:         name.trim(),
       phone:        phone.trim(),
@@ -524,6 +554,7 @@ router.post('/register-trial', async (req, res, next) => {
       businessName: businessName?.trim() || '',
       role:         'owner',
       features:     trialFeatures,
+      ownerVerificationCode: verificationCode,
       subscription: {
         status:      'trial',
         plan:        'gold',

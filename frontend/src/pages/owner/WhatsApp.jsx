@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { MessageSquare, RefreshCw, Wifi, WifiOff, Send, X, Loader, BookOpen, CheckCircle, XCircle, Lock, ArrowRight } from 'lucide-react';
+import { MessageSquare, RefreshCw, Wifi, WifiOff, Send, X, Loader, BookOpen, CheckCircle, Lock, ArrowRight, Smartphone, Copy } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -8,14 +8,29 @@ import { useNavigate } from 'react-router-dom';
 import useThrottle from '../../hooks/useThrottle';
 
 // ── Resolve template variables ────────────────────────────────
-const resolveTemplate = (body, { customerName, quantity, extraQty, ownerPhone, slot, isMarathi }) => {
+const resolveTemplate = (body, { customerName, quantity, extraQty, ownerPhone, slot, customerLang, balance, grandTotal, totalPaid }) => {
+  const isMr = customerLang === 'mr';
+  const qtyStr = quantity !== undefined && quantity !== null ? `${quantity}${isMr ? ' लीटर' : ' L'}` : '';
+  const extraStr = extraQty !== undefined && extraQty !== null ? `${extraQty}${isMr ? ' लीटर' : ' L'}` : '';
+
+  const formatAmount = (amt) => {
+    if (amt === undefined || amt === null) return '';
+    return `₹${amt}`;
+  };
+
+  const slotStr = slot === 'morning' ? (isMr ? 'सकाळ' : 'Morning') : (isMr ? 'संध्याकाळ' : 'Evening');
+
   return body
     .replace(/{{customerName}}/g, customerName || '')
-    .replace(/{{quantity}}/g, quantity ?? '')
-    .replace(/{{extraQty}}/g, extraQty ?? '')
+    .replace(/{{quantity}}/g, qtyStr)
+    .replace(/{{extraQty}}/g, extraStr)
     .replace(/{{ownerPhone}}/g, ownerPhone || '')
-    .replace(/{{slot}}/g, slot === 'morning' ? (isMarathi ? 'सकाळ' : 'Morning') : (isMarathi ? 'संध्याकाळ' : 'Evening'))
-    .replace(/{{date}}/g, new Date().toLocaleDateString('en-IN'));
+    .replace(/{{slot}}/g, slotStr)
+    .replace(/{{date}}/g, new Date().toLocaleDateString('en-IN'))
+    .replace(/₹?{{balance}}/g, formatAmount(balance))
+    .replace(/₹?{{grandTotal}}/g, formatAmount(grandTotal))
+    .replace(/₹?{{totalPaid}}/g, formatAmount(totalPaid))
+    .replace(/₹?{{amountDue}}/g, formatAmount(balance));
 };
 
 const WhatsApp = () => {
@@ -25,29 +40,53 @@ const WhatsApp = () => {
   const toast = useToast();
 
   const [status, setStatus] = useState(null);
-  const [qrData, setQrData] = useState(null);
-  const [loadingQr, setLoadingQr] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('+91');
+
+  const handlePhoneChange = (e) => {
+    let val = e.target.value;
+    if (!val.startsWith('+91')) {
+      const suffix = val.replace(/^\+?9?1?/, '').replace(/\D/g, '');
+      setPhoneNumber('+91' + suffix);
+    } else {
+      const suffix = val.substring(3).replace(/\D/g, '');
+      setPhoneNumber('+91' + suffix);
+    }
+  };
+  const [pairingCode, setPairingCode] = useState(null);
+  const [pairingLoading, setPairingLoading] = useState(false);
+  const [pairingError, setPairingError] = useState(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(c => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
   const [templates, setTemplates] = useState([]);
   const [todayLogs, setTodayLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [sendModal, setSendModal] = useState(null); // { log, template, message }
-  const pollRef = useRef(null);
 
-  const hasWhatsApp = user?.features?.whatsapp_alerts;
-  const hasCustomTemplates = user?.features?.custom_message_templates;
+  const plan = user?.subscription?.plan || 'silver';
+  const isTrial = user?.subscription?.status === 'trial';
+  const hasWhatsApp = user?.features?.whatsapp_alerts || plan === 'gold' || plan === 'platinum' || isTrial;
+  const hasCustomTemplates = user?.features?.custom_message_templates || plan === 'platinum' || isTrial;
 
   const fetchStatus = useCallback(async () => {
     try {
       const { data } = await api.get('/whatsapp/status');
       setStatus(data.status);
-      if (data.status === 'connected') {
-        setQrData(null);
-        setLoadingQr(false);
-        stopPolling();
+      if (data.pairingCode) setPairingCode(data.pairingCode);
+      if (data.phoneNumber) {
+        setPhoneNumber(data.phoneNumber.startsWith('+') ? data.phoneNumber : '+' + data.phoneNumber);
+      } else {
+        setPhoneNumber('+91');
       }
     } catch {
-      setStatus('unavailable');
+      setStatus('disconnected');
     }
   }, []);
 
@@ -70,52 +109,13 @@ const WhatsApp = () => {
 
   const throttledRefreshLogs = useThrottle(fetchTodayLogs);
 
-  const stopPolling = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  };
-
-  const pollForQR = useCallback(() => {
-    stopPolling();
-    let attempts = 0;
-    pollRef.current = setInterval(async () => {
-      attempts++;
-      try {
-        const { data } = await api.get('/whatsapp/qr');
-        if (data.status === 'connected') {
-          setStatus('connected'); setQrData(null); setLoadingQr(false); stopPolling();
-          toast.success(isMarathi ? 'WhatsApp जोडले!' : 'WhatsApp connected!');
-        } else if (data.qr) {
-          setQrData(data.qr); setStatus('qr_ready'); setLoadingQr(false); stopPolling();
-          startStatusPolling();
-        } else if (attempts >= 30) {
-          setLoadingQr(false); stopPolling();
-          toast.error(isMarathi ? 'QR कोड लोड होण्यास वेळ लागला.' : 'QR code took too long.');
-        }
-      } catch { setLoadingQr(false); stopPolling(); }
-    }, 2000);
-  }, [isMarathi]);
-
-  const startStatusPolling = useCallback(() => {
-    const interval = setInterval(async () => {
-      try {
-        const { data } = await api.get('/whatsapp/status');
-        setStatus(data.status);
-        if (data.status === 'connected') {
-          setQrData(null); clearInterval(interval);
-          toast.success(isMarathi ? 'WhatsApp यशस्वीरित्या जोडले!' : 'WhatsApp connected successfully!');
-        }
-      } catch { /* ignore */ }
-    }, 3000);
-    return interval;
-  }, [isMarathi]);
-
   useEffect(() => {
     if (!hasWhatsApp) return;
     fetchStatus();
     fetchTemplates();
     fetchTodayLogs();
 
-    // Use SSE for real-time status — replaces polling entirely
+    // SSE connection for real-time status updates
     const token = localStorage.getItem('amrit_token');
     let eventSource = null;
     try {
@@ -125,60 +125,142 @@ const WhatsApp = () => {
           const d = JSON.parse(e.data);
           if (d.status) {
             setStatus(d.status);
-            if (d.status === 'connected') { setQrData(null); setLoadingQr(false); stopPolling(); }
+            if (d.pairingCode) {
+              setPairingCode(d.pairingCode);
+            } else {
+              setPairingCode(null);
+            }
+            if (d.phoneNumber) {
+              setPhoneNumber(d.phoneNumber.startsWith('+') ? d.phoneNumber : '+' + d.phoneNumber);
+            } else {
+              setPhoneNumber('+91');
+            }
           }
         } catch { /* ignore */ }
       };
       eventSource.onerror = () => { eventSource?.close(); };
-    } catch { /* SSE not supported — status already fetched above */ }
+    } catch { /* ignore */ }
 
-    return () => { eventSource?.close(); stopPolling(); };
+    return () => { eventSource?.close(); };
   }, [fetchStatus, fetchTemplates, fetchTodayLogs, hasWhatsApp]);
 
-  const loadQR = async () => {
-    if (loadingQr) return;
-    setLoadingQr(true); setQrData(null);
+  const handleRequestPairing = async (e) => {
+    e.preventDefault();
+    if (cooldown > 0) return;
+    let submitPhone = phoneNumber.trim();
+    if (!submitPhone || submitPhone === '+91') {
+      setPairingError(isMarathi ? 'कृपया फोन नंबर प्रविष्ट करा.' : 'Please enter a phone number.');
+      return;
+    }
+    // Clean any spaces/dashes/brackets
+    const cleanDigits = submitPhone.replace(/[\s\-\(\)\+]/g, '');
+    if (cleanDigits.length === 10) {
+      submitPhone = '+91' + cleanDigits;
+    } else if (!submitPhone.startsWith('+')) {
+      submitPhone = '+' + submitPhone;
+    }
+
+    setPairingLoading(true);
+    setPairingError(null);
     try {
-      const { data } = await api.get('/whatsapp/qr');
-      if (data.status === 'connected') { setStatus('connected'); setLoadingQr(false); return; }
-      if (data.qr) { setQrData(data.qr); setStatus('qr_ready'); setLoadingQr(false); startStatusPolling(); return; }
-      setStatus('initializing'); pollForQR();
+      const { data } = await api.post('/whatsapp/request-pairing', { phoneNumber: submitPhone });
+      if (data.success) {
+        setStatus('pairing_requested');
+        setCooldown(90);
+        toast.success(isMarathi ? 'पेअरिंग विनंती सुरू झाली!' : 'Pairing request initiated!');
+      }
     } catch (err) {
-      setLoadingQr(false);
-      toast.error(err.response?.data?.error || (isMarathi ? 'WhatsApp सत्र सुरू करण्यात अयशस्वी.' : 'Failed to start WhatsApp session.'));
+      setPairingError(err.response?.data?.error || (isMarathi ? 'कोड जनरेट करण्यात अयशस्वी.' : 'Failed to generate pairing code.'));
+    } finally {
+      setPairingLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (cooldown > 0) return;
+    let submitPhone = phoneNumber.trim();
+    if (!submitPhone || submitPhone === '+91') {
+      setPairingError(isMarathi ? 'कृपया फोन नंबर प्रविष्ट करा.' : 'Please enter a phone number.');
+      return;
+    }
+    const cleanDigits = submitPhone.replace(/[\s\-\(\)\+]/g, '');
+    if (cleanDigits.length === 10) {
+      submitPhone = '+91' + cleanDigits;
+    } else if (!submitPhone.startsWith('+')) {
+      submitPhone = '+' + submitPhone;
+    }
+
+    setPairingLoading(true);
+    setPairingError(null);
+    try {
+      const { data } = await api.post('/whatsapp/request-pairing', { phoneNumber: submitPhone });
+      if (data.success) {
+        setStatus('pairing_requested');
+        setCooldown(90);
+        toast.success(isMarathi ? 'नवीन पेअरिंग कोड विनंती सुरू झाली!' : 'New pairing code request initiated!');
+      }
+    } catch (err) {
+      setPairingError(err.response?.data?.error || (isMarathi ? 'नवीन कोड जनरेट करण्यात अयशस्वी.' : 'Failed to generate new code.'));
+      toast.error(err.response?.data?.error || (isMarathi ? 'नवीन कोड जनरेट करण्यात अयशस्वी.' : 'Failed to generate new code.'));
+    } finally {
+      setPairingLoading(false);
     }
   };
 
   const disconnect = async () => {
-    setDisconnecting(true); stopPolling();
+    setDisconnecting(true);
     try {
       await api.post('/whatsapp/disconnect');
-      setStatus('disconnected'); setQrData(null);
+      setStatus('disconnected');
+      setPairingCode(null);
+      setPhoneNumber('+91');
       toast.success(isMarathi ? 'WhatsApp डिस्कनेक्ट झाले.' : 'WhatsApp disconnected.');
-    } catch { toast.error(isMarathi ? 'डिस्कनेक्ट करण्यात अयशस्वी.' : 'Failed to disconnect.'); }
-    finally { setDisconnecting(false); }
+    } catch {
+      toast.error(isMarathi ? 'डिस्कनेक्ट करण्यात अयशस्वी.' : 'Failed to disconnect.');
+    } finally {
+      setDisconnecting(false);
+      setPairingLoading(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+    if (!pairingCode) return;
+    navigator.clipboard.writeText(pairingCode);
+    toast.success(isMarathi ? 'कोड कॉपी केला!' : 'Code copied to clipboard!');
   };
 
   // Open send modal for a delivery log — auto-select best template
   const openSendModal = (log) => {
+    const customerLang = log.customerId?.language || 'en';
     const hasExtra = log.extra_qty > 0;
-    let best = null;
-    if (hasExtra) {
-      best = templates.find(t => t.type === 'extra_delivery' && t.isDefault) || templates.find(t => t.type === 'extra_delivery');
-    }
-    if (!best) {
-      best = templates.find(t => t.type === 'delivery' && t.isDefault) || templates.find(t => t.type === 'delivery');
-    }
-    if (!best && templates.length > 0) best = templates[0];
+    const requiredType = hasExtra ? 'extra_delivery' : 'delivery';
+    
+    let best = templates.find(t => t.type === requiredType && t.language === customerLang && t.isDefault) ||
+               templates.find(t => t.type === requiredType && t.language === customerLang) ||
+               templates.find(t => t.type === requiredType && t.isDefault) ||
+               templates.find(t => t.type === requiredType);
 
-    const message = best ? resolveTemplate(best.body, {
+    if (!best && templates.length > 0) {
+      best = templates.find(t => t.language === customerLang) || templates[0];
+    }
+
+    const bodyToResolve = best?.body || (hasExtra 
+      ? (customerLang === 'mr'
+          ? "✅ *दूध वितरण* — {{date}}\nवेळ: *{{slot}}*\nप्रमाण: *{{quantity}}*\n(अतिरिक्त: *+{{extraQty}}*)\n— {{ownerPhone}}"
+          : "✅ *Milk Delivered* — {{date}}\nSlot: *{{slot}}*\nQty: *{{quantity}}*\n(Extra: *+{{extraQty}}*)\n— {{ownerPhone}}")
+      : (customerLang === 'mr'
+          ? "✅ *दूध वितरण* — {{date}}\nवेळ: *{{slot}}*\nप्रमाण: *{{quantity}}*\n— {{ownerPhone}}"
+          : "✅ *Milk Delivered* — {{date}}\nSlot: *{{slot}}*\nQty: *{{quantity}}*\n— {{ownerPhone}}")
+    );
+
+    const message = resolveTemplate(bodyToResolve, {
       customerName: log.customerId?.name || '',
       quantity: log.delivered_qty,
       extraQty: log.extra_qty,
       ownerPhone: user?.phone || '',
       slot: log.slot,
-      isMarathi
-    }) : '';
+      customerLang
+    });
 
     setSendModal({ log, template: best, message });
   };
@@ -187,6 +269,25 @@ const WhatsApp = () => {
     if (!sendModal) return;
     const phone = sendModal.log.customerId?.phone;
     if (!phone) { toast.error(isMarathi ? 'ग्राहकाचा फोन नंबर उपलब्ध नाही.' : 'Customer phone not available.'); return; }
+    
+    if (!isConnected) {
+      let clean = phone.replace(/\D/g, '');
+      if (clean.length === 10)          clean = '91' + clean;
+      else if (clean.startsWith('0'))   clean = '91' + clean.slice(1);
+      
+      const url = `https://api.whatsapp.com/send?phone=${clean}&text=${encodeURIComponent(sendModal.message)}`;
+      window.open(url, '_blank');
+      
+      try {
+        await api.patch(`/owner/logs/${sendModal.log._id}`, { whatsappSent: true });
+      } catch { /* ignore */ }
+      
+      toast.success(isMarathi ? `${sendModal.log.customerId?.name} साठी WhatsApp उघडले.` : `Opened WhatsApp for ${sendModal.log.customerId?.name}.`);
+      setSendModal(null);
+      fetchTodayLogs();
+      return;
+    }
+
     try {
       await api.post('/owner/send-whatsapp', {
         customerId: sendModal.log.customerId?._id,
@@ -200,8 +301,9 @@ const WhatsApp = () => {
     }
   };
 
-  const isConnected = status === 'connected';
-  const isInitializing = loadingQr || status === 'initializing';
+  const isConnected = status === 'authenticated';
+  const isWaitingForAuth = status === 'pairing_requested' || pairingLoading;
+  const isInitializing = status === 'pending' || pairingLoading;
 
   // ── Not on WhatsApp plan — show upgrade gate ──────────────
   if (!hasWhatsApp) {
@@ -248,47 +350,268 @@ const WhatsApp = () => {
       </div>
 
       <div className="page-body">
-        {/* Connection status */}
+        {/* Connection status card */}
         <div className="card" style={{ marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: 48, height: 48, backgroundColor: isConnected ? '#DEFBE6' : isInitializing ? '#EDF5FF' : '#F4F4F4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {isConnected ? <Wifi size={24} color="#24A148" /> : isInitializing ? <Loader size={24} color="#0F62FE" style={{ animation: 'spin 1s linear infinite' }} /> : <WifiOff size={24} color="#8D8D8D" />}
+              <div style={{ width: 48, height: 48, backgroundColor: isConnected ? '#DEFBE6' : isWaitingForAuth ? '#FFF8E1' : isInitializing ? '#EDF5FF' : '#F4F4F4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {isConnected ? (
+                  <Wifi size={24} color="#24A148" />
+                ) : isInitializing ? (
+                  <Loader size={24} color="#0F62FE" style={{ animation: 'spin 1s linear infinite' }} />
+                ) : (
+                  <WifiOff size={24} color="#8D8D8D" />
+                )}
               </div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: '16px' }}>
-                  {isConnected ? (isMarathi ? 'जोडलेले' : 'Connected') : isInitializing ? (isMarathi ? 'लोड होत आहे...' : 'Loading...') : status === 'qr_ready' ? (isMarathi ? 'QR स्कॅन करा' : 'Scan QR') : (isMarathi ? 'जोडलेले नाही' : 'Not Connected')}
+                  {isConnected ? (
+                    isMarathi ? 'जोडलेले (Connected)' : 'Connected'
+                  ) : isWaitingForAuth ? (
+                    isMarathi ? 'अथॉरिटीची वाट पाहत आहे...' : 'Waiting for Authentication...'
+                  ) : isInitializing ? (
+                    isMarathi ? 'कोड जनरेट होत आहे...' : 'Generating pairing code...'
+                  ) : (
+                    isMarathi ? 'जोडलेले नाही' : 'Not Connected'
+                  )}
                 </div>
                 <div style={{ fontSize: '13px', color: '#525252', marginTop: '2px' }}>
-                  {isConnected ? (isMarathi ? 'वितरण सूचना पाठवण्यास तयार.' : 'Ready to send delivery notifications.') : (isMarathi ? 'WhatsApp लिंक करण्यासाठी QR कोड लोड करा.' : 'Load QR Code to link WhatsApp.')}
+                  {isConnected ? (
+                    isMarathi ? 'वितरण सूचना पाठवण्यास तयार.' : 'Ready to send delivery notifications.'
+                  ) : isWaitingForAuth ? (
+                    isMarathi ? 'कृपया तुमच्या फोनवर खालील पेअरिंग कोड प्रविष्ट करा.' : 'Please enter the pairing code on your phone.'
+                  ) : (
+                    isMarathi ? 'लिंक करण्यासाठी आंतरराष्ट्रीय फॉरमॅटमध्ये फोन नंबर प्रविष्ट करा.' : 'Enter phone number with country code to link.'
+                  )}
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {!isConnected && !isInitializing && (
-                <button className="btn btn-primary" onClick={loadQR}>{isMarathi ? 'QR कोड लोड करा' : 'Load QR Code'}</button>
-              )}
-              {isInitializing && <button className="btn btn-ghost" disabled><Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> {isMarathi ? 'लोड होत आहे...' : 'Loading...'}</button>}
-              {isConnected && (
-                <button className="btn btn-danger btn-sm" onClick={disconnect} disabled={disconnecting}>
-                  <X size={13} /> {disconnecting ? (isMarathi ? 'डिस्कनेक्ट होत आहे...' : 'Disconnecting...') : (isMarathi ? 'डिस्कनेक्ट' : 'Disconnect')}
+            {isConnected && (
+              <button className="btn btn-danger btn-sm" onClick={disconnect} disabled={disconnecting}>
+                <X size={13} /> {disconnecting ? (isMarathi ? 'डिस्कनेक्ट होत आहे...' : 'Disconnecting...') : (isMarathi ? 'डिस्कनेक्ट' : 'Disconnect')}
+              </button>
+            )}
+            {isWaitingForAuth && (
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: '#DA1E28', borderColor: '#DA1E28' }}
+                  onClick={disconnect}
+                  disabled={disconnecting}
+                >
+                  <X size={13} /> {disconnecting ? (isMarathi ? 'रद्द होत आहे...' : 'Canceling...') : (isMarathi ? 'नंबर बदला / रद्द करा' : 'Re-enter / Cancel')}
                 </button>
-              )}
-            </div>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleResendCode}
+                  disabled={disconnecting || cooldown > 0}
+                >
+                  {pairingLoading ? (
+                    <>
+                      <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> {isMarathi ? 'लोड होत आहे...' : 'Loading...'}
+                    </>
+                  ) : cooldown > 0 ? (
+                    isMarathi ? `${cooldown} सेकंद थांबा` : `Wait ${cooldown}s`
+                  ) : (
+                    isMarathi ? 'कोड पुन्हा पाठवा' : 'Resend Code'
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* QR Code */}
-        {qrData && !isConnected && (
-          <div className="card" style={{ textAlign: 'center', maxWidth: '380px', margin: '0 auto 20px' }}>
-            <h3 style={{ fontWeight: 700, marginBottom: '8px' }}>{isMarathi ? 'WhatsApp ने स्कॅन करा' : 'Scan with WhatsApp'}</h3>
-            <p style={{ fontSize: '13px', color: '#525252', marginBottom: '16px' }}>
-              {isMarathi ? 'WhatsApp → लिंक केलेली उपकरणे → उपकरण लिंक करा → स्कॅन करा' : 'WhatsApp → Linked Devices → Link a Device → Scan'}
+        {/* Pairing Flow Inputs */}
+        {!isConnected && !isWaitingForAuth && (
+          <div className="card" style={{ marginBottom: '20px', maxWidth: '520px' }}>
+            <h3 style={{ fontWeight: 700, marginBottom: '12px', fontSize: '16px' }}>
+              {isMarathi ? 'फोन नंबरसह लिंक करा' : 'Link with Phone Number'}
+            </h3>
+            <form onSubmit={handleRequestPairing}>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'फोन नंबर (देश कोडसह, उदा. +91)' : 'Phone Number (with country code, e.g. +91)'}</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="+91 98765 43210"
+                  value={phoneNumber}
+                  onChange={handlePhoneChange}
+                  disabled={isInitializing}
+                />
+              </div>
+
+              {pairingError && (
+                <div style={{ color: '#DA1E28', fontSize: '13px', marginBottom: '14px', fontWeight: 500 }}>
+                  {pairingError}
+                </div>
+              )}
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={isInitializing || cooldown > 0}>
+                {isInitializing ? (
+                  <>
+                    <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> {isMarathi ? 'कोड लोड होत आहे...' : 'Generating pairing code...'}
+                  </>
+                ) : cooldown > 0 ? (
+                  isMarathi ? `कृपया ${cooldown} सेकंद थांबा...` : `Please wait ${cooldown}s...`
+                ) : (
+                  <>
+                    <Smartphone size={15} /> {isMarathi ? 'पेअरिंग कोड मिळवा' : 'Get Pairing Code'}
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Pairing Code Display & Step-by-Step Instructions */}
+        {isWaitingForAuth && (
+          <div className="card" style={{ marginBottom: '20px', maxWidth: '560px' }}>
+            <h3 style={{ fontWeight: 700, marginBottom: '4px', fontSize: '16px', textAlign: 'center' }}>
+              {isMarathi ? 'तुमचा व्हॉट्सॲप पेअरिंग कोड' : 'Your WhatsApp Pairing Code'}
+            </h3>
+            <p style={{ fontSize: '13px', color: '#525252', textAlign: 'center', marginBottom: '12px' }}>
+              {isMarathi ? 'तुमचा फोन लिंक करण्यासाठी हा कोड प्रविष्ट करा' : 'Enter this code on your phone to link device'}
             </p>
-            <img src={qrData} alt="WhatsApp QR Code" style={{ width: '200px', height: '200px', maxWidth: '100%', border: '1px solid #E0E0E0' }} />
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: '12px' }} onClick={loadQR}>
-              <RefreshCw size={13} /> {isMarathi ? 'QR रिफ्रेश करा' : 'Refresh QR'}
-            </button>
+
+            {pairingCode ? (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    backgroundColor: '#EDF5FF',
+                    border: '1.5px dashed #0F62FE',
+                    padding: '12px 24px',
+                    borderRadius: '4px'
+                  }}>
+                    <span style={{
+                      fontFamily: 'monospace',
+                      fontSize: '32px',
+                      fontWeight: 700,
+                      letterSpacing: '4px',
+                      color: '#0F62FE'
+                    }}>
+                      {pairingCode}
+                    </span>
+                    <button
+                      onClick={copyToClipboard}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#0F62FE',
+                        padding: '8px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title={isMarathi ? 'कोड कॉपी करा' : 'Copy code'}
+                    >
+                      <Copy size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid #E0E0E0', paddingTop: '20px' }}>
+                  <h4 style={{ fontWeight: 700, fontSize: '14px', marginBottom: '12px', color: '#161616' }}>
+                    {isMarathi ? 'लिंक कसे करावे:' : 'How to Link your Account:'}
+                  </h4>
+                  <ol style={{
+                    fontSize: '14px',
+                    lineHeight: 1.6,
+                    paddingLeft: '20px',
+                    color: '#525252',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    <li>
+                      {isMarathi ? (
+                        <>तुमच्या फोनवर <strong>WhatsApp</strong> उघडा.</>
+                      ) : (
+                        <>Open <strong>WhatsApp</strong> on your phone.</>
+                      )}
+                    </li>
+                    <li>
+                      {isMarathi ? (
+                        <>तळामध्ये <strong>Settings</strong> किंवा उजव्या कोपऱ्यात <strong>पर्याय (तीन ठिपके)</strong> वर टॅप करा.</>
+                      ) : (
+                        <>Go to <strong>Settings</strong> or tap <strong>More options (three dots)</strong>.</>
+                      )}
+                    </li>
+                    <li>
+                      {isMarathi ? (
+                        <><strong>लिंक केलेली उपकरणे (Linked Devices)</strong> वर टॅप करा.</>
+                      ) : (
+                        <>Tap <strong>Linked Devices</strong>.</>
+                      )}
+                    </li>
+                    <li>
+                      {isMarathi ? (
+                        <><strong>उपकरण लिंक करा (Link a Device)</strong> निवडा.</>
+                      ) : (
+                        <>Tap <strong>Link a Device</strong>.</>
+                      )}
+                    </li>
+                    <li>
+                      {isMarathi ? (
+                        <>खाली दिलेला <strong>फोन नंबरसह लिंक करा (Link with phone number instead)</strong> पर्याय निवडा.</>
+                      ) : (
+                        <>Tap <strong>Link with phone number instead</strong> at the bottom of the screen.</>
+                      )}
+                    </li>
+                    <li>
+                      {isMarathi ? (
+                        <>वर दिसणारा पेअरिंग कोड <strong>{pairingCode}</strong> तुमच्या फोनवर प्रविष्ट करा.</>
+                      ) : (
+                        <>Enter the pairing code <strong>{pairingCode}</strong> on your phone.</>
+                      )}
+                    </li>
+                  </ol>
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '36px 0', borderTop: '1px solid #E0E0E0' }}>
+                <Loader size={32} color="#0F62FE" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+                <div style={{ fontWeight: 600, fontSize: '14px', color: '#161616' }}>
+                  {isMarathi ? 'पेअरिंग कोड जनरेट होत आहे...' : 'Generating pairing code...'}
+                </div>
+                <div style={{ fontSize: '12px', color: '#525252', marginTop: '6px' }}>
+                  {isMarathi ? 'कृपया काही सेकंद प्रतीक्षा करा, व्हॉट्सॲप सर्व्हरशी कनेक्ट करत आहे.' : 'Please wait a few seconds while we connect to WhatsApp servers.'}
+                </div>
+              </div>
+            )}
+
+            {pairingError && (
+              <div style={{ color: '#DA1E28', fontSize: '13px', marginTop: '14px', fontWeight: 500, textAlign: 'center' }}>
+                {pairingError}
+              </div>
+            )}
+
+            <div style={{ marginTop: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap', borderTop: '1px solid #E0E0E0', paddingTop: '16px' }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ flex: 1, minWidth: '150px' }}
+                onClick={disconnect}
+                disabled={disconnecting}
+              >
+                {isMarathi ? 'नंबर बदला / पुन्हा टाका' : 'Re-enter Phone Number'}
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ flex: 1, minWidth: '150px' }}
+                onClick={handleResendCode}
+                disabled={disconnecting}
+              >
+                {pairingLoading ? (
+                  <>
+                    <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> {isMarathi ? 'लोड होत आहे...' : 'Loading...'}
+                  </>
+                ) : (
+                  isMarathi ? 'कोड पुन्हा पाठवा' : 'Resend Code'
+                )}
+              </button>
+            </div>
           </div>
         )}
 
@@ -343,12 +666,11 @@ const WhatsApp = () => {
                     ) : (
                       <button
                         className="btn btn-sm"
-                        style={{ backgroundColor: '#25D366', color: '#FFFFFF', border: 'none', fontSize: '12px' }}
+                        style={{ backgroundColor: isConnected ? '#25D366' : '#0F62FE', color: '#FFFFFF', border: 'none', fontSize: '12px' }}
                         onClick={() => openSendModal(log)}
-                        disabled={!isConnected || templates.length === 0}
-                        title={!isConnected ? (isMarathi ? 'WhatsApp जोडलेले नाही' : 'WhatsApp not connected') : templates.length === 0 ? (isMarathi ? 'टेम्पलेट नाही' : 'No templates') : ''}
+                        title={isConnected ? (isMarathi ? 'स्वयंचलित पाठवा' : 'Automated Send') : (isMarathi ? 'थेट पाठवा (wa.me)' : 'Direct Send (wa.me)')}
                       >
-                        <Send size={12} /> {isMarathi ? 'पाठवा' : 'Send'}
+                        <Send size={12} /> {isConnected ? (isMarathi ? 'पाठवा' : 'Send') : (isMarathi ? 'थेट पाठवा' : 'Direct Send')}
                       </button>
                     )}
                   </div>
@@ -425,7 +747,6 @@ const WhatsApp = () => {
               ({sendModal.log.customerId?.phone})
             </p>
 
-            {/* Delivery summary — no amount shown */}
             <div style={{ backgroundColor: '#F4F4F4', padding: '12px 16px', marginBottom: '16px', fontSize: '13px' }}>
               <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                 <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'वेळ: ' : 'Slot: '}</span><strong>{sendModal.log.slot === 'morning' ? (isMarathi ? 'सकाळ' : 'Morning') : (isMarathi ? 'संध्याकाळ' : 'Evening')}</strong></div>
@@ -434,7 +755,6 @@ const WhatsApp = () => {
               </div>
             </div>
 
-            {/* Template selector */}
             {templates.length > 1 && (
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'टेम्पलेट' : 'Template'}</label>
@@ -447,7 +767,7 @@ const WhatsApp = () => {
                       extraQty: sendModal.log.extra_qty,
                       ownerPhone: user?.phone || '',
                       slot: sendModal.log.slot,
-                      isMarathi
+                      customerLang: sendModal.log.customerId?.language || 'en'
                     });
                     setSendModal(prev => ({ ...prev, template: tmpl, message: msg }));
                   }
@@ -457,7 +777,6 @@ const WhatsApp = () => {
               </div>
             )}
 
-            {/* Message preview + edit */}
             <div className="input-group">
               <label className="input-label">{isMarathi ? 'संदेश (संपादित करा)' : 'Message (editable)'}</label>
               <textarea

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Search, Edit2, UserX, UserCheck, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -382,6 +383,8 @@ const Customers = () => {
 
 // ── Customer Modal ────────────────────────────────────────────
 const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [form, setForm] = useState({
     name:            customer?.name || '',
     phone:           customer?.phone || '',
@@ -498,7 +501,25 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.error || (isMarathi ? 'ग्राहक जतन करण्यात अयशस्वी.' : 'Failed to save customer.'));
+      const errMsg = err.response?.data?.error || '';
+      if (errMsg.toLowerCase().includes('limit reached')) {
+        if (user?.subscription?.plan === 'platinum') {
+          navigate('/app/owner/feedback', {
+            state: {
+              prefillCategory: 'support',
+              prefillMessage: isMarathi 
+                ? 'नमस्कार टीम, मी प्लॅटिनम प्लॅनवरील माझी ग्राहक मर्यादा ओलांडली आहे. कृपया माझी ग्राहक मर्यादा वाढवा.'
+                : 'Hi support team, I have exhausted my customer limit on the Platinum plan. Please increase my customer limit.'
+            }
+          });
+          toast.error(isMarathi ? 'ग्राहक मर्यादा ओलांडली आहे. सपोर्ट पेजवर रिडायरेक्ट करत आहे...' : 'Customer limit reached. Redirecting to support...');
+        } else {
+          navigate('/app/owner/upgrade');
+          toast.error(isMarathi ? 'ग्राहक मर्यादा ओलांडली आहे. अपग्रेड पेजवर रिडायरेक्ट करत आहे...' : 'Customer limit reached. Redirecting to upgrade...');
+        }
+      } else {
+        toast.error(errMsg || (isMarathi ? 'ग्राहक जतन करण्यात अयशस्वी.' : 'Failed to save customer.'));
+      }
     } finally {
       setLoading(false);
     }

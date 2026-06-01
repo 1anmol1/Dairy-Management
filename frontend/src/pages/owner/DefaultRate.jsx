@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Milk, TrendingUp, TrendingDown, Minus, Plus, History } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
@@ -6,10 +6,14 @@ import useDelayedLoading from '../../hooks/useDelayedLoading';
 import useWindowWidth from '../../hooks/useWindowWidth';
 import { useMarathi } from '../../i18n/marathi';
 import { getCache, setCache, invalidateCache } from '../../utils/cache';
+import { useAuth } from '../../context/AuthContext';
 
 const CACHE_KEY = 'owner/default-rate';
 
 const DefaultRate = () => {
+  const { user } = useAuth();
+  const isDairyOwner = user?.ownerRole === 'dairy_owner';
+  const [activeCategory, setActiveCategory] = useState(isDairyOwner ? 'farmers' : 'customers');
   const [history, setHistory] = useState(() => getCache(CACHE_KEY)?.history || []);
   const [current, setCurrent] = useState(() => getCache(CACHE_KEY)?.current || null);
   const [loading, setLoading] = useState(!getCache(CACHE_KEY));
@@ -49,17 +53,74 @@ const DefaultRate = () => {
     <div style={{ maxWidth: '100%' }}>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{isMarathi ? 'डिफॉल्ट दूध दर' : 'Default Milk Rate'}</h1>
+          <h1 className="page-title">
+            {isDairyOwner
+              ? (activeCategory === 'farmers'
+                ? (isMarathi ? 'डिफॉल्ट खरेदी दर (सूत्र)' : 'Default Purchase Rates (Formula)')
+                : (isMarathi ? 'डिफॉल्ट विक्री दर' : 'Default Customer Sales Rate'))
+              : (isMarathi ? 'डिफॉल्ट दूध दर' : 'Default Milk Rate')}
+          </h1>
           <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
-            {isMarathi ? 'नवीन ग्राहकांसाठी डिफॉल्ट दर सेट करा' : 'Set the default rate applied to new customers'}
+            {isDairyOwner
+              ? (activeCategory === 'farmers'
+                ? (isMarathi ? 'गाय, म्हैस आणि मिश्रित दुधासाठी खरेदी दर मोजणीचे सूत्र सेट करा' : 'Configure pricing formulas for milk procured from farmers')
+                : (isMarathi ? 'नवीन ग्राहकांसाठी डिफॉल्ट विक्री दर सेट करा' : 'Set the default sales rate applied to new buyers/customers'))
+              : (isMarathi ? 'नवीन ग्राहकांसाठी डिफॉल्ट दर सेट करा' : 'Set the default rate applied to new customers')}
           </div>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowSetModal(true)}>
-          <Plus size={16} /> {isMarathi ? 'नवीन दर सेट करा' : 'Set New Rate'}
-        </button>
+        {(!isDairyOwner || activeCategory === 'customers') && (
+          <button className="btn btn-primary btn-sm" onClick={() => setShowSetModal(true)}>
+            <Plus size={16} /> {isMarathi ? 'नवीन दर सेट करा' : 'Set New Rate'}
+          </button>
+        )}
       </div>
 
-      <div className="page-body">
+      {isDairyOwner && (
+        <div style={{ display: 'flex', borderBottom: '1px solid #E0E0E0', marginBottom: '24px', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setActiveCategory('farmers')}
+            style={{
+              padding: '12px 20px',
+              fontWeight: 600,
+              fontSize: '15px',
+              border: 'none',
+              background: 'none',
+              borderBottom: activeCategory === 'farmers' ? '3px solid #0F62FE' : 'none',
+              color: activeCategory === 'farmers' ? '#0F62FE' : '#525252',
+              cursor: 'pointer',
+              transition: 'all 0.1s'
+            }}
+          >
+            {isMarathi ? 'शेतकरी दर (खरेदी सूत्र)' : 'Farmers (Purchase Formula)'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveCategory('customers')}
+            style={{
+              padding: '12px 20px',
+              fontWeight: 600,
+              fontSize: '15px',
+              border: 'none',
+              background: 'none',
+              borderBottom: activeCategory === 'customers' ? '3px solid #0F62FE' : 'none',
+              color: activeCategory === 'customers' ? '#0F62FE' : '#525252',
+              cursor: 'pointer',
+              transition: 'all 0.1s'
+            }}
+          >
+            {isMarathi ? 'ग्राहक दर (विक्री दर)' : 'Customers (Sales Rate)'}
+          </button>
+        </div>
+      )}
+
+      {isDairyOwner && activeCategory === 'farmers' ? (
+        <div className="page-body">
+          <DairyDefaultRateSection />
+        </div>
+      ) : (
+        <>
+          <div className="page-body">
         {/* Current rate card */}
         <div style={{
           display: 'grid',
@@ -287,6 +348,8 @@ const DefaultRate = () => {
           onSaved={() => { invalidateCache(CACHE_KEY); fetchRate(true); }}
         />
       )}
+        </>
+      )}
     </div>
   );
 };
@@ -366,6 +429,244 @@ const SetRateModal = ({ currentRate, onClose, onSaved }) => {
           </div>
         </form>
       </div>
+    </div>
+  );
+};
+
+// ── DairyDefaultRateSection Component ──────────────────────────
+const DairyDefaultRateSection = () => {
+  const { isMarathi } = useMarathi();
+  const toast = useToast();
+  
+  const [configs, setConfigs] = useState({});
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('Cow'); // 'Cow', 'Buffalo', 'Mixed'
+
+  // Input states for the active tab config
+  const [baseRate, setBaseRate] = useState('');
+  const [fatMultiplier, setFatMultiplier] = useState('');
+  const [snfMultiplier, setSnfMultiplier] = useState('');
+  const [bonusPerLiter, setBonusPerLiter] = useState('');
+  const [deductionPerLiter, setDeductionPerLiter] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().split('T')[0]);
+
+  const fetchRates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/owner/dairy-default-rates');
+      const configsMap = {};
+      data.configs.forEach(c => {
+        configsMap[c.milkType] = c;
+      });
+      setConfigs(configsMap);
+      setHistory(data.history || []);
+
+      // Load active tab config values
+      const currentConfig = configsMap[activeTab];
+      if (currentConfig) {
+        setBaseRate(String(currentConfig.baseRate ?? ''));
+        setFatMultiplier(String(currentConfig.fatMultiplier ?? ''));
+        setSnfMultiplier(String(currentConfig.snfMultiplier ?? ''));
+        setBonusPerLiter(String(currentConfig.bonusPerLiter ?? '0'));
+        setDeductionPerLiter(String(currentConfig.deductionPerLiter ?? '0'));
+        if (currentConfig.effectiveFrom) {
+          setEffectiveFrom(new Date(currentConfig.effectiveFrom).toISOString().split('T')[0]);
+        }
+      } else {
+        setBaseRate('');
+        setFatMultiplier('');
+        setSnfMultiplier('');
+        setBonusPerLiter('0');
+        setDeductionPerLiter('0');
+      }
+    } catch (err) {
+      toast.error('Failed to load default rate configurations.');
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, toast]);
+
+  useEffect(() => {
+    fetchRates();
+  }, [fetchRates]);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!baseRate || !fatMultiplier || !snfMultiplier || !effectiveFrom) {
+      toast.error(isMarathi ? 'कृपया सर्व आवश्यक फील्ड भरा.' : 'Please fill all required fields.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post('/owner/dairy-default-rates', {
+        milkType: activeTab,
+        baseRate: parseFloat(baseRate),
+        fatMultiplier: parseFloat(fatMultiplier),
+        snfMultiplier: parseFloat(snfMultiplier),
+        bonusPerLiter: parseFloat(bonusPerLiter || 0),
+        deductionPerLiter: parseFloat(deductionPerLiter || 0),
+        effectiveFrom
+      });
+      toast.success(isMarathi ? 'दर नियम यशस्वीरित्या जतन केले!' : 'Default rate rules saved successfully!');
+      fetchRates();
+    } catch (err) {
+      toast.error('Failed to save default rates.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #E0E0E0' }}>
+        {['Cow', 'Buffalo', 'Mixed'].map(type => (
+          <button
+            key={type}
+            type="button"
+            onClick={() => setActiveTab(type)}
+            style={{
+              padding: '12px 24px',
+              fontWeight: 600,
+              fontSize: '14px',
+              border: 'none',
+              background: 'none',
+              borderBottom: activeTab === type ? '3px solid #0F62FE' : 'none',
+              color: activeTab === type ? '#0F62FE' : '#525252',
+              cursor: 'pointer'
+            }}
+          >
+            {type === 'Cow' ? (isMarathi ? 'गाय दूध' : 'Cow Milk') : 
+             type === 'Buffalo' ? (isMarathi ? 'म्हैस दूध' : 'Buffalo Milk') : 
+             (isMarathi ? 'मिश्रित दूध' : 'Mixed Milk')}
+          </button>
+        ))}
+      </div>
+
+      <div className="card" style={{ padding: '24px' }}>
+        <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '20px' }}>
+          {isMarathi ? `${activeTab === 'Cow' ? 'गाय' : activeTab === 'Buffalo' ? 'म्हैस' : 'मिश्रित'} दूध दर नियम` : `${activeTab} Milk Pricing Rules`}
+        </h3>
+
+        {loading ? (
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <div className="spinner" style={{ margin: 'auto' }} />
+          </div>
+        ) : (
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'मूळ दर (Base Rate) (₹/L)' : 'Base Rate (₹/L)'}</label>
+                <input
+                  type="number" className="input" step="0.01" min="0" required
+                  value={baseRate} onChange={e => setBaseRate(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'फॅट Multiplier (FAT Rate)' : 'FAT Rate Multiplier'}</label>
+                <input
+                  type="number" className="input" step="0.0001" min="0" required
+                  value={fatMultiplier} onChange={e => setFatMultiplier(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'एसएनएफ Multiplier (SNF Rate)' : 'SNF Rate Multiplier'}</label>
+                <input
+                  type="number" className="input" step="0.0001" min="0" required
+                  value={snfMultiplier} onChange={e => setSnfMultiplier(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'बोनस / लिटर (₹/L)' : 'Bonus Per Liter (₹/L)'}</label>
+                <input
+                  type="number" className="input" step="0.01" min="0" required
+                  value={bonusPerLiter} onChange={e => setBonusPerLiter(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'वजावट / लिटर (₹/L)' : 'Deduction Per Liter (₹/L)'}</label>
+                <input
+                  type="number" className="input" step="0.01" min="0" required
+                  value={deductionPerLiter} onChange={e => setDeductionPerLiter(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'अंमलबजावणी तारीख' : 'Effective From Date'}</label>
+                <input
+                  type="date" className="input" required
+                  value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)}
+                />
+              </div>
+
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{ alignSelf: 'flex-start', height: '42px', minWidth: '150px' }} disabled={saving}>
+              {saving ? <div className="spinner" style={{ width: '18px', height: '18px' }} /> : (isMarathi ? 'दर नियम जतन करा' : 'Save Pricing Rule')}
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* History */}
+      <div className="card" style={{ padding: 0 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E0E0E0', fontWeight: 700, fontSize: '14px' }}>
+          {isMarathi ? 'दर नियम इतिहास' : 'Pricing Formula History'}
+        </div>
+        {history.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#8D8D8D' }}>
+            {isMarathi ? 'कोणताही इतिहास सापडला नाही.' : 'No formula updates recorded yet.'}
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#F4F4F4', borderBottom: '1px solid #E0E0E0', textAlign: 'left' }}>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'तारीख' : 'Effective Date'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'दूध प्रकार' : 'Milk Type'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'मूळ दर' : 'Base Rate'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'FAT Multiplier' : 'FAT Mult.'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'SNF Multiplier' : 'SNF Mult.'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'बोनस' : 'Bonus'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'वजावट' : 'Deduction'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'स्थिती' : 'Status'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map(h => (
+                  <tr key={h._id} style={{ borderBottom: '1px solid #E0E0E0' }}>
+                    <td style={{ padding: '12px 16px' }}>{new Date(h.effectiveFrom).toLocaleDateString('en-IN')}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span className={`badge ${h.milkType === 'Cow' ? 'badge-blue' : h.milkType === 'Buffalo' ? 'badge-orange' : 'badge-green'}`}>
+                        {h.milkType}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>₹{h.baseRate.toFixed(2)}/L</td>
+                    <td style={{ padding: '12px 16px' }}>{h.fatMultiplier.toFixed(4)}</td>
+                    <td style={{ padding: '12px 16px' }}>{h.snfMultiplier.toFixed(4)}</td>
+                    <td style={{ padding: '12px 16px' }}>+₹{h.bonusPerLiter.toFixed(2)}/L</td>
+                    <td style={{ padding: '12px 16px' }}>-₹{h.deductionPerLiter.toFixed(2)}/L</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span className={`badge ${h.isActive ? 'badge-green' : 'badge-red'}`}>
+                        {h.isActive ? (isMarathi ? 'सक्रिय' : 'Active') : (isMarathi ? 'निष्क्रिय' : 'Inactive')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 };

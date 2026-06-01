@@ -6,7 +6,9 @@ const DailyLog = require('../models/DailyLog');
 const AuthLog = require('../models/AuthLog');
 const PlanConfig = require('../models/PlanConfig');
 const SystemConfig = require('../models/SystemConfig');
+const SubscriptionRequest = require('../models/SubscriptionRequest');
 const { protect, authorize } = require('../middleware/auth');
+const { sendStartTrialEvent, sendSubscribeEvent } = require('../services/metaCapiService');
 
 // All routes require superadmin role
 router.use(protect, authorize('superadmin'));
@@ -45,7 +47,7 @@ router.get('/owners', async (req, res, next) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [owners, total] = await Promise.all([
       User.find(query)
-        .select('_id name phone email businessName role isActive subscription features createdAt lastLogin')
+        .select('_id name phone email businessName role ownerRole isActive subscription features createdAt lastLogin')
         .sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
       User.countDocuments(query)
     ]);
@@ -93,7 +95,9 @@ router.post('/owners', async (req, res, next) => {
       endDate,
       amountPaid = 0,
       setupFeePaid = 0,
-      notes = ''
+      notes = '',
+      maxCustomers,
+      maxStaff
     } = req.body;
 
     if (!name || !phone || !password || !email) {
@@ -133,6 +137,18 @@ router.post('/owners', async (req, res, next) => {
       end.setMonth(end.getMonth() + parseInt(months));
     }
 
+    // Default plan limits
+    const DEFAULT_PLAN_LIMITS = {
+      silver: { maxCustomers: 50, maxStaff: 2 },
+      gold: { maxCustomers: 150, maxStaff: 5 },
+      platinum: { maxCustomers: 999999, maxStaff: 15 }
+    };
+    const defaultLim = DEFAULT_PLAN_LIMITS[plan] || DEFAULT_PLAN_LIMITS.gold;
+    const finalMaxCustomers = maxCustomers !== undefined && maxCustomers !== '' ? parseInt(maxCustomers) : defaultLim.maxCustomers;
+    const finalMaxStaff = maxStaff !== undefined && maxStaff !== '' ? parseInt(maxStaff) : defaultLim.maxStaff;
+
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
     const owner = await User.create({
       name: name.trim(),
       phone: phone.trim(),
@@ -140,7 +156,12 @@ router.post('/owners', async (req, res, next) => {
       password,
       businessName: businessName?.trim() || '',
       role: 'owner',
+      ownerRole: req.body.ownerRole || 'milk_supplier',
       features: planFeatures,
+      maxCustomers: finalMaxCustomers,
+      maxStaff: finalMaxStaff,
+      source: req.body.source || 'organic',
+      ownerVerificationCode: verificationCode,
       subscription: {
         status: subscriptionStatus,
         plan,
@@ -153,6 +174,48 @@ router.post('/owners', async (req, res, next) => {
         adminNotes: notes || undefined,
       }
     });
+
+    // Fire Meta CAPI events if this owner came from ads_landing
+    if (subscriptionStatus === 'trial' || subscriptionStatus === 'active') {
+      setImmediate(async () => {
+        try {
+          const lead = await SubscriptionRequest.findOne({
+            contactPhone: phone.trim(),
+            source: 'ads_landing',
+          }).sort({ createdAt: -1 }).lean();
+
+          if (lead) {
+            owner.source = 'ads_landing';
+            await owner.save();
+
+            if (owner.source === 'ads_landing') {
+              if (subscriptionStatus === 'trial') {
+                const trialEventId = require('crypto').randomUUID();
+                await SubscriptionRequest.findByIdAndUpdate(lead._id, {
+                  ownerId: owner._id,
+                  trialEventId,
+                });
+                await sendStartTrialEvent(lead, trialEventId);
+              } else if (subscriptionStatus === 'active') {
+                const subscribeEventId = require('crypto').randomUUID();
+                await SubscriptionRequest.findByIdAndUpdate(lead._id, {
+                  ownerId: owner._id,
+                  subscribeEventId,
+                });
+                const planPrices = { silver: 99, gold: 199, platinum: 399 };
+                await sendSubscribeEvent(lead, subscribeEventId, {
+                  value:        planPrices[plan] || 199,
+                  planName:     plan,
+                  billingCycle: billingCycle || 'monthly',
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`[META CAPI] ${subscriptionStatus} event failed:`, err.message);
+        }
+      });
+    }
 
     res.status(201).json({ owner });
   } catch (err) {
@@ -181,7 +244,7 @@ router.get('/owners/:id', async (req, res, next) => {
 // ── PATCH /api/superadmin/owners/:id/subscription ─────────────
 router.patch('/owners/:id/subscription', async (req, res, next) => {
   try {
-    const { status, plan, expiresAt, trialEndsAt } = req.body;
+    const { status, plan, expiresAt, trialEndsAt, maxCustomers, maxStaff } = req.body;
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
 
@@ -192,11 +255,56 @@ router.patch('/owners/:id/subscription', async (req, res, next) => {
       if (planFeatures) {
         Object.keys(planFeatures).forEach(key => { owner.features[key] = planFeatures[key]; });
       }
+      // Apply new plan default limits
+      const DEFAULT_PLAN_LIMITS = {
+        silver: { maxCustomers: 50, maxStaff: 2 },
+        gold: { maxCustomers: 150, maxStaff: 5 },
+        platinum: { maxCustomers: 999999, maxStaff: 15 }
+      };
+      const defaultLim = DEFAULT_PLAN_LIMITS[plan];
+      if (defaultLim) {
+        owner.maxCustomers = defaultLim.maxCustomers;
+        owner.maxStaff = defaultLim.maxStaff;
+      }
     }
     if (expiresAt) owner.subscription.expiresAt = new Date(expiresAt);
     if (trialEndsAt) owner.subscription.trialEndsAt = new Date(trialEndsAt);
 
+    if (maxCustomers !== undefined && maxCustomers !== '') owner.maxCustomers = parseInt(maxCustomers);
+    if (maxStaff !== undefined && maxStaff !== '') owner.maxStaff = parseInt(maxStaff);
+
     await owner.save();
+
+    // Fire Meta CAPI Subscribe if activating a paid plan for an ads_landing user
+    if (status === 'active') {
+      setImmediate(async () => {
+        try {
+          const lead = await SubscriptionRequest.findOne({
+            contactPhone: owner.phone,
+            source: 'ads_landing',
+          }).sort({ createdAt: -1 }).lean();
+
+          if (lead) {
+            owner.source = 'ads_landing';
+            await owner.save();
+
+            if (owner.source === 'ads_landing') {
+              const subscribeEventId = require('crypto').randomUUID();
+              const planPrices = { silver: 99, gold: 199, platinum: 399 };
+              await SubscriptionRequest.findByIdAndUpdate(lead._id, { subscribeEventId });
+              await sendSubscribeEvent(lead, subscribeEventId, {
+                value:        planPrices[owner.subscription.plan] || 199,
+                planName:     owner.subscription.plan,
+                billingCycle: owner.subscription.billingCycle || 'monthly',
+              });
+            }
+          }
+        } catch (err) {
+          console.error('[META CAPI] Subscribe event failed:', err.message);
+        }
+      });
+    }
+
     res.json({ owner });
   } catch (err) {
     next(err);
@@ -215,6 +323,25 @@ router.patch('/owners/:id/features', async (req, res, next) => {
     });
 
     await owner.save();
+    res.json({ owner });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/superadmin/owners/:id/role ──────────────────────
+router.patch('/owners/:id/role', async (req, res, next) => {
+  try {
+    const { ownerRole } = req.body;
+    if (!ownerRole || !['dairy_owner', 'milk_supplier'].includes(ownerRole)) {
+      return res.status(400).json({ error: 'Invalid owner role.' });
+    }
+    const owner = await User.findOneAndUpdate(
+      { _id: req.params.id, role: 'owner' },
+      { ownerRole },
+      { new: true }
+    );
+    if (!owner) return res.status(404).json({ error: 'Owner not found.' });
     res.json({ owner });
   } catch (err) {
     next(err);
@@ -701,6 +828,100 @@ router.get('/auth-logs', async (req, res, next) => {
     ]);
 
     res.json({ logs, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/superadmin/feedback ──────────────────────────────
+router.get('/feedback', async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const query = {};
+    if (status) query.status = status;
+
+    const Feedback = require('../models/Feedback');
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [feedbacks, total] = await Promise.all([
+      Feedback.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('ownerId', 'name phone businessName')
+        .lean(),
+      Feedback.countDocuments(query)
+    ]);
+
+    res.json({ feedbacks, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/superadmin/feedback/:id ─────────────────────────
+router.patch('/feedback/:id', async (req, res, next) => {
+  try {
+    const { status, adminNotes } = req.body;
+    const Feedback = require('../models/Feedback');
+    const feedback = await Feedback.findById(req.params.id);
+    if (!feedback) return res.status(404).json({ error: 'Feedback not found.' });
+
+    if (status) feedback.status = status;
+    if (adminNotes !== undefined) feedback.adminNotes = adminNotes;
+    await feedback.save();
+
+    res.json({ feedback });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/superadmin/impersonate ──────────────────────────
+router.post('/impersonate', async (req, res, next) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number is required.' });
+
+    const targetUser = await User.findOne({ phone: phone.trim() });
+    if (!targetUser) return res.status(404).json({ error: 'Account not found with that phone number.' });
+
+    if (targetUser.role === 'superadmin') {
+      return res.status(400).json({ error: 'Cannot impersonate another superadmin.' });
+    }
+
+    // Sign token with a special flag indicating it was impersonated by superadmin
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign(
+      { id: targetUser._id, role: targetUser.role, impersonatedBy: 'superadmin' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    let effectiveFeatures = targetUser.features;
+    if (targetUser.role === 'owner' && targetUser.subscription?.status === 'trial') {
+      try {
+        const PlanConfig = require('../models/PlanConfig');
+        const planName = targetUser.subscription?.plan || 'gold';
+        const planCfg = await PlanConfig.findOne({ plan: planName }).lean();
+        if (planCfg) effectiveFeatures = planCfg.features;
+      } catch (_) {}
+    }
+
+    const payload = {
+      _id:             targetUser._id,
+      name:            targetUser.name,
+      phone:           targetUser.phone,
+      role:            targetUser.role,
+      ownerId:         targetUser.ownerId,
+      businessName:    targetUser.businessName,
+      subscription:    targetUser.subscription,
+      ownerRole:       targetUser.ownerRole,
+      features:        effectiveFeatures,
+      onboardingDone:  targetUser.onboardingDone || false,
+      impersonated:    true
+    };
+
+    res.json({ token, user: payload });
   } catch (err) {
     next(err);
   }

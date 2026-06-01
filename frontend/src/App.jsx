@@ -30,11 +30,14 @@ import SuperadminOwners    from './pages/superadmin/Owners';
 import SuperadminPlans     from './pages/superadmin/Plans';
 import SuperadminRequests  from './pages/superadmin/Requests';
 import SuperadminActivities from './pages/superadmin/Activities';
+import SuperadminImpersonation from './pages/superadmin/Impersonation';
+import SuperadminFeedbackList from './pages/superadmin/FeedbackList';
 
 // ── Owner ─────────────────────────────────────────────────────
 import OwnerLayout          from './layouts/OwnerLayout';
 import OwnerDashboard       from './pages/owner/Dashboard';
 import OwnerCustomers       from './pages/owner/Customers';
+import OwnerFarmers         from './pages/owner/Farmers';
 import OwnerStaff           from './pages/owner/Staff';
 import OwnerLogs            from './pages/owner/Logs';
 import OwnerBilling         from './pages/owner/Billing';
@@ -44,6 +47,8 @@ import OwnerUpgrade         from './pages/owner/Upgrade';
 import OwnerOnboarding      from './pages/owner/Onboarding';
 import OwnerDailyCollection from './pages/owner/DailyCollection';
 import OwnerMessageTemplates from './pages/owner/MessageTemplates';
+import PromotePage from './pages/landing/Promote';
+import FeedbackPage         from './pages/owner/Feedback';
 
 // ── Staff ─────────────────────────────────────────────────────
 import StaffLayout   from './layouts/StaffLayout';
@@ -93,13 +98,11 @@ const PrivateAccessPortal = () => (
 );
 
 // ── "Not signed in" message for /app when unauthenticated ────
-// When signed in, show the sign-out guard instead of redirecting
 const AppGate = () => {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   if (loading) return null;
 
-  // Signed in — show sign-out prompt (same as SignOutGuard)
   if (user) {
     const roleColor = user.role === 'owner' ? '#0F62FE' : user.role === 'staff' ? '#24A148' : '#DA1E28';
     const roleLabel = user.role === 'owner' ? 'Owner' : user.role === 'staff' ? 'Staff' : 'Super Admin';
@@ -129,42 +132,10 @@ const AppGate = () => {
     );
   }
 
-  return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      backgroundColor: '#F4F4F4', fontFamily: 'Inter, sans-serif', padding: '24px'
-    }}>
-      <div style={{ textAlign: 'center', maxWidth: '400px' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
-        <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '10px', color: '#161616' }}>
-          If you are subscribed, you will be redirected soon!
-        </h2>
-        <p style={{ fontSize: '14px', color: '#525252', lineHeight: 1.6, marginBottom: '24px' }}>
-          Please sign in to access your account. Use the correct login link for your role.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <a href="/securelogin/ownerlogin" style={{
-            backgroundColor: '#0F62FE', color: '#FFFFFF', padding: '12px 24px',
-            textDecoration: 'none', fontWeight: 600, fontSize: '14px', display: 'block'
-          }}>
-            Owner Login
-          </a>
-          <a href="/loginto/staffaccess" style={{
-            backgroundColor: '#24A148', color: '#FFFFFF', padding: '12px 24px',
-            textDecoration: 'none', fontWeight: 600, fontSize: '14px', display: 'block'
-          }}>
-            Staff Login
-          </a>
-        </div>
-      </div>
-    </div>
-  );
+  return <Navigate to="/securelogin/ownerlogin" replace />;
 };
 
 // ── Protected route — no redirects, show 404 for unauthenticated ─
-// - Not logged in → 404
-// - Wrong role    → sign-out guard (they're logged in but wrong area)
-// - Correct role  → render children
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -173,107 +144,250 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
+const OwnerCollectionGuard = ({ children }) => {
+  const { user } = useAuth();
+  if (!user || user.ownerRole !== 'dairy_owner') {
+    return <Navigate to="/app/owner" replace />;
+  }
+  return children;
+};
+
+const ImpersonationBanner = () => {
+  const { user, logout } = useAuth();
+  const [showConfirm, setShowConfirm] = React.useState(false);
+  const navigate = useNavigate();
+
+  if (!user || !user.impersonated) return null;
+
+  const handleLogout = () => {
+    logout();
+    setShowConfirm(false);
+    navigate('/app/superadmin');
+  };
+
+  return (
+    <>
+      <div style={{
+        backgroundColor: '#DA1E28',
+        color: '#FFFFFF',
+        padding: '8px 16px',
+        fontSize: '13px',
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        position: 'sticky',
+        top: 0,
+        zIndex: 99999,
+        fontFamily: 'Inter, sans-serif',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        borderBottom: '1px solid rgba(255,255,255,0.2)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '16px' }}>👁️</span>
+          <span>
+            Impersonating {user.role.toUpperCase()}: <strong>{user.name}</strong> ({user.phone})
+          </span>
+        </div>
+        <button
+          onClick={() => setShowConfirm(true)}
+          style={{
+            backgroundColor: '#FFFFFF',
+            color: '#DA1E28',
+            border: 'none',
+            padding: '4px 12px',
+            fontSize: '11px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            borderRadius: '2px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+        >
+          Exit Session
+        </button>
+      </div>
+
+      {showConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100000,
+          fontFamily: 'Inter, sans-serif'
+        }}>
+          <div style={{
+            backgroundColor: '#FFFFFF',
+            padding: '24px',
+            maxWidth: '380px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#161616', margin: '0 0 10px 0' }}>
+              Confirm Exit Session?
+            </h3>
+            <p style={{ fontSize: '14px', color: '#525252', lineHeight: 1.5, margin: '0 0 24px 0' }}>
+              Are you sure you want to exit the impersonated session? You will be returned to the Super Admin panel.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={() => setShowConfirm(false)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#FFFFFF',
+                  color: '#525252',
+                  border: '1px solid #E0E0E0',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#DA1E28',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const App = () => {
   // Detect if running on the app domain (amritmanage-app.eurekai.in or localhost dev)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const isAppSubdomain =
     hostname === 'amritmanage-app.eurekai.in' ||
-    hostname.startsWith('app.');
+    hostname.startsWith('app.') ||
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1';
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <ToastProvider>
           <MarathiProvider>
+            <ImpersonationBanner />
             <ScrollToTop />
-          <Routes>
-            {isAppSubdomain ? (
-              /* ── APP SUBDOMAIN (app.amritmanage.eurekai.in) ── */
-              <>
-                {/* Root → Private Access Portal */}
-                <Route path="/" element={<PrivateAccessPortal />} />
+            <Routes>
+              {isAppSubdomain ? (
+                /* ── APP SUBDOMAIN (app.amritmanage.eurekai.in) ── */
+                <>
+                  {/* Root → Private Access Portal */}
+                  <Route path="/" element={<PrivateAccessPortal />} />
 
-                {/* ── Secure login URLs ─────────────────────── */}
-                <Route path="/securelogin/ownerlogin"  element={<SignOutGuard><OwnerLogin /></SignOutGuard>} />
-                <Route path="/loginto/staffaccess"     element={<SignOutGuard><StaffLogin /></SignOutGuard>} />
-                <Route path="/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login" element={<SignOutGuard><AdminLogin /></SignOutGuard>} />
+                  {/* ── Secure login URLs ─────────────────────── */}
+                  <Route path="/securelogin/ownerlogin"  element={<SignOutGuard><OwnerLogin /></SignOutGuard>} />
+                  <Route path="/loginto/staffaccess"     element={<SignOutGuard><StaffLogin /></SignOutGuard>} />
+                  <Route path="/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login" element={<SignOutGuard><AdminLogin /></SignOutGuard>} />
 
-                {/* ── Legacy → 404 ──────────────────────────── */}
-                <Route path="/ownerlogin"  element={<NotFound />} />
-                <Route path="/staffaccess" element={<NotFound />} />
-                <Route path="/app/login"   element={<NotFound />} />
-                <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
-                <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+                  {/* ── Legacy → 404 ──────────────────────────── */}
+                  <Route path="/ownerlogin"  element={<NotFound />} />
+                  <Route path="/staffaccess" element={<NotFound />} />
+                  <Route path="/app/login"   element={<NotFound />} />
+                  <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+                  <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
 
-                {/* ── Superadmin ────────────────────────────── */}
-                <Route path="/app/superadmin" element={
-                  <ProtectedRoute allowedRoles={['superadmin']}>
-                    <SuperadminLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<SuperadminDashboard />} />
-                  <Route path="owners"     element={<SuperadminOwners />} />
-                  <Route path="activities" element={<SuperadminActivities />} />
-                  <Route path="plans"      element={<SuperadminPlans />} />
-                  <Route path="requests"   element={<SuperadminRequests />} />
-                </Route>
+                  {/* ── Superadmin ────────────────────────────── */}
+                  <Route path="/app/superadmin" element={
+                    <ProtectedRoute allowedRoles={['superadmin']}>
+                      <SuperadminLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<SuperadminDashboard />} />
+                    <Route path="owners"      element={<SuperadminOwners />} />
+                    <Route path="activities"  element={<SuperadminActivities />} />
+                    <Route path="plans"       element={<SuperadminPlans />} />
+                    <Route path="requests"    element={<SuperadminRequests />} />
+                    <Route path="impersonate" element={<SuperadminImpersonation />} />
+                    <Route path="feedback"    element={<SuperadminFeedbackList />} />
+                  </Route>
 
-                {/* ── Owner ─────────────────────────────────── */}
-                <Route path="/app/owner" element={
-                  <ProtectedRoute allowedRoles={['owner']}>
-                    <OwnerLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<OwnerDashboard />} />
-                  <Route path="customers"         element={<OwnerCustomers />} />
-                  <Route path="staff"             element={<OwnerStaff />} />
-                  <Route path="collection"        element={<OwnerDailyCollection />} />
-                  <Route path="logs"              element={<OwnerLogs />} />
-                  <Route path="billing"           element={<OwnerBilling />} />
-                  <Route path="whatsapp"          element={<OwnerWhatsApp />} />
-                  <Route path="default-rate"      element={<OwnerDefaultRate />} />
-                  <Route path="upgrade"           element={<OwnerUpgrade />} />
-                  <Route path="message-templates" element={<OwnerMessageTemplates />} />
-                </Route>
+                  {/* ── Owner ─────────────────────────────────── */}
+                  <Route path="/app/owner" element={
+                    <ProtectedRoute allowedRoles={['owner']}>
+                      <OwnerLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<OwnerDashboard />} />
+                    <Route path="customers"         element={<OwnerCustomers />} />
+                    <Route path="farmers"           element={<OwnerFarmers />} />
+                    <Route path="staff"             element={<OwnerStaff />} />
+                    <Route path="collection"        element={<OwnerDailyCollection />} />
+                    <Route path="logs"              element={<OwnerLogs />} />
+                    <Route path="billing"           element={<OwnerBilling />} />
+                    <Route path="whatsapp"          element={<OwnerWhatsApp />} />
+                    <Route path="default-rate"      element={<OwnerDefaultRate />} />
+                    <Route path="upgrade"           element={<OwnerUpgrade />} />
+                    <Route path="message-templates" element={<OwnerMessageTemplates />} />
+                    <Route path="delivery"          element={<StaffDelivery />} />
+                    <Route path="feedback"          element={<FeedbackPage />} />
+                  </Route>
 
-                {/* ── Onboarding ────────────────────────────── */}
-                <Route path="/app/owner/onboarding" element={
-                  <ProtectedRoute allowedRoles={['owner']}>
-                    <OwnerOnboarding />
-                  </ProtectedRoute>
-                } />
+                  {/* ── Onboarding ────────────────────────────── */}
+                  <Route path="/app/owner/onboarding" element={
+                    <ProtectedRoute allowedRoles={['owner']}>
+                      <OwnerOnboarding />
+                    </ProtectedRoute>
+                  } />
 
-                {/* ── Staff ─────────────────────────────────── */}
-                <Route path="/app/staff" element={
-                  <ProtectedRoute allowedRoles={['staff']}>
-                    <StaffLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<StaffDelivery />} />
-                </Route>
+                  {/* ── Staff ─────────────────────────────────── */}
+                  <Route path="/app/staff" element={
+                    <ProtectedRoute allowedRoles={['staff']}>
+                      <StaffLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<StaffDelivery />} />
+                  </Route>
 
-                {/* ── /app root ─────────────────────────────── */}
-                <Route path="/app" element={<AppGate />} />
+                  {/* ── /app root ─────────────────────────────── */}
+                  <Route path="/app" element={<AppGate />} />
 
-                {/* ── 404 ───────────────────────────────────── */}
-                <Route path="*" element={<NotFound />} />
-              </>
-            ) : (
-              /* ── MARKETING DOMAIN (amritmanage.eurekai.in) ── */
-              <>
-                <Route path="/"             element={<SignOutGuard><LandingPage /></SignOutGuard>} />
-                <Route path="/landing"      element={<SignOutGuard><AdsLanding /></SignOutGuard>} />
-                <Route path="/features"     element={<SignOutGuard><FeaturesPage /></SignOutGuard>} />
-                <Route path="/pricing"      element={<SignOutGuard><PricingPage /></SignOutGuard>} />
-                <Route path="/how-it-works" element={<SignOutGuard><HowItWorks /></SignOutGuard>} />
-                <Route path="/faq"          element={<SignOutGuard><FAQPage /></SignOutGuard>} />
-                <Route path="/privacy"      element={<SignOutGuard><PrivacyPage /></SignOutGuard>} />
-                <Route path="/terms"        element={<SignOutGuard><TermsPage /></SignOutGuard>} />
-                <Route path="/start"        element={<SignOutGuard><TrialSignup /></SignOutGuard>} />
-                <Route path="*"             element={<NotFound />} />
-              </>
-            )}
-          </Routes>
+                  {/* ── Promote ────────────────────────────────── */}
+                  <Route path="/promote" element={<PromotePage />} />
+
+                  {/* ── 404 ───────────────────────────────────── */}
+                  <Route path="*" element={<NotFound />} />
+                </>
+              ) : (
+                /* ── MARKETING DOMAIN (amritmanage.eurekai.in) ── */
+                <>
+                  <Route path="/"             element={<SignOutGuard><LandingPage /></SignOutGuard>} />
+                  <Route path="/promote"      element={<SignOutGuard><PromotePage /></SignOutGuard>} />
+                  <Route path="/landing"      element={<SignOutGuard><AdsLanding /></SignOutGuard>} />
+                  <Route path="/features"     element={<SignOutGuard><FeaturesPage /></SignOutGuard>} />
+                  <Route path="/pricing"      element={<SignOutGuard><PricingPage /></SignOutGuard>} />
+                  <Route path="/how-it-works" element={<SignOutGuard><HowItWorks /></SignOutGuard>} />
+                  <Route path="/faq"          element={<SignOutGuard><FAQPage /></SignOutGuard>} />
+                  <Route path="/privacy"      element={<SignOutGuard><PrivacyPage /></SignOutGuard>} />
+                  <Route path="/terms"        element={<SignOutGuard><TermsPage /></SignOutGuard>} />
+                  <Route path="/start"        element={<SignOutGuard><TrialSignup /></SignOutGuard>} />
+                  <Route path="*"             element={<NotFound />} />
+                </>
+              )}
+            </Routes>
           </MarathiProvider>
         </ToastProvider>
       </AuthProvider>

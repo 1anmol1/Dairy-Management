@@ -156,7 +156,7 @@ const AdminLoginForm = () => {
           <div style={{ position: 'relative' }}>
             <Phone size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8D8D8D' }} />
             <input type="tel" className="input" style={{ paddingLeft: '38px' }}
-              value={phone} onChange={e => setPhone(e.target.value)}
+              value={phone} onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
               inputMode="numeric" autoComplete="off" maxLength={10} disabled={showCode} />
           </div>
         </div>

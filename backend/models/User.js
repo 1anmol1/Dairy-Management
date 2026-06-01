@@ -45,11 +45,24 @@ const userSchema = new mongoose.Schema({
     ref: 'User',
     default: null
   },
+  ownerRole: {
+    type: String,
+    enum: ['dairy_owner', 'milk_supplier'],
+    default: 'milk_supplier'
+  },
   // Owner-specific fields
   businessName: {
     type: String,
     trim: true,
     maxlength: [150, 'Business name cannot exceed 150 characters']
+  },
+  maxCustomers: {
+    type: Number,
+    default: 150
+  },
+  maxStaff: {
+    type: Number,
+    default: 5
   },
   // Subscription (managed by superadmin)
   subscription: {
@@ -85,7 +98,7 @@ const userSchema = new mongoose.Schema({
     sessionActive: { type: Boolean, default: false },
     method: {
       type: String,
-      enum: ['cloud_api', 'web_session', 'none'],
+      enum: ['cloud_api', 'web_session', 'pairing_code', 'none'],
       default: 'none'
     }
   },
@@ -96,6 +109,10 @@ const userSchema = new mongoose.Schema({
     code: { type: String, select: false },
     expiresAt: { type: Date, select: false },
     attempts: { type: Number, default: 0, select: false }
+  },
+  ownerVerificationCode: {
+    type: String,
+    default: null
   },
   isActive: {
     type: Boolean,
@@ -109,6 +126,11 @@ const userSchema = new mongoose.Schema({
   onboardingDone: {
     type: Boolean,
     default: false
+  },
+  source: {
+    type: String,
+    default: 'organic',
+    index: true
   }
 }, {
   timestamps: true

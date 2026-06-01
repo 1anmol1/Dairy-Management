@@ -4,11 +4,13 @@ import { Menu, X } from 'lucide-react';
 import LanguageToggle from '../i18n/marathi/LanguageToggle';
 import { useMarathi } from '../i18n/marathi';
 import amritLogo from '../assets/Amritmanagelogo.png';
+import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   const { t, isMarathi } = useMarathi();
+  const { user } = useAuth();
 
   const links = [
     { to: '/features',     label: t('nav.features',   'Features') },
@@ -18,6 +20,14 @@ const Navbar = () => {
   ];
 
   const isActive = (to) => pathname === to;
+
+  const getLogoLink = () => {
+    if (!user) return '/';
+    if (user.role === 'superadmin') return '/app/superadmin';
+    if (user.role === 'owner') return '/app/owner';
+    if (user.role === 'staff') return '/app/staff';
+    return '/';
+  };
 
   return (
     <nav style={{
@@ -36,7 +46,7 @@ const Navbar = () => {
         fontFamily: isMarathi ? '"Noto Sans Devanagari", sans-serif' : 'Inter, sans-serif',
         boxSizing: 'border-box'
       }}>
-        <Link to="/" style={{
+        <Link to={getLogoLink()} style={{
           display: 'flex', alignItems: 'center',
           textDecoration: 'none', flexShrink: 0,
           minWidth: '180px'

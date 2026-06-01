@@ -7,190 +7,7 @@ import useDelayedLoading from '../../hooks/useDelayedLoading';
 import useOfflineSync from '../../hooks/useOfflineSync';
 import { useMarathi } from '../../i18n/marathi';
 
-// ── WhatsApp SVG icon (official green brand color) ────────────
-const WhatsAppIcon = ({ size = 16 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-  </svg>
-);
-
-// ── Resolve template variables ────────────────────────────────
-const resolveTemplate = (body, { customerName, quantity, extraQty, ownerPhone, slot, isMarathi }) => {
-  const name = customerName?.trim() ? customerName.trim() : '';
-  return body
-    .replace(/{{customerName}}/g, name || '')
-    .replace(/{{quantity}}/g, quantity ?? '')
-    .replace(/{{extraQty}}/g, extraQty ?? '')
-    .replace(/{{ownerPhone}}/g, ownerPhone || '')
-    .replace(/{{slot}}/g, slot === 'morning' ? (isMarathi ? 'सकाळ' : 'Morning') : (isMarathi ? 'संध्याकाळ' : 'Evening'))
-    .replace(/{{date}}/g, new Date().toLocaleDateString('en-IN'));
-};
-
-// ── WhatsApp message modal ────────────────────────────────────
-const WhatsAppModal = ({ customer, deliveryLog, slot, ownerPhone, templates, onClose, onSend, isMarathi }) => {
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const toast = useToast();
-  const L = isMarathi ? 'ली.' : 'L';
-
-  // Determine delivery context
-  const log = deliveryLog;
-  const hasDelivery = !!log;
-  const hasExtra = log?.extra_qty > 0;
-  const qty = log?.delivered_qty ?? 0;
-  const extraQty = log?.extra_qty ?? 0;
-
-  // Auto-select best matching template
-  useEffect(() => {
-    if (!templates.length) return;
-    let best = null;
-    if (!hasDelivery) {
-      best = templates.find(t => t.type === 'no_delivery' && t.isDefault)
-          || templates.find(t => t.type === 'no_delivery');
-    } else if (hasExtra) {
-      best = templates.find(t => t.type === 'extra_delivery' && t.isDefault)
-          || templates.find(t => t.type === 'extra_delivery');
-    } else {
-      best = templates.find(t => t.type === 'delivery' && t.isDefault)
-          || templates.find(t => t.type === 'delivery');
-    }
-    if (!best) best = templates[0];
-    if (best) {
-      setSelectedTemplateId(best._id);
-      setMessage(resolveTemplate(best.body, {
-        customerName: customer.name,
-        quantity: qty,
-        extraQty,
-        ownerPhone,
-        slot,
-        isMarathi
-      }));
-    }
-  }, [templates]);
-
-  const handleTemplateChange = (id) => {
-    setSelectedTemplateId(id);
-    const tmpl = templates.find(t => t._id === id);
-    if (tmpl) {
-      setMessage(resolveTemplate(tmpl.body, {
-        customerName: customer.name,
-        quantity: qty,
-        extraQty,
-        ownerPhone,
-        slot,
-        isMarathi
-      }));
-    }
-  };
-
-  const handleSend = async () => {
-    if (!message.trim()) { toast.error(isMarathi ? 'संदेश रिकामा असू शकत नाही.' : 'Message cannot be empty.'); return; }
-    setSending(true);
-    try {
-      await api.post('/staff/send-whatsapp', { customerId: customer._id, message: message.trim() });
-      toast.success(isMarathi ? `${customer.name} ला संदेश पाठवला` : `Message sent to ${customer.name}`);
-      onSend?.();
-      onClose();
-    } catch (err) {
-      toast.error(err.response?.data?.error || (isMarathi ? 'संदेश पाठवता आला नाही.' : 'Failed to send message. Check WhatsApp connection.'));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: '520px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#25D366' }}><WhatsAppIcon size={20} /></span>
-            <h3 style={{ fontWeight: 700, fontSize: '16px' }}>{isMarathi ? 'WhatsApp संदेश पाठवा' : 'Send WhatsApp Message'}</h3>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#525252', padding: '4px' }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Customer info + big liters display */}
-        <div style={{ backgroundColor: '#F4F4F4', padding: '12px 14px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '15px' }}>{customer.name}</div>
-              <div style={{ fontSize: '12px', color: '#525252', marginTop: '2px' }}>{customer.phone}</div>
-              {customer.customerCode && (
-                <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '1px' }}>#{customer.customerCode}</div>
-              )}
-            </div>
-            {hasDelivery && (
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '36px', fontWeight: 800, color: '#24A148', lineHeight: 1 }}>
-                  {qty}{L}
-                </div>
-                {hasExtra && (
-                  <div style={{ fontSize: '12px', color: '#FF832B', fontWeight: 600, marginTop: '2px' }}>
-                    +{extraQty}{L} {isMarathi ? 'अतिरिक्त' : 'extra'}
-                  </div>
-                )}
-                <div style={{ fontSize: '11px', color: '#525252', marginTop: '2px' }}>
-                  {isMarathi ? 'वितरित' : 'delivered'}
-                </div>
-              </div>
-            )}
-            {!hasDelivery && (
-              <div style={{ fontSize: '13px', color: '#8D8D8D', fontStyle: 'italic' }}>
-                {isMarathi ? 'आज वितरण नाही' : 'No delivery today'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Template selector */}
-        {templates.length > 0 && (
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'टेम्पलेट निवडा' : 'Select Template'}</label>
-            <select className="input" value={selectedTemplateId} onChange={e => handleTemplateChange(e.target.value)}>
-              <option value="">{isMarathi ? '-- टेम्पलेट निवडा --' : '-- Choose a template --'}</option>
-              {templates.map(t => (
-                <option key={t._id} value={t._id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Message — read-only for staff, shows resolved template */}
-        <div className="input-group">
-          <label className="input-label">{isMarathi ? 'संदेश' : 'Message'}</label>
-          <div style={{
-            backgroundColor: '#F4F4F4', border: '1px solid #E0E0E0',
-            padding: '10px 12px', lineHeight: 1.6, fontSize: '14px',
-            minHeight: '100px', whiteSpace: 'pre-wrap', color: '#161616',
-            borderRadius: '2px'
-          }}>
-            {message || <span style={{ color: '#8D8D8D', fontStyle: 'italic' }}>{isMarathi ? 'टेम्पलेट निवडा...' : 'Select a template above...'}</span>}
-          </div>
-          <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
-            {isMarathi ? 'संदेश टेम्पलेटनुसार आपोआप तयार होतो.' : 'Message is auto-generated from the template.'}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
-          <button
-            className="btn btn-full"
-            style={{ backgroundColor: '#25D366', color: '#FFFFFF', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-            onClick={handleSend}
-            disabled={sending || !message.trim()}
-          >
-            {sending
-              ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> {isMarathi ? 'पाठवत आहे...' : 'Sending...'}</>
-              : <><WhatsAppIcon size={16} /> {isMarathi ? 'WhatsApp वर पाठवा' : 'Send via WhatsApp'}</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+// WhatsApp modal and icon definitions removed since staff doesn't trigger manual WhatsApp messages anymore
 
 // ── Main Delivery page ────────────────────────────────────────
 const Delivery = () => {
@@ -206,8 +23,7 @@ const Delivery = () => {
   });
   const [delivering, setDelivering] = useState({});
   const [extraQty, setExtraQty] = useState({});
-  const [templates, setTemplates] = useState([]);
-  const [msgModal, setMsgModal] = useState(null);
+  const [whatsappStatus, setWhatsappStatus] = useState('disconnected');
   const [expandedAddress, setExpandedAddress] = useState({}); // track which customer's address is expanded
   const toast = useToast();
   const showSkeleton = useDelayedLoading(loading);
@@ -223,6 +39,7 @@ const Delivery = () => {
       const { data } = await api.get('/staff/today');
       setCustomers(data.customers);
       setQuota(data.quota || null);
+      setWhatsappStatus(data.whatsappStatus || 'disconnected');
     } catch {
       toast.error('Failed to load customer list.');
     } finally {
@@ -230,17 +47,9 @@ const Delivery = () => {
     }
   }, []);
 
-  const fetchTemplates = useCallback(async () => {
-    try {
-      const { data } = await api.get('/staff/message-templates');
-      setTemplates(data.templates || []);
-    } catch { /* templates optional */ }
-  }, []);
-
   useEffect(() => {
     fetchToday();
-    fetchTemplates();
-  }, [fetchToday, fetchTemplates]);
+  }, [fetchToday]);
 
   const handleDeliver = async (customer, slot) => {
     if (customer[slot]) return;
@@ -375,7 +184,32 @@ const Delivery = () => {
       )}
       {/* Header */}
       <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0', padding: '16px', marginBottom: '16px' }}>
-        <div style={{ fontSize: '13px', color: '#8D8D8D', marginBottom: '12px' }}>{today}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <div style={{ fontSize: '13px', color: '#8D8D8D' }}>{today}</div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            fontWeight: 600,
+            padding: '4px 8px',
+            borderRadius: '12px',
+            backgroundColor: whatsappStatus === 'authenticated' ? '#DEFBE6' : '#FFF1F1',
+            color: whatsappStatus === 'authenticated' ? '#0E6027' : '#DA1E28',
+            border: `1.5px solid ${whatsappStatus === 'authenticated' ? '#24A148' : '#DA1E28'}`
+          }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: whatsappStatus === 'authenticated' ? '#24A148' : '#DA1E28',
+              display: 'inline-block'
+            }} />
+            {whatsappStatus === 'authenticated'
+              ? (isMarathi ? 'WhatsApp: सुरू आहे' : 'WhatsApp: Connected')
+              : (isMarathi ? 'WhatsApp: बंद आहे' : 'WhatsApp: Disconnected')}
+          </div>
+        </div>
 
         {/* Quota banner */}
         {quota && (
@@ -521,21 +355,6 @@ const Delivery = () => {
                     <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', backgroundColor: eveningDelivered ? '#EDF5FF' : '#F4F4F4', color: eveningDelivered ? '#0043CE' : '#8D8D8D', border: `1px solid ${eveningDelivered ? '#0F62FE' : '#E0E0E0'}` }}>
                       🌙 {eveningDelivered ? `${customer.evening?.delivered_qty}${isMarathi ? 'ली.' : 'L'}` : `${customer.base_requirement?.evening || 0}${isMarathi ? 'ली.' : 'L'}`}
                     </span>
-                    {/* WhatsApp button */}
-                    <button
-                      title={isMarathi ? 'WhatsApp संदेश पाठवा' : 'Send WhatsApp message'}
-                      onClick={() => setMsgModal({ customer, slot: activeSlot })}
-                      style={{
-                        background: 'none', border: '1px solid #25D366', cursor: 'pointer',
-                        padding: '5px 8px', display: 'flex', alignItems: 'center', gap: '4px',
-                        color: '#25D366', fontSize: '12px', fontWeight: 600,
-                        transition: 'background-color 0.1s'
-                      }}
-                      onMouseOver={e => { e.currentTarget.style.backgroundColor = '#DEFBE6'; }}
-                      onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                    >
-                      <WhatsAppIcon size={15} />
-                    </button>
                   </div>
                 </div>
 
@@ -560,7 +379,7 @@ const Delivery = () => {
                           <Minus size={13} />
                         </button>
                         <div style={{ width: '52px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '14px', borderLeft: '1px solid #E0E0E0', borderRight: '1px solid #E0E0E0' }}>
-                          {extra}{isMarathi ? 'ली.' : 'L'}
+                           {extra}{isMarathi ? 'ली.' : 'L'}
                         </div>
                         <button onClick={() => adjustExtra(customer._id, activeSlot, 0.5)} style={{ width: '36px', height: '36px', border: 'none', cursor: 'pointer', backgroundColor: '#F4F4F4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <Plus size={13} />
@@ -575,7 +394,7 @@ const Delivery = () => {
                     >
                       {isLoading
                         ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Marking...</>
-                        : <><CheckCircle size={16} /> {isMarathi ? `${activeSlot === 'morning' ? 'सकाळ' : 'संध्याकाळ'} नोंदवा (${totalQty}L)` : `Mark ${activeSlot === 'morning' ? 'Morning' : 'Evening'} (${totalQty}L)`}</>}
+                        : <><CheckCircle size={16} /> {isMarathi ? `${activeSlot === 'morning' ? 'सकाळ' : 'संध्याकाळ'} नोंदवा (${totalQty}ली.)` : `Mark ${activeSlot === 'morning' ? 'Morning' : 'Evening'} (${totalQty}L)`}</>}
                     </button>
                     {quota && quota.remainingLiters > 0 && totalQty > quota.remainingLiters && (
                       <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>
@@ -592,20 +411,6 @@ const Delivery = () => {
         </div>
       )}
       <div style={{ height: '32px' }} />
-
-      {/* WhatsApp message modal */}
-      {msgModal && (
-        <WhatsAppModal
-          customer={msgModal.customer}
-          deliveryLog={msgModal.customer[msgModal.slot]}
-          slot={msgModal.slot}
-          ownerPhone={ownerPhone}
-          templates={templates}
-          onClose={() => setMsgModal(null)}
-          onSend={() => setMsgModal(null)}
-          isMarathi={isMarathi}
-        />
-      )}
     </div>
   );
 };

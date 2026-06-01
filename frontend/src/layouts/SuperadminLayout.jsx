@@ -1,9 +1,11 @@
+
+
 import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut,
   Menu, X, Shield, CreditCard, KeyRound,
-  Phone, Mail, ChevronDown, ChevronUp, Activity
+  Phone, Mail, ChevronDown, ChevronUp, Activity, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -25,15 +27,17 @@ const SuperadminLayout = () => {
   const navItems = [
     { to: '/app/superadmin', icon: LayoutDashboard, label: 'Dashboard', end: true },
     { to: '/app/superadmin/owners',     icon: Users,     label: 'Owner Accounts' },
+    { to: '/app/superadmin/impersonate',icon: KeyRound,  label: 'Direct Impersonate' },
     { to: '/app/superadmin/activities', icon: Activity,  label: 'All Activities' },
     { to: '/app/superadmin/plans',      icon: CreditCard, label: 'Plans & Features' },
-    { to: '/app/superadmin/requests',   icon: Phone,     label: 'Subscription Requests' }
+    { to: '/app/superadmin/requests',   icon: Phone,     label: 'Subscription Requests' },
+    { to: '/app/superadmin/feedback',   icon: MessageSquare, label: 'User Feedbacks' }
   ];
 
   const SidebarContent = () => (
     <>
       {/* Logo — PNG asset */}
-      <div className="sidebar-logo">
+      <Link to="/app/superadmin" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
         <div style={{ marginBottom: '6px' }}>
           <img
             src={amritLogo}
@@ -47,7 +51,7 @@ const SuperadminLayout = () => {
             Super Admin
           </span>
         </div>
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className="sidebar-nav">
@@ -161,13 +165,13 @@ const SuperadminLayout = () => {
 
       <div className="main-content">
         <div className="mobile-header">
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <Link to="/app/superadmin" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
             <img
               src={amritLogo}
               alt="Amrit Manage"
               style={{ height: '26px', width: 'auto', filter: 'brightness(0) invert(1)' }}
             />
-          </div>
+          </Link>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FFFFFF', padding: '4px' }}

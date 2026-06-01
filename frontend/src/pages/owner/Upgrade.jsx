@@ -135,14 +135,8 @@ const Upgrade = () => {
   const validateDetails = () => {
     const e = {};
     if (!form.contactName.trim())  e.contactName  = 'Name is required.';
-    if (!form.contactEmail.trim()) e.contactEmail = 'Email is required.';
-    else if (!form.contactEmail.includes('@')) e.contactEmail = 'Enter a valid email.';
     if (!form.contactPhone.trim()) e.contactPhone = 'Phone is required.';
     else if (!/^\d{10}$/.test(form.contactPhone.trim())) e.contactPhone = 'Enter a valid 10-digit phone number.';
-    if (!form.address.trim())  e.address  = 'Address is required.';
-    if (!form.state)           e.state    = 'Select your state.';
-    if (!form.pincode.trim())  e.pincode  = 'Pincode is required.';
-    else if (!/^\d{6}$/.test(form.pincode.trim())) e.pincode = 'Enter a valid 6-digit pincode.';
     return e;
   };
 
@@ -283,38 +277,7 @@ const Upgrade = () => {
                   <FormField label={isMarathi ? 'पूर्ण नाव *' : 'Full Name *'} value={form.contactName} onChange={v => setF('contactName', v)} placeholder="Ramesh Patel" error={errors.contactName} />
                   <FormField label={isMarathi ? 'फोन नंबर *' : 'Phone Number *'} value={form.contactPhone} onChange={v => setF('contactPhone', v)} placeholder="9876543210" error={errors.contactPhone} hint={isMarathi ? 'आम्ही या नंबरवर कॉल करू' : 'We will call this number'} />
                 </div>
-                <FormField label={isMarathi ? 'ईमेल पत्ता *' : 'Email Address *'} value={form.contactEmail} onChange={v => setF('contactEmail', v)} placeholder="ramesh@example.com" error={errors.contactEmail} />
                 <FormField label={isMarathi ? 'कंपनी / व्यवसायाचे नाव (पर्यायी)' : 'Company / Business Name (optional)'} value={form.companyName} onChange={v => setF('companyName', v)} placeholder="Patel Dairy" />
-
-                {/* Address */}
-                <div style={{ fontSize: '12px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '14px', marginTop: '8px' }}>
-                  {isMarathi ? 'बिलिंग पत्ता' : 'Billing Address'}
-                </div>
-
-                <FormField label={isMarathi ? 'पत्ता *' : 'Address *'} value={form.address} onChange={v => setF('address', v)} placeholder="123 Main Street, Pune" error={errors.address} />
-
-                <FormField label={isMarathi ? 'जिल्हा' : 'District'} value={form.district} onChange={v => setF('district', v)} placeholder={isMarathi ? 'पुणे' : 'Pune'} />
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  {/* State dropdown */}
-                  <div className="input-group" style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#525252', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                      {isMarathi ? 'राज्य *' : 'State *'}
-                    </label>
-                    <select
-                      className="input"
-                      value={form.state}
-                      onChange={e => setF('state', e.target.value)}
-                      style={errors.state ? { borderColor: '#DA1E28' } : {}}
-                    >
-                      <option value="">{isMarathi ? 'राज्य निवडा...' : 'Select state...'}</option>
-                      {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {errors.state && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '3px' }}>{errors.state}</div>}
-                  </div>
-
-                  <FormField label={isMarathi ? 'पिनकोड *' : 'Pincode *'} value={form.pincode} onChange={v => setF('pincode', v)} placeholder="411001" error={errors.pincode} />
-                </div>
 
                 <button
                   type="submit"

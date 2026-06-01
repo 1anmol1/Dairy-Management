@@ -10,8 +10,8 @@ export const getFaqSections = (isMarathi) => [
       {
         q: isMarathi ? 'अमृत मॅनेज म्हणजे काय आणि ते कोणासाठी आहे?' : 'What is Amrit Manage and who is it for?',
         a: isMarathi
-          ? 'अमृत मॅनेज हे भारतीय दूध विक्रेत्यांसाठी बनवलेले डेअरी व्यवसाय व्यवस्थापन प्लॅटफॉर्म आहे. रोजचे वितरण नोंदवणे, मासिक बिले आपोआप तयार करणे, ग्राहकांची देयके ट्रॅक करणे आणि कर्मचारी व्यवस्थापन — सर्व काही एकाच ठिकाणी. तुमच्याकडे १० ग्राहक असोत किंवा ३०० — अमृत मॅनेज तुमची वही बदलते.'
-          : 'Amrit Manage is a dairy business management platform built specifically for Indian milk vendors. It helps you record daily deliveries, generate monthly bills automatically, track customer payments, and manage your delivery staff. Whether you have 10 customers or 300, Amrit Manage replaces your notebook with a simple phone-based system.',
+          ? 'अमृत मॅनेज हे भारतीय दूध विक्रेत्यांसाठी बनवलेले डेअरी व्यवसाय व्यवस्थापन प्लॅटफॉर्म आहे. रोजचे वितरण नोंदवणे, मासिक बिले आपोआप तयार करणे, ग्राहकांची देयके ट्रॅक करणे आणि कर्मचारी व्यवस्थापन — सर्व काही एकाच ठिकाणी. तुमच्याकडे १० ग्राहक असोत किंवा शेकडो — अमृत मॅनेज तुमची वही बदलते.'
+          : 'Amrit Manage is a dairy business management platform built specifically for Indian milk vendors. It helps you record daily deliveries, generate monthly bills automatically, track customer payments, and manage your delivery staff. Whether you have 10 customers or hundreds, Amrit Manage replaces your notebook with a simple phone-based system.',
       },
       {
         q: isMarathi ? 'अमृत मॅनेज अॅप आहे की वेबसाइट?' : 'Is Amrit Manage an app or a website?',
@@ -46,8 +46,8 @@ export const getFaqSections = (isMarathi) => [
       {
         q: isMarathi ? 'ट्रायलमध्ये काय समाविष्ट आहे?' : 'What is included in the trial?',
         a: isMarathi
-          ? 'ट्रायलमध्ये अमृत गोल्डच्या सर्व वैशिष्ट्यांचा समावेश आहे: सर्वाधिक २०० ग्राहक, ७ कर्मचारी लॉगिन, आपोआप मासिक बिलिंग, देयक ट्रॅकिंग, WhatsApp अलर्ट, PDF बिल डाउनलोड आणि डिफॉल्ट दर व्यवस्थापन. ट्रायल आमच्या टीमशी चर्चेनंतर सुरू होते.'
-          : 'The trial gives you full access to all Amrit Gold features: up to 200 customers, up to 7 staff logins, automatic monthly billing, payment tracking, WhatsApp delivery alerts, PDF bill download, and default rate management. The trial is activated after a brief discussion with our team.',
+          ? 'ट्रायलमध्ये अमृत गोल्डच्या सर्व वैशिष्ट्यांचा समावेश आहे: सर्वाधिक १५० ग्राहक, ५ कर्मचारी लॉगिन, आपोआप मासिक बिलिंग, देयक ट्रॅकिंग, WhatsApp अलर्ट, PDF बिल डाउनलोड आणि डिफॉल्ट दर व्यवस्थापन. ट्रायल आमच्या टीमशी चर्चेनंतर सुरू होते.'
+          : 'The trial gives you full access to all Amrit Gold features: up to 150 customers, up to 5 staff logins, automatic monthly billing, payment tracking, WhatsApp delivery alerts, PDF bill download, and default rate management. The trial is activated after a brief discussion with our team.',
       },
       {
         q: isMarathi ? 'ट्रायल संपल्यावर काय होते?' : 'What happens after the trial ends?',
@@ -64,8 +64,8 @@ export const getFaqSections = (isMarathi) => [
       {
         q: isMarathi ? 'कोणत्या योजना उपलब्ध आहेत?' : 'What are the available plans?',
         a: isMarathi
-          ? 'तीन योजना आहेत: अमृत सिल्व्हर (मूलभूत, ५० ग्राहक), अमृत गोल्ड (पूर्ण वैशिष्ट्ये, ३०० ग्राहक, ७ कर्मचारी), अमृत प्लॅटिनम (अमर्यादित ग्राहक, कर्मचारी, प्रगत अहवाल, प्राधान्य सपोर्ट). सर्व योजनांमध्ये एकवेळ सेटअप फी समाविष्ट आहे.'
-          : 'We offer three plans: Amrit Silver (basic, up to 50 customers), Amrit Gold (full features, up to 300 customers, up to 7 staff), and Amrit Platinum (unlimited customers, unlimited staff, advanced reports, priority support). All plans include a one-time setup fee.',
+          ? 'तीन योजना आहेत: अमृत सिल्व्हर (मूलभूत, ५० ग्राहक), अमृत गोल्ड (पूर्ण वैशिष्ट्ये, १५० ग्राहक, ५ कर्मचारी), अमृत प्लॅटिनम (अमर्यादित ग्राहक, १५ कर्मचारी, प्रगत अहवाल, प्राधान्य सपोर्ट). सर्व योजनांमध्ये एकवेळ सेटअप फी समाविष्ट आहे.'
+          : 'We offer three plans: Amrit Silver (basic, up to 50 customers), Amrit Gold (full features, up to 150 customers, up to 5 staff), and Amrit Platinum (unlimited customers, up to 15 staff, advanced reports, priority support). All plans include a one-time setup fee.',
       },
       {
         q: isMarathi ? 'सेटअप फी दरवर्षी आकारली जाते का?' : 'Is the setup fee charged every year?',
@@ -112,8 +112,8 @@ export const getFaqSections = (isMarathi) => [
       {
         q: isMarathi ? 'किती ग्राहक जोडता येतात?' : 'How many customers can I add?',
         a: isMarathi
-          ? 'अमृत सिल्व्हरमध्ये ५०, गोल्डमध्ये ३००, प्लॅटिनममध्ये अमर्यादित. ट्रायलमध्ये गोल्डची मर्यादा मिळते.'
-          : 'Amrit Silver allows up to 50 customers. Amrit Gold allows up to 300 customers. Amrit Platinum has no limit. During the trial, you get the Gold limit of 300 customers.',
+          ? 'अमृत सिल्व्हरमध्ये ५०, गोल्डमध्ये १५०, प्लॅटिनममध्ये अमर्यादित. ट्रायलमध्ये गोल्डची मर्यादा मिळते.'
+          : 'Amrit Silver allows up to 50 customers. Amrit Gold allows up to 150 customers. Amrit Platinum has no limit. During the trial, you get the Gold limit of 150 customers.',
       },
     ],
   },
@@ -136,8 +136,8 @@ export const getFaqSections = (isMarathi) => [
       {
         q: isMarathi ? 'किती कर्मचारी जोडता येतात?' : 'How many staff members can I add?',
         a: isMarathi
-          ? 'अमृत सिल्व्हरमध्ये २, गोल्डमध्ये ७, प्लॅटिनममध्ये अमर्यादित. ट्रायलमध्ये गोल्डची मर्यादा मिळते.'
-          : 'Amrit Silver allows up to 2 staff. Amrit Gold allows up to 7 staff. Amrit Platinum has no limit. During the trial, you get the Gold limit of 7 staff accounts.',
+          ? 'अमृत सिल्व्हरमध्ये २, गोल्डमध्ये ५, प्लॅटिनममध्ये १५. ट्रायलमध्ये गोल्डची मर्यादा मिळते.'
+          : 'Amrit Silver allows up to 2 staff. Amrit Gold allows up to 5 staff. Amrit Platinum allows up to 15 staff. During the trial, you get the Gold limit of 5 staff accounts.',
       },
       {
         q: isMarathi ? 'कर्मचारी खाते डिलीट न करता बंद करता येते का?' : 'Can I disable a staff account without deleting it?',

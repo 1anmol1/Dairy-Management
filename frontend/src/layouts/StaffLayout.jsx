@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { LogOut, Phone, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import amritLogo from '../assets/Amritmanagelogo.png';
@@ -26,9 +26,9 @@ const StaffLayout = () => {
         position: 'sticky', top: 0, zIndex: 99, height: '52px'
       }}>
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <Link to="/app/staff" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
           <img src={amritLogo} alt="Amrit Manage" style={{ height: '28px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
-        </div>
+        </Link>
 
         {/* Right: profile + logout */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
