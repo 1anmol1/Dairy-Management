@@ -138,12 +138,11 @@ router.post('/owners', async (req, res, next) => {
     }
 
     // Default plan limits
-    const DEFAULT_PLAN_LIMITS = {
-      silver: { maxCustomers: 50, maxStaff: 2 },
-      gold: { maxCustomers: 150, maxStaff: 5 },
-      platinum: { maxCustomers: 999999, maxStaff: 15 }
+    const planCfg = await PlanConfig.findOne({ plan }).lean();
+    const defaultLim = planCfg?.limits || {
+      maxCustomers: plan === 'silver' ? 50 : plan === 'platinum' ? 999999 : 150,
+      maxStaff: plan === 'silver' ? 2 : plan === 'platinum' ? 15 : 5
     };
-    const defaultLim = DEFAULT_PLAN_LIMITS[plan] || DEFAULT_PLAN_LIMITS.gold;
     const finalMaxCustomers = maxCustomers !== undefined && maxCustomers !== '' ? parseInt(maxCustomers) : defaultLim.maxCustomers;
     const finalMaxStaff = maxStaff !== undefined && maxStaff !== '' ? parseInt(maxStaff) : defaultLim.maxStaff;
 
@@ -251,20 +250,32 @@ router.patch('/owners/:id/subscription', async (req, res, next) => {
     if (status) owner.subscription.status = status;
     if (plan) {
       owner.subscription.plan = plan;
-      const planFeatures = PLAN_FEATURES[plan];
-      if (planFeatures) {
-        Object.keys(planFeatures).forEach(key => { owner.features[key] = planFeatures[key]; });
-      }
-      // Apply new plan default limits
-      const DEFAULT_PLAN_LIMITS = {
-        silver: { maxCustomers: 50, maxStaff: 2 },
-        gold: { maxCustomers: 150, maxStaff: 5 },
-        platinum: { maxCustomers: 999999, maxStaff: 15 }
-      };
-      const defaultLim = DEFAULT_PLAN_LIMITS[plan];
-      if (defaultLim) {
-        owner.maxCustomers = defaultLim.maxCustomers;
-        owner.maxStaff = defaultLim.maxStaff;
+      const planCfg = await PlanConfig.findOne({ plan }).lean();
+      if (planCfg) {
+        if (planCfg.features) {
+          Object.keys(planCfg.features).forEach(key => {
+            owner.features[key] = planCfg.features[key];
+          });
+        }
+        if (planCfg.limits) {
+          owner.maxCustomers = planCfg.limits.maxCustomers;
+          owner.maxStaff = planCfg.limits.maxStaff;
+        }
+      } else {
+        const planFeatures = PLAN_FEATURES[plan];
+        if (planFeatures) {
+          Object.keys(planFeatures).forEach(key => { owner.features[key] = planFeatures[key]; });
+        }
+        const DEFAULT_PLAN_LIMITS = {
+          silver: { maxCustomers: 50, maxStaff: 2 },
+          gold: { maxCustomers: 150, maxStaff: 5 },
+          platinum: { maxCustomers: 999999, maxStaff: 15 }
+        };
+        const defaultLim = DEFAULT_PLAN_LIMITS[plan];
+        if (defaultLim) {
+          owner.maxCustomers = defaultLim.maxCustomers;
+          owner.maxStaff = defaultLim.maxStaff;
+        }
       }
     }
     if (expiresAt) owner.subscription.expiresAt = new Date(expiresAt);

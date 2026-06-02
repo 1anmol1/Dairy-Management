@@ -749,6 +749,7 @@ const Logs = () => {
 
 // ── Edit Log Modal ────────────────────────────────────────────
 const EditLogModal = ({ log, onClose, onSaved }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   const [extraQty, setExtraQty] = useState(String(log.extra_qty ?? 0));
   const [notes, setNotes] = useState(log.notes || '');
   const [loading, setLoading] = useState(false);
@@ -778,16 +779,40 @@ const EditLogModal = ({ log, onClose, onSaved }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: '420px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ maxWidth: '420px', position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingRight: '24px' }}>
           <div>
             <h2 style={{ fontWeight: 700, fontSize: '18px' }}>{isMarathi ? 'नोंद संपादित करा' : 'Edit Log Entry'}</h2>
             <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
               {log.customerId?.name} · {isMarathi ? (log.slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : log.slot} · {log.date}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8D8D8D', padding: '4px' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#8D8D8D',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px',
+              transition: 'background-color 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
             <X size={18} />
           </button>
         </div>

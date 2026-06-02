@@ -2,12 +2,14 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, ToggleLeft, ToggleRight, Settings,
-  ChevronDown, ChevronUp, KeyRound, Users, Check, X, RefreshCw, Calculator
+  ChevronDown, ChevronUp, KeyRound, Users, Check, X, RefreshCw, Calculator,
+  ChevronLeft, LogIn
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
 import useWindowWidth from '../../hooks/useWindowWidth';
+import ConfirmModal from '../../components/ConfirmModal';
 
 const PLANS = ['silver', 'gold', 'platinum'];
 const STATUSES = ['trial', 'active', 'inactive', 'expired'];
@@ -49,7 +51,10 @@ const Owners = () => {
   const [showCalculator, setShowCalculator] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [pwModal, setPwModal] = useState(null);       // { type: 'owner'|'staff', id, name }
-  const [staffModal, setStaffModal] = useState(null); // owner object
+  const [viewingStaffOwner, setViewingStaffOwner] = useState(null);
+  const [roleConfirm, setRoleConfirm] = useState(null);
+  const [impersonateConfirm, setImpersonateConfirm] = useState(null); // { phone, name }
+  const [statusConfirm, setStatusConfirm] = useState(null);           // { ownerId, newStatus }
   const toast = useToast();
   const showSkeleton = useDelayedLoading(loading, 2000);
   const windowWidth = useWindowWidth();
@@ -87,6 +92,24 @@ const Owners = () => {
     }
   };
 
+  const handleImpersonate = (phone, name) => {
+    setImpersonateConfirm({ phone, name });
+  };
+
+  const handleImpersonateExecute = async (phone, name) => {
+    try {
+      const { data } = await api.post('/superadmin/impersonate', { phone: phone.trim() });
+      toast.success(`Access granted! Impersonating ${data.user.name}`);
+      
+      sessionStorage.setItem('amrit_impersonate_token', data.token);
+      sessionStorage.setItem('amrit_impersonate_user', JSON.stringify(data.user));
+
+      window.location.href = data.user.role === 'owner' ? '/app/owner' : '/app/staff';
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Direct login failed.');
+    }
+  };
+
   // When plan changes, backend auto-applies features — refresh owner in list
   const updateSubscription = async (ownerId, updates) => {
     try {
@@ -100,10 +123,19 @@ const Owners = () => {
 
   const handleStatusChange = (ownerId, newStatus) => {
     if (newStatus === 'active') {
-      const confirmed = window.confirm("Are you sure you want to change status to Active (Paid)? This will activate the paid subscription and trigger the Meta subscribe event (if the user is from ads landing page).");
-      if (!confirmed) return;
+      setStatusConfirm({ ownerId, newStatus });
+    } else {
+      updateSubscription(ownerId, { status: newStatus });
     }
-    updateSubscription(ownerId, { status: newStatus });
+  };
+
+  const handleRoleChangeConfirm = (owner, newRole) => {
+    setRoleConfirm({
+      ownerId: owner._id,
+      newRole,
+      name: owner.name,
+      currentRole: owner.ownerRole || 'milk_supplier'
+    });
   };
 
   const updateFeatures = async (ownerId, features) => {
@@ -133,6 +165,17 @@ const Owners = () => {
       </span>
     );
   };
+
+  if (viewingStaffOwner) {
+    return (
+      <StaffList
+        owner={viewingStaffOwner}
+        onBack={() => setViewingStaffOwner(null)}
+        handleImpersonate={handleImpersonate}
+        setPwModal={setPwModal}
+      />
+    );
+  }
 
   return (
     <div style={{ maxWidth: '100%', overflowX: 'hidden' }}>
@@ -244,15 +287,23 @@ const Owners = () => {
                           {owner.email && <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#8D8D8D' }}>Email: </span><strong>{owner.email}</strong></div>}
                         </div>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
+                          <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center' }}
                             onClick={() => setExpandedId(expandedId === owner._id ? null : owner._id)}>
                             <Settings size={13} /> Manage
                           </button>
-                          <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
+                          <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center' }}
+                            onClick={() => setViewingStaffOwner(owner)}>
+                            <Users size={13} /> Staff
+                          </button>
+                          <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center', color: '#0F62FE' }}
+                            onClick={() => handleImpersonate(owner.phone, owner.name)}>
+                            <LogIn size={13} /> Login
+                          </button>
+                          <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center' }}
                             onClick={() => setPwModal({ type: 'owner', id: owner._id, name: owner.name })}>
                             <KeyRound size={13} /> Reset PW
                           </button>
-                          <button className={`btn btn-sm ${owner.isActive ? 'btn-danger' : 'btn-success'}`} style={{ flex: 1 }}
+                          <button className={`btn btn-sm ${owner.isActive ? 'btn-danger' : 'btn-success'}`} style={{ flex: '1 1 100%' }}
                             onClick={() => toggleAccount(owner)}>
                             {owner.isActive ? 'Disable' : 'Enable'}
                           </button>
@@ -288,16 +339,7 @@ const Owners = () => {
                               className="input"
                               style={{ height: '36px', width: '100%', fontSize: '13px', marginBottom: '12px' }}
                               value={owner.ownerRole || 'milk_supplier'}
-                              onChange={async (e) => {
-                                try {
-                                  const newRole = e.target.value;
-                                  const { data } = await api.patch(`/superadmin/owners/${owner._id}/role`, { ownerRole: newRole });
-                                  setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, ownerRole: data.owner.ownerRole } : o));
-                                  toast.success('Owner role updated successfully.');
-                                } catch {
-                                  toast.error('Failed to update owner role.');
-                                }
-                              }}
+                              onChange={(e) => handleRoleChangeConfirm(owner, e.target.value)}
                             >
                               <option value="dairy_owner">Dairy Owner</option>
                               <option value="milk_supplier">Milk Supplier</option>
@@ -398,8 +440,14 @@ const Owners = () => {
                               <KeyRound size={13} />
                             </button>
                             <button className="btn btn-ghost btn-sm"
-                              onClick={() => setStaffModal(owner)}
-                              title="Manage staff passwords">
+                              onClick={() => handleImpersonate(owner.phone, owner.name)}
+                              title="Login as Owner"
+                              style={{ color: '#0F62FE' }}>
+                              <LogIn size={13} />
+                            </button>
+                            <button className="btn btn-ghost btn-sm"
+                              onClick={() => setViewingStaffOwner(owner)}
+                              title="View Staff">
                               <Users size={13} />
                             </button>
                             <button
@@ -463,16 +511,7 @@ const Owners = () => {
                                   className="input"
                                   style={{ height: '36px', width: '100%', fontSize: '13px', marginBottom: '16px' }}
                                   value={owner.ownerRole || 'milk_supplier'}
-                                  onChange={async (e) => {
-                                    try {
-                                      const newRole = e.target.value;
-                                      const { data } = await api.patch(`/superadmin/owners/${owner._id}/role`, { ownerRole: newRole });
-                                      setOwners(prev => prev.map(o => o._id === owner._id ? { ...o, ownerRole: data.owner.ownerRole } : o));
-                                      toast.success('Owner role updated successfully.');
-                                    } catch {
-                                      toast.error('Failed to update owner role.');
-                                    }
-                                  }}
+                                  onChange={(e) => handleRoleChangeConfirm(owner, e.target.value)}
                                 >
                                   <option value="dairy_owner">Dairy Owner</option>
                                   <option value="milk_supplier">Milk Supplier</option>
@@ -590,12 +629,56 @@ const Owners = () => {
 
       {showAddModal && <AddOwnerModal onClose={() => setShowAddModal(false)} onCreated={fetchOwners} prefillData={addModalPrefill} />}
       {pwModal && <PasswordModal target={pwModal} onClose={() => setPwModal(null)} />}
-      {staffModal && <StaffPasswordModal owner={staffModal} onClose={() => setStaffModal(null)} />}
       {showCalculator && (
         <PricingCalculatorModal
           onClose={() => setShowCalculator(false)}
           onAddOwner={(prefill) => { setShowCalculator(false); setAddModalPrefill(prefill); setShowAddModal(true); }}
           context="owners"
+        />
+      )}
+      {roleConfirm && (
+        <RoleConfirmModal
+          target={roleConfirm}
+          onClose={() => setRoleConfirm(null)}
+          onConfirm={async () => {
+            try {
+              const { data } = await api.patch(`/superadmin/owners/${roleConfirm.ownerId}/role`, { ownerRole: roleConfirm.newRole });
+              setOwners(prev => prev.map(o => o._id === roleConfirm.ownerId ? { ...o, ownerRole: data.owner.ownerRole } : o));
+              toast.success('Owner role updated successfully.');
+            } catch {
+              toast.error('Failed to update owner role.');
+            }
+          }}
+        />
+      )}
+
+      {impersonateConfirm && (
+        <ConfirmModal
+          title="Direct Login Confirm"
+          message={`Are you sure you want to log in as ${impersonateConfirm.name}?`}
+          confirmText="Yes, Login"
+          cancelText="Cancel"
+          onConfirm={() => {
+            const { phone, name } = impersonateConfirm;
+            setImpersonateConfirm(null);
+            handleImpersonateExecute(phone, name);
+          }}
+          onCancel={() => setImpersonateConfirm(null)}
+        />
+      )}
+
+      {statusConfirm && (
+        <ConfirmModal
+          title="Change Status to Active"
+          message="Are you sure you want to change status to Active (Paid)? This will activate the paid subscription and trigger the Meta subscribe event (if the user is from ads landing page)."
+          confirmText="Confirm Active"
+          cancelText="Cancel"
+          onConfirm={() => {
+            const { ownerId, newStatus } = statusConfirm;
+            setStatusConfirm(null);
+            updateSubscription(ownerId, { status: newStatus });
+          }}
+          onCancel={() => setStatusConfirm(null)}
         />
       )}
     </div>
@@ -604,6 +687,7 @@ const Owners = () => {
 
 // ── Add Owner Modal ───────────────────────────────────────────
 export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   const [step, setStep] = useState('details'); // 'details' | 'subscription'
   const [form, setForm] = useState({
     name: prefillData?.contactName || '',
@@ -731,15 +815,43 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ position: 'relative', maxWidth: '600px', display: 'flex', flexDirection: 'column' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 1
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={20} />
+        </button>
         <h2 style={{ fontWeight: 700, marginBottom: '6px', fontSize: '20px' }}>Add Owner Account</h2>
         <p style={{ color: '#525252', fontSize: '13px', marginBottom: '24px' }}>
           {step === 'details' ? 'Step 1 of 2 — Account details' : 'Step 2 of 2 — Subscription & payment'}
         </p>
 
         {/* Progress */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', flexShrink: 0 }}>
           {['details', 'subscription'].map((s, i) => (
             <div key={s} style={{
               flex: 1, height: '3px',
@@ -751,277 +863,278 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
 
         {/* ── Step 1: Account details ── */}
         {step === 'details' && (
-          <div>
-            {[
-              { key: 'name',         label: 'Full Name *',              type: 'text',     placeholder: 'Ramesh Patel' },
-              { key: 'phone',        label: 'Phone Number *',           type: 'tel',      placeholder: '9876543210' },
-              { key: 'email',        label: 'Email Address *',          type: 'email',    placeholder: 'ramesh@example.com' },
-              { key: 'password',     label: 'Password *',               type: 'password', placeholder: 'Min 6 characters' },
-              { key: 'businessName', label: 'Business Name (optional)', type: 'text',     placeholder: 'Patel Dairy' }
-            ].map(f => (
-              <div key={f.key} className="input-group">
-                <label className="input-label">{f.label}</label>
-                <input type={f.type} className="input" placeholder={f.placeholder}
-                  value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
-                  required={f.key !== 'businessName'} autoComplete="off"
-                  {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
+          <form style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }} onSubmit={e => { e.preventDefault(); if (validateDetails()) setStep('subscription'); }}>
+            <div className="modal-body">
+              {[
+                { key: 'name',         label: 'Full Name *',              type: 'text',     placeholder: 'Ramesh Patel' },
+                { key: 'phone',        label: 'Phone Number *',           type: 'tel',      placeholder: '9876543210' },
+                { key: 'email',        label: 'Email Address *',          type: 'email',    placeholder: 'ramesh@example.com' },
+                { key: 'password',     label: 'Password *',               type: 'password', placeholder: 'Min 6 characters' },
+                { key: 'businessName', label: 'Business Name (optional)', type: 'text',     placeholder: 'Patel Dairy' }
+              ].map(f => (
+                <div key={f.key} className="input-group">
+                  <label className="input-label">{f.label}</label>
+                  <input type={f.type} className="input" placeholder={f.placeholder}
+                    value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
+                    required={f.key !== 'businessName'} autoComplete="off"
+                    {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
+                </div>
+              ))}
+              <div className="input-group">
+                <label className="input-label">Owner Role / Business Mode</label>
+                <select className="input" value={form.ownerRole}
+                  onChange={e => setForm(p => ({ ...p, ownerRole: e.target.value }))}>
+                  <option value="dairy_owner">Dairy Owner</option>
+                  <option value="milk_supplier">Milk Supplier</option>
+                </select>
               </div>
-            ))}
-            <div className="input-group">
-              <label className="input-label">Owner Role / Business Mode</label>
-              <select className="input" value={form.ownerRole}
-                onChange={e => setForm(p => ({ ...p, ownerRole: e.target.value }))}>
-                <option value="dairy_owner">Dairy Owner</option>
-                <option value="milk_supplier">Milk Supplier</option>
-              </select>
             </div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+            <div className="modal-footer">
               <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>Cancel</button>
-              <button type="button" className="btn btn-primary btn-full"
-                onClick={() => { if (validateDetails()) setStep('subscription'); }}>
+              <button type="submit" className="btn btn-primary btn-full">
                 Next: Subscription →
               </button>
             </div>
-          </div>
+          </form>
         )}
 
         {/* ── Step 2: Subscription & payment ── */}
         {step === 'subscription' && (
-          <div>
-            {/* Plan selector */}
-            <div style={{ marginBottom: '20px' }}>
-              <div className="input-label" style={{ marginBottom: '10px' }}>Select Plan</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                {['silver', 'gold', 'platinum'].map(p => {
-                  const c = PLAN_COLORS_LOCAL[p];
-                  const cfg = getPlanConfig(p);
-                  const monthly = cfg?.monthlyPrice ?? (p === 'silver' ? 99 : p === 'gold' ? 199 : 399);
-                  const active = sub.plan === p;
-                  return (
-                    <button key={p} type="button"
-                      onClick={() => {
-                        const DEFAULT_LIMITS = {
-                          silver: { maxCustomers: 50, maxStaff: 2 },
-                          gold: { maxCustomers: 150, maxStaff: 5 },
-                          platinum: { maxCustomers: 999999, maxStaff: 15 }
-                        };
-                        const lim = DEFAULT_LIMITS[p];
-                        setSub(s => ({ ...s, plan: p, maxCustomers: lim.maxCustomers, maxStaff: lim.maxStaff }));
-                      }}
-                      style={{
-                        border: `2px solid ${active ? c.border : '#E0E0E0'}`,
-                        backgroundColor: active ? c.bg : '#FFFFFF',
-                        padding: '12px 10px', cursor: 'pointer', textAlign: 'left',
-                        transition: 'all 0.1s'
-                      }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px', color: c.color, textTransform: 'capitalize', marginBottom: '4px' }}>{p}</div>
-                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#161616' }}>₹{monthly}<span style={{ fontSize: '11px', fontWeight: 400, color: '#525252' }}>/mo</span></div>
-                      <div style={{ marginTop: '6px', display: 'grid', gap: '2px' }}>
-                        {planFeatures[p].slice(0, 3).map((f, i) => (
-                          <div key={i} style={{ fontSize: '10px', color: '#525252' }}>✓ {f}</div>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Custom Limits Control */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-              <div className="input-group" style={{ marginBottom: 0 }}>
-                <label className="input-label">Max Customers Limit</label>
-                <input
-                  type="number"
-                  className="input"
-                  placeholder="e.g. 150"
-                  value={sub.maxCustomers}
-                  onChange={e => setSub(s => ({ ...s, maxCustomers: parseInt(e.target.value) || 0 }))}
-                />
-                <span style={{ fontSize: '10px', color: '#8D8D8D' }}>Use 999999 for unlimited</span>
-              </div>
-              <div className="input-group" style={{ marginBottom: 0 }}>
-                <label className="input-label">Max Staff Limit</label>
-                <input
-                  type="number"
-                  className="input"
-                  placeholder="e.g. 5"
-                  value={sub.maxStaff}
-                  onChange={e => setSub(s => ({ ...s, maxStaff: parseInt(e.target.value) || 0 }))}
-                />
-                <span style={{ fontSize: '10px', color: '#8D8D8D' }}>Default plan limit pre-set</span>
-              </div>
-            </div>
-
-            {/* Status */}
-            <div className="input-group">
-              <label className="input-label">Subscription Status</label>
-              <select className="input" value={sub.status}
-                onChange={e => setSub(s => ({ ...s, status: e.target.value }))}>
-                <option value="trial">Trial (7 days free)</option>
-                <option value="active">Active (paid)</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-
-            {/* Billing cycle — only for active */}
-            {sub.status === 'active' && (
-              <>
-                <div className="input-group">
-                  <label className="input-label">Billing Cycle</label>
-                  <div style={{ display: 'flex', border: '1px solid #E0E0E0', overflow: 'hidden' }}>
-                    {[
-                      { value: 'monthly', label: 'Monthly' },
-                      { value: 'yearly',  label: 'Yearly (2 months free)' }
-                    ].map(c => (
-                      <button key={c.value} type="button"
-                        onClick={() => setSub(s => ({ ...s, billingCycle: c.value }))}
+          <form style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }} onSubmit={e => { e.preventDefault(); handleSubmit(); }}>
+            <div className="modal-body">
+              {/* Plan selector */}
+              <div style={{ marginBottom: '20px' }}>
+                <div className="input-label" style={{ marginBottom: '10px' }}>Select Plan</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {['silver', 'gold', 'platinum'].map(p => {
+                    const c = PLAN_COLORS_LOCAL[p];
+                    const cfg = getPlanConfig(p);
+                    const monthly = cfg?.monthlyPrice ?? (p === 'silver' ? 99 : p === 'gold' ? 199 : 399);
+                    const active = sub.plan === p;
+                    return (
+                      <button key={p} type="button"
+                        onClick={() => {
+                          const cfg = getPlanConfig(p);
+                          const lim = cfg?.limits || {
+                            maxCustomers: p === 'silver' ? 50 : p === 'platinum' ? 999999 : 150,
+                            maxStaff: p === 'silver' ? 2 : p === 'platinum' ? 15 : 5
+                          };
+                          setSub(s => ({ ...s, plan: p, maxCustomers: lim.maxCustomers, maxStaff: lim.maxStaff }));
+                        }}
                         style={{
-                          flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
-                          backgroundColor: sub.billingCycle === c.value ? '#161616' : '#FFFFFF',
-                          color: sub.billingCycle === c.value ? '#FFFFFF' : '#525252',
-                          fontWeight: 600, fontSize: '13px', transition: 'all 0.1s'
+                          border: `2px solid ${active ? c.border : '#E0E0E0'}`,
+                          backgroundColor: active ? c.bg : '#FFFFFF',
+                          padding: '12px 10px', cursor: 'pointer', textAlign: 'left',
+                          transition: 'all 0.1s'
                         }}>
-                        {c.label}
+                        <div style={{ fontWeight: 700, fontSize: '13px', color: c.color, textTransform: 'capitalize', marginBottom: '4px' }}>{p}</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#161616' }}>₹{monthly}<span style={{ fontSize: '11px', fontWeight: 400, color: '#525252' }}>/mo</span></div>
+                        <div style={{ marginTop: '6px', display: 'grid', gap: '2px' }}>
+                          {planFeatures[p].slice(0, 3).map((f, i) => (
+                            <div key={i} style={{ fontSize: '10px', color: '#525252' }}>✓ {f}</div>
+                          ))}
+                        </div>
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
+              </div>
 
-                {sub.billingCycle === 'monthly' && (
+              {/* Custom Limits Control */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div className="input-group" style={{ marginBottom: 0 }}>
+                  <label className="input-label">Max Customers Limit</label>
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="e.g. 150"
+                    value={sub.maxCustomers}
+                    onChange={e => setSub(s => ({ ...s, maxCustomers: parseInt(e.target.value) || 0 }))}
+                  />
+                  <span style={{ fontSize: '10px', color: '#8D8D8D' }}>Use 999999 for unlimited</span>
+                </div>
+                <div className="input-group" style={{ marginBottom: 0 }}>
+                  <label className="input-label">Max Staff Limit</label>
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="e.g. 5"
+                    value={sub.maxStaff}
+                    onChange={e => setSub(s => ({ ...s, maxStaff: parseInt(e.target.value) || 0 }))}
+                  />
+                  <span style={{ fontSize: '10px', color: '#8D8D8D' }}>Default plan limit pre-set</span>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="input-group">
+                <label className="input-label">Subscription Status</label>
+                <select className="input" value={sub.status}
+                  onChange={e => setSub(s => ({ ...s, status: e.target.value }))}>
+                  <option value="trial">Trial (7 days free)</option>
+                  <option value="active">Active (paid)</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
+              {/* Billing cycle — only for active */}
+              {sub.status === 'active' && (
+                <>
                   <div className="input-group">
-                    <label className="input-label">Number of Months</label>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      {[1, 3, 6, 12].map(m => (
-                        <button key={m} type="button"
-                          onClick={() => { setSub(s => ({ ...s, months: m })); setCustomMonthInput(String(m)); }}
+                    <label className="input-label">Billing Cycle</label>
+                    <div style={{ display: 'flex', border: '1px solid #E0E0E0', overflow: 'hidden' }}>
+                      {[
+                        { value: 'monthly', label: 'Monthly' },
+                        { value: 'yearly',  label: 'Yearly (2 months free)' }
+                      ].map(c => (
+                        <button key={c.value} type="button"
+                          onClick={() => setSub(s => ({ ...s, billingCycle: c.value }))}
                           style={{
-                            width: '48px', height: '40px',
-                            border: `1px solid ${sub.months === m ? '#0F62FE' : '#E0E0E0'}`,
-                            backgroundColor: sub.months === m ? '#EDF5FF' : '#FFFFFF',
-                            color: sub.months === m ? '#0F62FE' : '#525252',
-                            cursor: 'pointer', fontSize: '13px', fontWeight: 600
+                            flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
+                            backgroundColor: sub.billingCycle === c.value ? '#161616' : '#FFFFFF',
+                            color: sub.billingCycle === c.value ? '#FFFFFF' : '#525252',
+                            fontWeight: 600, fontSize: '13px', transition: 'all 0.1s'
                           }}>
-                          {m}
+                          {c.label}
                         </button>
                       ))}
-                      <input
-                        type="number"
-                        min="1"
-                        max="60"
-                        className="input"
-                        style={{ width: '80px', height: '40px', textAlign: 'center' }}
-                        placeholder="Custom"
-                        value={customMonthInput}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setCustomMonthInput(val);
-                          const n = parseInt(val);
-                          if (!isNaN(n) && n >= 1 && n <= 60) {
-                            setSub(s => ({ ...s, months: n }));
-                          }
-                        }}
-                        inputMode="numeric"
-                      />
-                      <span style={{ fontSize: '11px', color: '#8D8D8D' }}>months (1–60)</span>
                     </div>
                   </div>
-                )}
-              </>
-            )}
 
-            {/* Start date */}
-            <div className="input-group">
-              <label className="input-label">Start Date</label>
-              <input type="date" className="input" value={sub.startDate}
-                onChange={e => setSub(s => ({ ...s, startDate: e.target.value }))} />
-            </div>
+                  {sub.billingCycle === 'monthly' && (
+                    <div className="input-group">
+                      <label className="input-label">Number of Months</label>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {[1, 3, 6, 12].map(m => (
+                          <button key={m} type="button"
+                            onClick={() => { setSub(s => ({ ...s, months: m })); setCustomMonthInput(String(m)); }}
+                            style={{
+                              width: '48px', height: '40px',
+                              border: `1px solid ${sub.months === m ? '#0F62FE' : '#E0E0E0'}`,
+                              backgroundColor: sub.months === m ? '#EDF5FF' : '#FFFFFF',
+                              color: sub.months === m ? '#0F62FE' : '#525252',
+                              cursor: 'pointer', fontSize: '13px', fontWeight: 600
+                            }}>
+                            {m}
+                          </button>
+                        ))}
+                        <input
+                          type="number"
+                          min="1"
+                          max="60"
+                          className="input"
+                          style={{ width: '80px', height: '40px', textAlign: 'center' }}
+                          placeholder="Custom"
+                          value={customMonthInput}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setCustomMonthInput(val);
+                            const n = parseInt(val);
+                            if (!isNaN(n) && n >= 1 && n <= 60) {
+                              setSub(s => ({ ...s, months: n }));
+                            }
+                          }}
+                          inputMode="numeric"
+                        />
+                        <span style={{ fontSize: '11px', color: '#8D8D8D' }}>months (1–60)</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
-            {/* End date — computed or custom */}
-            <div className="input-group">
-              <label className="input-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>End Date</span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 400, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={sub.useCustomEnd}
-                    onChange={e => setSub(s => ({ ...s, useCustomEnd: e.target.checked }))} />
-                  Custom date
+              {/* Start date */}
+              <div className="input-group">
+                <label className="input-label">Start Date</label>
+                <input type="date" className="input" value={sub.startDate}
+                  onChange={e => setSub(s => ({ ...s, startDate: e.target.value }))} />
+              </div>
+
+              {/* End date — computed or custom */}
+              <div className="input-group">
+                <label className="input-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>End Date</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 400, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={sub.useCustomEnd}
+                      onChange={e => setSub(s => ({ ...s, useCustomEnd: e.target.checked }))} />
+                    Custom date
+                  </label>
                 </label>
-              </label>
-              {sub.useCustomEnd ? (
-                <input type="date" className="input" value={sub.customEndDate}
-                  onChange={e => setSub(s => ({ ...s, customEndDate: e.target.value }))} />
-              ) : (
-                <div style={{
-                  height: '44px', padding: '0 12px', border: '1px solid #E0E0E0',
-                  backgroundColor: '#F4F4F4', display: 'flex', alignItems: 'center',
-                  fontSize: '14px', color: '#525252'
-                }}>
-                  {endDate} <span style={{ marginLeft: '8px', fontSize: '11px', color: '#8D8D8D' }}>
-                    (auto-computed from {sub.status === 'trial' ? '7-day trial' : sub.billingCycle === 'yearly' ? '1 year' : `${sub.months} month${sub.months > 1 ? 's' : ''}`})
-                  </span>
+                {sub.useCustomEnd ? (
+                  <input type="date" className="input" value={sub.customEndDate}
+                    onChange={e => setSub(s => ({ ...s, customEndDate: e.target.value }))} />
+                ) : (
+                  <div style={{
+                    height: '44px', padding: '0 12px', border: '1px solid #E0E0E0',
+                    backgroundColor: '#F4F4F4', display: 'flex', alignItems: 'center',
+                    fontSize: '14px', color: '#525252'
+                  }}>
+                    {endDate} <span style={{ marginLeft: '8px', fontSize: '11px', color: '#8D8D8D' }}>
+                      (auto-computed from {sub.status === 'trial' ? '7-day trial' : sub.billingCycle === 'yearly' ? '1 year' : `${sub.months} month${sub.months > 1 ? 's' : ''}`})
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment summary */}
+              <div style={{
+                backgroundColor: '#F4F4F4', border: '1px solid #E0E0E0',
+                padding: '14px 16px', marginBottom: '16px'
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
+                  Payment Summary
+                </div>
+                {[
+                  { label: sub.billingCycle === 'yearly' ? 'Yearly subscription (2 months free)' : `${sub.months} month${sub.months > 1 ? 's' : ''} subscription`, value: sub.status === 'trial' ? '₹0 (trial)' : `₹${computeSubscriptionAmount()}` },
+                  { label: 'One-time setup fee', value: `₹${getSetupFee()}` },
+                  { label: 'Total due', value: sub.status === 'trial' ? '₹0' : `₹${totalDue}`, bold: true },
+                ].map(r => (
+                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                    <span style={{ color: '#525252' }}>{r.label}</span>
+                    <span style={{ fontWeight: r.bold ? 700 : 600, color: r.bold ? '#0F62FE' : '#161616' }}>{r.value}</span>
+                  </div>
+                ))}
+                {sub.billingCycle === 'yearly' && sub.status === 'active' && (
+                  <div style={{ fontSize: '11px', color: '#24A148', marginTop: '4px', fontWeight: 600 }}>
+                    ✓ 2 months free — pay for 10, get 12
+                  </div>
+                )}
+              </div>
+
+              {/* Amount paid fields */}
+              {sub.status === 'active' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="input-group" style={{ marginBottom: 0 }}>
+                    <label className="input-label">Subscription Paid (₹)</label>
+                    <input type="number" className="input" placeholder="0"
+                      value={sub.amountPaid} onChange={e => setSub(s => ({ ...s, amountPaid: e.target.value }))} />
+                  </div>
+                  <div className="input-group" style={{ marginBottom: 0 }}>
+                    <label className="input-label">Setup Fee Paid (₹)</label>
+                    <input type="number" className="input" placeholder="0"
+                      value={sub.setupFeePaid} onChange={e => setSub(s => ({ ...s, setupFeePaid: e.target.value }))} />
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Payment summary */}
-            <div style={{
-              backgroundColor: '#F4F4F4', border: '1px solid #E0E0E0',
-              padding: '14px 16px', marginBottom: '16px'
-            }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
-                Payment Summary
+              {/* Notes */}
+              <div className="input-group" style={{ marginTop: '12px' }}>
+                <label className="input-label">Admin Notes (optional)</label>
+                <input type="text" className="input" placeholder="e.g. Paid via UPI, ref #12345"
+                  value={sub.notes} onChange={e => setSub(s => ({ ...s, notes: e.target.value }))} />
               </div>
-              {[
-                { label: sub.billingCycle === 'yearly' ? 'Yearly subscription (2 months free)' : `${sub.months} month${sub.months > 1 ? 's' : ''} subscription`, value: sub.status === 'trial' ? '₹0 (trial)' : `₹${computeSubscriptionAmount()}` },
-                { label: 'One-time setup fee', value: `₹${getSetupFee()}` },
-                { label: 'Total due', value: sub.status === 'trial' ? '₹0' : `₹${totalDue}`, bold: true },
-              ].map(r => (
-                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                  <span style={{ color: '#525252' }}>{r.label}</span>
-                  <span style={{ fontWeight: r.bold ? 700 : 600, color: r.bold ? '#0F62FE' : '#161616' }}>{r.value}</span>
-                </div>
-              ))}
-              {sub.billingCycle === 'yearly' && sub.status === 'active' && (
-                <div style={{ fontSize: '11px', color: '#24A148', marginTop: '4px', fontWeight: 600 }}>
-                  ✓ 2 months free — pay for 10, get 12
-                </div>
-              )}
             </div>
 
-            {/* Amount paid fields */}
-            {sub.status === 'active' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="input-group" style={{ marginBottom: 0 }}>
-                  <label className="input-label">Subscription Paid (₹)</label>
-                  <input type="number" className="input" placeholder="0"
-                    value={sub.amountPaid} onChange={e => setSub(s => ({ ...s, amountPaid: e.target.value }))} />
-                </div>
-                <div className="input-group" style={{ marginBottom: 0 }}>
-                  <label className="input-label">Setup Fee Paid (₹)</label>
-                  <input type="number" className="input" placeholder="0"
-                    value={sub.setupFeePaid} onChange={e => setSub(s => ({ ...s, setupFeePaid: e.target.value }))} />
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            <div className="input-group" style={{ marginTop: '12px' }}>
-              <label className="input-label">Admin Notes (optional)</label>
-              <input type="text" className="input" placeholder="e.g. Paid via UPI, ref #12345"
-                value={sub.notes} onChange={e => setSub(s => ({ ...s, notes: e.target.value }))} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <div className="modal-footer">
               <button type="button" className="btn btn-ghost btn-full"
                 onClick={() => setStep('details')}>
                 ← Back
               </button>
-              <button type="button" className="btn btn-primary btn-full"
-                onClick={handleSubmit} disabled={loading}>
+              <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
                 {loading ? 'Creating...' : `Create Account (${sub.status === 'trial' ? 'Trial' : sub.status === 'active' ? 'Paid' : 'Inactive'})`}
               </button>
             </div>
-          </div>
+          </form>
         )}
       </div>
     </div>
@@ -1030,6 +1143,7 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
 
 // ── Password Reset Modal (owner or staff) ─────────────────────
 const PasswordModal = ({ target, onClose }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -1063,57 +1177,87 @@ const PasswordModal = ({ target, onClose }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ position: 'relative', display: 'flex', flexDirection: 'column', maxWidth: '520px', width: '90%' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 1
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={20} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', paddingRight: '24px' }}>
           <KeyRound size={20} color="#0F62FE" />
           <h2 style={{ fontWeight: 700, fontSize: '20px' }}>Reset Credentials</h2>
         </div>
         <p style={{ color: '#525252', fontSize: '14px', marginBottom: '24px' }}>
           Updating credentials for <strong>{target.name}</strong>
         </p>
-        <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label className="input-label">New Username (optional)</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="Leave blank to keep current"
-              value={newUsername}
-              onChange={e => setNewUsername(e.target.value)}
-              autoCapitalize="none"
-              autoComplete="off"
-            />
-            <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '3px' }}>
-              Only fill this to change the username.
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          <div className="modal-body">
+            <div className="input-group">
+              <label className="input-label">New Username (optional)</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Leave blank to keep current"
+                value={newUsername}
+                onChange={e => setNewUsername(e.target.value)}
+                autoCapitalize="none"
+                autoComplete="off"
+              />
+              <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '3px' }}>
+                Only fill this to change the username.
+              </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">New Password *</label>
+              <input type="password" className="input" placeholder="Min 6 characters"
+                value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Confirm Password *</label>
+              <input type="password" className="input" placeholder="Repeat new password"
+                value={confirm} onChange={e => setConfirm(e.target.value)} required />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Superadmin Verification Code *</label>
+              <input
+                type="password"
+                className="input"
+                placeholder="Enter your verification code"
+                value={verificationCode}
+                onChange={e => setVerificationCode(e.target.value)}
+                autoComplete="off"
+                required
+              />
+              <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '3px' }}>
+                Your superadmin login verification code.
+              </div>
             </div>
           </div>
-          <div className="input-group">
-            <label className="input-label">New Password *</label>
-            <input type="password" className="input" placeholder="Min 6 characters"
-              value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
-          </div>
-          <div className="input-group">
-            <label className="input-label">Confirm Password *</label>
-            <input type="password" className="input" placeholder="Repeat new password"
-              value={confirm} onChange={e => setConfirm(e.target.value)} required />
-          </div>
-          <div className="input-group">
-            <label className="input-label">Superadmin Verification Code *</label>
-            <input
-              type="password"
-              className="input"
-              placeholder="Enter your verification code"
-              value={verificationCode}
-              onChange={e => setVerificationCode(e.target.value)}
-              autoComplete="off"
-              required
-            />
-            <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '3px' }}>
-              Your superadmin login verification code.
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+          <div className="modal-footer">
             <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
               {loading ? 'Updating...' : 'Update Credentials'}
@@ -1125,82 +1269,131 @@ const PasswordModal = ({ target, onClose }) => {
   );
 };
 
-// ── Staff Password Manager (list staff under an owner) ────────
-const StaffPasswordModal = ({ owner, onClose }) => {
+// ── Staff List Sub-view Page ──────────────────────────────────
+const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pwTarget, setPwTarget] = useState(null);
   const toast = useToast();
 
+  const fetchStaff = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get(`/superadmin/owners/${owner._id}/staff`);
+      setStaff(data.staff);
+    } catch {
+      toast.error('Failed to load staff list.');
+    } finally {
+      setLoading(false);
+    }
+  }, [owner._id, toast]);
+
   useEffect(() => {
-    api.get(`/superadmin/owners/${owner._id}/staff`)
-      .then(r => setStaff(r.data.staff))
-      .catch(() => toast.error('Failed to load staff.'))
-      .finally(() => setLoading(false));
-  }, [owner._id]);
+    fetchStaff();
+  }, [fetchStaff]);
 
   return (
-    <>
-      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-        <div className="modal" style={{ maxWidth: '520px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <Users size={20} color="#0F62FE" />
-            <h2 style={{ fontWeight: 700, fontSize: '20px' }}>Staff — {owner.name}</h2>
+    <div style={{ maxWidth: '100%', overflowX: 'hidden' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ padding: '8px' }}>
+            <ChevronLeft size={18} />
+          </button>
+          <div>
+            <h1 className="page-title" style={{ margin: 0 }}>Staff Directory</h1>
+            <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
+              Owner: <strong>{owner.name}</strong> {owner.businessName ? `(${owner.businessName})` : ''} • {owner.phone}
+            </div>
           </div>
-          <p style={{ color: '#525252', fontSize: '14px', marginBottom: '20px' }}>
-            Reset passwords for staff members under this owner.
-          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ fontSize: '14px', color: '#525252' }}>
+            Limit: <strong>{staff.length}</strong> / {owner.maxStaff ?? 5} staff members
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={fetchStaff} disabled={loading} title="Refresh">
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
+      </div>
 
+      <div className="page-body">
+        <div className="card" style={{ padding: 0 }}>
           {loading ? (
-            <div style={{ padding: '12px 0' }}>
-              {[0,1,2].map(i => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 2 ? '1px solid #F4F4F4' : 'none' }}>
-                  <div className="skeleton-row" style={{ gap: '6px', flex: 1 }}>
-                    <div className="skeleton skeleton-line" style={{ width: '50%' }} />
-                    <div className="skeleton skeleton-line-sm" style={{ width: '35%' }} />
-                  </div>
-                  <div className="skeleton skeleton-line" style={{ width: '80px', height: '28px', marginLeft: '16px' }} />
+            <div style={{ padding: '24px' }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '12px', padding: '16px 0', borderBottom: i < 2 ? '1px solid #F4F4F4' : 'none' }}>
+                  <div className="skeleton skeleton-line" style={{ width: '60%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '40%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '30%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '50%' }} />
                 </div>
               ))}
             </div>
           ) : staff.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px', color: '#8D8D8D' }}>No staff members found.</div>
+            <div className="empty-state" style={{ padding: '48px 24px' }}>
+              <div className="empty-state-icon"><Users size={40} /></div>
+              <h3>No staff members found</h3>
+              <p>This owner has not registered any staff members yet.</p>
+            </div>
           ) : (
-            <div style={{ display: 'grid', gap: '8px', marginBottom: '20px' }}>
-              {staff.map(s => (
-                <div key={s._id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 16px', border: '1px solid #E0E0E0', backgroundColor: '#FAFAFA'
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>{s.name}</div>
-                    <div style={{ fontSize: '12px', color: '#8D8D8D' }}>{s.phone}</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span className={`badge ${s.isActive ? 'badge-green' : 'badge-red'}`}>
-                      {s.isActive ? 'Active' : 'Disabled'}
-                    </span>
-                    <button className="btn btn-ghost btn-sm"
-                      onClick={() => setPwTarget({ type: 'staff', id: s._id, name: s.name })}>
-                      <KeyRound size={13} /> Reset PW
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Staff Member</th>
+                    <th>Phone Number</th>
+                    <th>Status</th>
+                    <th>Created On</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staff.map(s => (
+                    <tr key={s._id}>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#161616' }}>{s.name}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 500, color: '#525252' }}>{s.phone}</div>
+                      </td>
+                      <td>
+                        <span className={`badge ${s.isActive ? 'badge-green' : 'badge-red'}`}>
+                          {s.isActive ? 'Active' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '13px', color: '#525252' }}>
+                          {new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => handleImpersonate(s.phone, s.name)}
+                            style={{ color: '#0F62FE', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <LogIn size={13} /> Login
+                          </button>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => setPwModal({ type: 'staff', id: s._id, name: s.name })}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <KeyRound size={13} /> Reset PW
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-
-          <button className="btn btn-dark btn-full" onClick={onClose}>Close</button>
         </div>
       </div>
-
-      {pwTarget && <PasswordModal target={pwTarget} onClose={() => setPwTarget(null)} />}
-    </>
+    </div>
   );
 };
 
 // ── Pricing Calculator Modal ──────────────────────────────────
 export const PricingCalculatorModal = ({ onClose, onAddOwner, context, onViewRequests }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   const [plan, setPlan] = useState('gold');
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [months, setMonths] = useState(1);
@@ -1253,159 +1446,272 @@ export const PricingCalculatorModal = ({ onClose, onAddOwner, context, onViewReq
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ position: 'relative', maxWidth: '700px', display: 'flex', flexDirection: 'column' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 1
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={20} />
+        </button>
         <h2 style={{ fontWeight: 700, marginBottom: '6px', fontSize: '20px' }}>Pricing Calculator</h2>
         <p style={{ color: '#525252', fontSize: '13px', marginBottom: '24px' }}>
           Calculate subscription costs and add owners with pre-filled plans
         </p>
 
-        {/* Plan selector */}
-        <div style={{ marginBottom: '20px' }}>
-          <div className="input-label" style={{ marginBottom: '10px' }}>Select Plan</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-            {['silver', 'gold', 'platinum'].map(p => {
-              const c = PLAN_COLORS_LOCAL[p];
-              const cfg = getPlanConfig(p);
-              const monthly = cfg?.monthlyPrice ?? (p === 'silver' ? 99 : p === 'gold' ? 199 : 399);
-              const active = plan === p;
-              return (
-                <button key={p} type="button"
-                  onClick={() => setPlan(p)}
-                  style={{
-                    border: `2px solid ${active ? c.border : '#E0E0E0'}`,
-                    backgroundColor: active ? c.bg : '#FFFFFF',
-                    padding: '12px 10px', cursor: 'pointer', textAlign: 'left',
-                    transition: 'all 0.1s'
-                  }}>
-                  <div style={{ fontWeight: 700, fontSize: '13px', color: c.color, textTransform: 'capitalize', marginBottom: '4px' }}>{p}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#161616' }}>₹{monthly}<span style={{ fontSize: '11px', fontWeight: 400, color: '#525252' }}>/mo</span></div>
-                  <div style={{ marginTop: '6px', display: 'grid', gap: '2px' }}>
-                    {planFeatures[p].slice(0, 3).map((f, i) => (
-                      <div key={i} style={{ fontSize: '10px', color: '#525252' }}>✓ {f}</div>
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <form style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }} onSubmit={e => e.preventDefault()}>
+          <div className="modal-body">
+            {/* Plan selector */}
+            <div style={{ marginBottom: '20px' }}>
+              <div className="input-label" style={{ marginBottom: '10px' }}>Select Plan</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                {['silver', 'gold', 'platinum'].map(p => {
+                  const c = PLAN_COLORS_LOCAL[p];
+                  const cfg = getPlanConfig(p);
+                  const monthly = cfg?.monthlyPrice ?? (p === 'silver' ? 99 : p === 'gold' ? 199 : 399);
+                  const active = plan === p;
+                  return (
+                    <button key={p} type="button"
+                      onClick={() => setPlan(p)}
+                      style={{
+                        border: `2px solid ${active ? c.border : '#E0E0E0'}`,
+                        backgroundColor: active ? c.bg : '#FFFFFF',
+                        padding: '12px 10px', cursor: 'pointer', textAlign: 'left',
+                        transition: 'all 0.1s'
+                      }}>
+                      <div style={{ fontWeight: 700, fontSize: '13px', color: c.color, textTransform: 'capitalize', marginBottom: '4px' }}>{p}</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#161616' }}>₹{monthly}<span style={{ fontSize: '11px', fontWeight: 400, color: '#525252' }}>/mo</span></div>
+                      <div style={{ marginTop: '6px', display: 'grid', gap: '2px' }}>
+                        {planFeatures[p].slice(0, 3).map((f, i) => (
+                          <div key={i} style={{ fontSize: '10px', color: '#525252' }}>✓ {f}</div>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        {/* Billing cycle */}
-        <div className="input-group">
-          <label className="input-label">Billing Cycle</label>
-          <div style={{ display: 'flex', border: '1px solid #E0E0E0', overflow: 'hidden' }}>
-            {[
-              { value: 'monthly', label: 'Monthly' },
-              { value: 'yearly',  label: 'Yearly (2 months free)' }
-            ].map(c => (
-              <button key={c.value} type="button"
-                onClick={() => setBillingCycle(c.value)}
-                style={{
-                  flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
-                  backgroundColor: billingCycle === c.value ? '#161616' : '#FFFFFF',
-                  color: billingCycle === c.value ? '#FFFFFF' : '#525252',
-                  fontWeight: 600, fontSize: '13px', transition: 'all 0.1s'
-                }}>
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* Billing cycle */}
+            <div className="input-group">
+              <label className="input-label">Billing Cycle</label>
+              <div style={{ display: 'flex', border: '1px solid #E0E0E0', overflow: 'hidden' }}>
+                {[
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'yearly',  label: 'Yearly (2 months free)' }
+                ].map(c => (
+                  <button key={c.value} type="button"
+                    onClick={() => setBillingCycle(c.value)}
+                    style={{
+                      flex: 1, padding: '10px', border: 'none', cursor: 'pointer',
+                      backgroundColor: billingCycle === c.value ? '#161616' : '#FFFFFF',
+                      color: billingCycle === c.value ? '#FFFFFF' : '#525252',
+                      fontWeight: 600, fontSize: '13px', transition: 'all 0.1s'
+                    }}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Custom month input */}
-        {billingCycle === 'monthly' && (
-          <div className="input-group">
-            <label className="input-label">Number of Months</label>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-              {[1, 3, 6, 12].map(m => (
-                <button key={m} type="button"
-                  onClick={() => { setMonths(m); setCustomMonthInput(String(m)); }}
-                  style={{
-                    width: '48px', height: '40px',
-                    border: `1px solid ${months === m ? '#0F62FE' : '#E0E0E0'}`,
-                    backgroundColor: months === m ? '#EDF5FF' : '#FFFFFF',
-                    color: months === m ? '#0F62FE' : '#525252',
-                    cursor: 'pointer', fontSize: '13px', fontWeight: 600
-                  }}>
-                  {m}
-                </button>
+            {/* Custom month input */}
+            {billingCycle === 'monthly' && (
+              <div className="input-group">
+                <label className="input-label">Number of Months</label>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {[1, 3, 6, 12].map(m => (
+                    <button key={m} type="button"
+                      onClick={() => { setMonths(m); setCustomMonthInput(String(m)); }}
+                      style={{
+                        width: '48px', height: '40px',
+                        border: `1px solid ${months === m ? '#0F62FE' : '#E0E0E0'}`,
+                        backgroundColor: months === m ? '#EDF5FF' : '#FFFFFF',
+                        color: months === m ? '#0F62FE' : '#525252',
+                        cursor: 'pointer', fontSize: '13px', fontWeight: 600
+                      }}>
+                      {m}
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    className="input"
+                    style={{ width: '80px', height: '40px', textAlign: 'center' }}
+                    placeholder="Custom"
+                    value={customMonthInput}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setCustomMonthInput(val);
+                      const n = parseInt(val);
+                      if (!isNaN(n) && n >= 1 && n <= 60) {
+                        setMonths(n);
+                      }
+                    }}
+                    inputMode="numeric"
+                  />
+                  <span style={{ fontSize: '11px', color: '#8D8D8D' }}>months (1–60)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Include setup fee checkbox */}
+            <div className="input-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
+                <input type="checkbox" checked={includeSetup} onChange={e => setIncludeSetup(e.target.checked)} />
+                Include Setup Fee (₹{getSetupFee()})
+              </label>
+              <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px', marginLeft: '24px' }}>
+                Typically charged for new owners
+              </div>
+            </div>
+
+            {/* Payment summary */}
+            <div style={{
+              backgroundColor: '#F4F4F4', border: '1px solid #E0E0E0',
+              padding: '16px 20px', marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>
+                Payment Summary
+              </div>
+              {[
+                { label: billingCycle === 'yearly' ? 'Yearly subscription (2 months free)' : `${months} month${months > 1 ? 's' : ''} subscription`, value: `₹${subscriptionAmount}` },
+                ...(includeSetup ? [{ label: 'One-time setup fee', value: `₹${setupFee}` }] : []),
+                { label: 'Total', value: `₹${total}`, bold: true },
+              ].map(r => (
+                <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                  <span style={{ color: '#525252' }}>{r.label}</span>
+                  <span style={{ fontWeight: r.bold ? 700 : 600, color: r.bold ? '#0F62FE' : '#161616' }}>{r.value}</span>
+                </div>
               ))}
-              <input
-                type="number"
-                min="1"
-                max="60"
-                className="input"
-                style={{ width: '80px', height: '40px', textAlign: 'center' }}
-                placeholder="Custom"
-                value={customMonthInput}
-                onChange={e => {
-                  const val = e.target.value;
-                  setCustomMonthInput(val);
-                  const n = parseInt(val);
-                  if (!isNaN(n) && n >= 1 && n <= 60) {
-                    setMonths(n);
-                  }
-                }}
-                inputMode="numeric"
-              />
-              <span style={{ fontSize: '11px', color: '#8D8D8D' }}>months (1–60)</span>
+              {billingCycle === 'yearly' && (
+                <div style={{ fontSize: '11px', color: '#24A148', marginTop: '4px', fontWeight: 600 }}>
+                  ✓ 2 months free — pay for 10, get 12
+                </div>
+              )}
             </div>
           </div>
-        )}
 
-        {/* Include setup fee checkbox */}
-        <div className="input-group">
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-            <input type="checkbox" checked={includeSetup} onChange={e => setIncludeSetup(e.target.checked)} />
-            Include Setup Fee (₹{getSetupFee()})
-          </label>
-          <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px', marginLeft: '24px' }}>
-            Typically charged for new owners
+          <div className="modal-footer" style={{ flexDirection: 'column', gap: '10px' }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-full"
+              onClick={() => {
+                onAddOwner({
+                  plan,
+                  billingCycle,
+                  months: billingCycle === 'yearly' ? 12 : months
+                });
+              }}
+            >
+              Add Owner with this plan →
+            </button>
+            <button type="button" className="btn btn-ghost btn-full" onClick={onClose} style={{ margin: 0 }}>
+              Close
+            </button>
           </div>
-        </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
-        {/* Payment summary */}
-        <div style={{
-          backgroundColor: '#F4F4F4', border: '1px solid #E0E0E0',
-          padding: '16px 20px', marginBottom: '20px'
-        }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px' }}>
-            Payment Summary
-          </div>
-          {[
-            { label: billingCycle === 'yearly' ? 'Yearly subscription (2 months free)' : `${months} month${months > 1 ? 's' : ''} subscription`, value: `₹${subscriptionAmount}` },
-            ...(includeSetup ? [{ label: 'One-time setup fee', value: `₹${setupFee}` }] : []),
-            { label: 'Total', value: `₹${total}`, bold: true },
-          ].map(r => (
-            <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
-              <span style={{ color: '#525252' }}>{r.label}</span>
-              <span style={{ fontWeight: r.bold ? 700 : 600, color: r.bold ? '#0F62FE' : '#161616' }}>{r.value}</span>
-            </div>
-          ))}
-          {billingCycle === 'yearly' && (
-            <div style={{ fontSize: '11px', color: '#24A148', marginTop: '4px', fontWeight: 600 }}>
-              ✓ 2 months free — pay for 10, get 12
-            </div>
-          )}
-        </div>
+// ── Owner Role Confirmation Modal ────────────────────────────
+const RoleConfirmModal = ({ target, onClose, onConfirm }) => {
+  const [loading, setLoading] = useState(false);
+  const mouseDownOnOverlay = React.useRef(false);
 
-        {/* Action buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+  const currentRoleLabel = target.currentRole === 'dairy_owner' ? 'Dairy Owner' : 'Milk Supplier';
+  const newRoleLabel = target.newRole === 'dairy_owner' ? 'Dairy Owner' : 'Milk Supplier';
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      await onConfirm();
+    } finally {
+      setLoading(false);
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ maxWidth: '400px', position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={20} />
+        </button>
+
+        <h3 style={{ fontWeight: 700, fontSize: '18px', marginBottom: '12px', marginTop: '8px' }}>
+          Change Business Mode?
+        </h3>
+        <p style={{ color: '#525252', fontSize: '14.5px', marginBottom: '24px', lineHeight: 1.5, textAlign: 'left' }}>
+          Are you sure you want to change the role of <strong>{target.name}</strong> from <strong>{currentRoleLabel}</strong> to <strong>{newRoleLabel}</strong>?
+          <br /><br />
+          <span style={{ color: '#DA1E28', fontWeight: 600 }}>Note:</span> This will adjust the sidebar options and system permissions for this owner.
+        </p>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
           <button
-            className="btn btn-primary btn-full"
-            onClick={() => {
-              onAddOwner({
-                plan,
-                billingCycle,
-                months: billingCycle === 'yearly' ? 12 : months
-              });
-            }}
+            type="button"
+            className="btn btn-ghost btn-full"
+            onClick={onClose}
+            disabled={loading}
           >
-            Add Owner with this plan →
+            Cancel
           </button>
-          <button className="btn btn-ghost btn-full" onClick={onClose}>
-            Close
+          <button
+            type="button"
+            className="btn btn-primary btn-full"
+            onClick={handleConfirm}
+            disabled={loading}
+          >
+            {loading ? 'Changing...' : 'Confirm Change'}
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Edit2, UserX, UserCheck, RefreshCw, ChevronDown, ChevronUp, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Plus, Search, Edit2, UserX, UserCheck, RefreshCw, ChevronDown, ChevronUp, AlertCircle, Eye, EyeOff, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
@@ -417,67 +417,100 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
     }
   };
 
+  const mouseDownOnOverlay = React.useRef(false);
+
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: '520px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 style={{ fontWeight: 700, fontSize: '20px', marginBottom: '20px' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ maxWidth: '520px', width: '90%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 1
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={18} />
+        </button>
+
+        <h2 style={{ fontWeight: 700, fontSize: '20px', marginBottom: '20px', paddingRight: '24px' }}>
           {farmer ? (isMarathi ? 'शेतकरी संपादित करा' : 'Edit Farmer') : (isMarathi ? 'नवीन शेतकरी जोडा' : 'Add New Farmer')}
         </h2>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'पूर्ण नाव *' : 'Full Name *'}</label>
-            <input
-              type="text" className="input" placeholder={isMarathi ? 'उदा. ज्ञानेश्वर पाटील' : 'e.g. Dnyaneshwar Patil'}
-              value={form.name} onChange={e => handleChange('name', e.target.value)}
-              style={errors.name ? { borderColor: '#DA1E28' } : {}}
-            />
-            {errors.name && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.name}</div>}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          <div className="modal-body">
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'पूर्ण नाव *' : 'Full Name *'}</label>
+              <input
+                type="text" className="input" placeholder={isMarathi ? 'उदा. ज्ञानेश्वर पाटील' : 'e.g. Dnyaneshwar Patil'}
+                value={form.name} onChange={e => handleChange('name', e.target.value)}
+                style={errors.name ? { borderColor: '#DA1E28' } : {}}
+              />
+              {errors.name && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.name}</div>}
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'फोन नंबर *' : 'Phone Number *'}</label>
+              <input
+                type="tel" className="input" placeholder={isMarathi ? '१०-अंकी नंबर' : '10-digit number'}
+                value={form.phone} onChange={e => handleChange('phone', e.target.value)}
+                maxLength={10} style={errors.phone ? { borderColor: '#DA1E28' } : {}}
+              />
+              {errors.phone && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.phone}</div>}
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'शेतकरी कोड (पर्यायी)' : 'Farmer Code (optional)'}</label>
+              <input
+                type="text" className="input" placeholder={isMarathi ? 'उदा. F-101' : 'e.g. F-101'}
+                value={form.customerCode} onChange={e => handleChange('customerCode', e.target.value)}
+              />
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'गाव / पत्ता' : 'Village / Address'}</label>
+              <input
+                type="text" className="input" placeholder={isMarathi ? 'उदा. मु. पो. वडगाव' : 'e.g. Vadgaon'}
+                value={form.address} onChange={e => handleChange('address', e.target.value)}
+              />
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'पसंतीची भाषा (WhatsApp)' : 'Preferred Language (WhatsApp)'}</label>
+              <select className="input" value={form.language} onChange={e => handleChange('language', e.target.value)}>
+                <option value="en">English</option>
+                <option value="mr">मराठी (Marathi)</option>
+              </select>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'नोंदी / रिमार्क (पर्यायी)' : 'Notes / Remarks (optional)'}</label>
+              <textarea
+                className="input" placeholder={isMarathi ? 'शेतकऱ्याबद्दल अधिक माहिती...' : 'Extra notes about the farmer...'}
+                value={form.notes} onChange={e => handleChange('notes', e.target.value)}
+                rows={2} style={{ fontFamily: 'inherit', resize: 'vertical' }}
+              />
+            </div>
           </div>
 
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'फोन नंबर *' : 'Phone Number *'}</label>
-            <input
-              type="tel" className="input" placeholder={isMarathi ? '१०-अंकी नंबर' : '10-digit number'}
-              value={form.phone} onChange={e => handleChange('phone', e.target.value)}
-              maxLength={10} style={errors.phone ? { borderColor: '#DA1E28' } : {}}
-            />
-            {errors.phone && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.phone}</div>}
-          </div>
-
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'शेतकरी कोड (पर्यायी)' : 'Farmer Code (optional)'}</label>
-            <input
-              type="text" className="input" placeholder={isMarathi ? 'उदा. F-101' : 'e.g. F-101'}
-              value={form.customerCode} onChange={e => handleChange('customerCode', e.target.value)}
-            />
-          </div>
-
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'गाव / पत्ता' : 'Village / Address'}</label>
-            <input
-              type="text" className="input" placeholder={isMarathi ? 'उदा. मु. पो. वडगाव' : 'e.g. Vadgaon'}
-              value={form.address} onChange={e => handleChange('address', e.target.value)}
-            />
-          </div>
-
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'पसंतीची भाषा (WhatsApp)' : 'Preferred Language (WhatsApp)'}</label>
-            <select className="input" value={form.language} onChange={e => handleChange('language', e.target.value)}>
-              <option value="en">English</option>
-              <option value="mr">मराठी (Marathi)</option>
-            </select>
-          </div>
-
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'नोंदी / रिमार्क (पर्यायी)' : 'Notes / Remarks (optional)'}</label>
-            <textarea
-              className="input" placeholder={isMarathi ? 'शेतकऱ्याबद्दल अधिक माहिती...' : 'Extra notes about the farmer...'}
-              value={form.notes} onChange={e => handleChange('notes', e.target.value)}
-              rows={2} style={{ fontFamily: 'inherit', resize: 'vertical' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+          <div className="modal-footer">
             <button type="button" className="btn btn-ghost btn-full" onClick={onClose} disabled={submitting}>
               {isMarathi ? 'रद्द करा' : 'Cancel'}
             </button>

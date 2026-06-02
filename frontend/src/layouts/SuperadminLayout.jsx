@@ -190,6 +190,7 @@ const SuperadminLayout = () => {
 
 // ── Superadmin Change Password Modal ─────────────────────────
 const SuperadminPasswordModal = ({ onClose }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   const { user } = useAuth();
   const [step, setStep] = useState('change'); // 'change' | 'forgot'
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirm: '', verificationCode: '' });
@@ -283,9 +284,36 @@ const SuperadminPasswordModal = ({ onClose }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={20} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingRight: '24px' }}>
           <KeyRound size={20} color="#0F62FE" />
           <h2 style={{ fontWeight: 700, fontSize: '20px' }}>Change Password</h2>
         </div>

@@ -237,9 +237,30 @@ tr:hover td {
   width: 100%;
   max-width: 480px;
   max-height: 90vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   padding: 32px;
   position: relative;
+  box-sizing: border-box;
+}
+.modal:not(:has(.modal-body)) {
+  overflow-y: auto;
+}
+.modal:has(.modal-body) {
+  overflow: hidden;
+}
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+  margin-bottom: 20px;
+}
+.modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
 }
 
 /* ── Toast ───────────────────────────────────────────────────── */
@@ -416,8 +437,9 @@ tr:hover td {
     padding: 20px;
     margin: 12px;
     max-width: calc(100vw - 24px) !important;
-    max-height: 90vh;
-    overflow-y: auto;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
   }
   .modal-overlay {
     padding: 12px;

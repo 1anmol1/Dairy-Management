@@ -116,16 +116,14 @@ const OwnerLayout = () => {
 
   const navItems = [
     { to: '/app/owner', icon: LayoutDashboard, label: t('app.nav.dashboard', 'Dashboard'), end: true },
-    ...(isDairyOwner ? [
-      { to: '/app/owner/farmers', icon: Users, label: isMarathi ? 'शेतकरी (दूध उत्पादक)' : 'Farmers (Suppliers)' },
-      { to: '/app/owner/customers', icon: Users, label: isMarathi ? 'ग्राहक (दूध खरेदीदार)' : 'Customers (Buyers)' }
-    ] : [
-      { to: '/app/owner/customers', icon: Users, label: t('app.nav.customers', 'Customers') }
-    ]),
+    { to: '/app/owner/customers', icon: Users, label: isMarathi ? 'ग्राहक (दूध खरेदीदार)' : 'Customers' },
     { to: '/app/owner/delivery', icon: CheckCircle, label: isMarathi ? 'वितरण नोंदवा' : 'Log Deliveries' },
-    { to: '/app/owner/staff', icon: UserCheck, label: t('app.nav.staff', 'Staff') },
+    { to: '/app/owner/logs', icon: ClipboardList, label: t('app.nav.logs', 'Delivery History') },
     { to: '/app/owner/collection', icon: Droplets, label: t('app.nav.dailyCollection', 'Daily Collection') },
-    { to: '/app/owner/logs', icon: ClipboardList, label: t('app.nav.logs', 'Logs') },
+    ...(isDairyOwner
+      ? [{ to: '/app/owner/farmers', icon: Users, label: isMarathi ? 'शेतकरी (दूध उत्पादक)' : 'Farmers (Suppliers)' }]
+      : []),
+    { to: '/app/owner/staff', icon: UserCheck, label: t('app.nav.staff', 'Staff') },
     { to: '/app/owner/billing', icon: Receipt, label: t('app.nav.billing', 'Billing') },
     { to: '/app/owner/default-rate', icon: Milk, label: t('app.nav.defaultRate', 'Default Rate') },
     ...(user?.features?.whatsapp_alerts || user?.features?.custom_message_templates
@@ -313,9 +311,38 @@ const OwnerLayout = () => {
 
 // ── Renewal Modal ─────────────────────────────────────────────
 const RenewalModal = ({ onClose, onRenew, onLogout, isMarathi }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   return (
-    <div className="modal-overlay" style={{ zIndex: 99999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-      <div className="modal renewal-modal" style={{ backgroundColor: '#FFFFFF', padding: '32px', borderRadius: '8px', maxWidth: '440px', width: '100%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.25)', border: '1px solid #EAEAEA' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+      style={{ zIndex: 99999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
+    >
+      <div className="modal renewal-modal" style={{ position: 'relative', backgroundColor: '#FFFFFF', padding: '32px', borderRadius: '8px', maxWidth: '440px', width: '100%', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.25)', border: '1px solid #EAEAEA' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={20} />
+        </button>
         <div style={{
           width: '56px',
           height: '56px',
@@ -376,6 +403,7 @@ const RenewalModal = ({ onClose, onRenew, onLogout, isMarathi }) => {
 
 // ── Change Password Modal ─────────────────────────────────────
 const ChangePasswordModal = ({ onClose }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirm: '', verificationCode: '' });
   const [loading, setLoading] = useState(false);
   const toast = useToast();
@@ -402,9 +430,36 @@ const ChangePasswordModal = ({ onClose }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={20} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', paddingRight: '24px' }}>
           <KeyRound size={20} color="#0F62FE" />
           <h2 style={{ fontWeight: 700, fontSize: '20px' }}>Change Password</h2>
         </div>

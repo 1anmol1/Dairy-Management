@@ -244,7 +244,7 @@ const mr = {
       customers:        'ग्राहक',
       staff:            'कर्मचारी',
       dailyCollection:  'दैनिक संकलन',
-      logs:             'नोंदी',
+      logs:             'वितरण इतिहास',
       billing:          'बिलिंग',
       defaultRate:      'डिफॉल्ट दर',
       messageTemplates: 'संदेश टेम्पलेट',

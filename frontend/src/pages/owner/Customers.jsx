@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Search, Edit2, UserX, UserCheck, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, Edit2, UserX, UserCheck, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
@@ -545,127 +545,160 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
     </div>
   );
 
+  const mouseDownOnOverlay = React.useRef(false);
+
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <h2 style={{ fontWeight: 700, marginBottom: '24px', fontSize: '20px' }}>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ maxWidth: '520px', width: '90%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 1
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={18} />
+        </button>
+
+        <h2 style={{ fontWeight: 700, marginBottom: '20px', fontSize: '20px', paddingRight: '24px' }}>
           {customer ? (isMarathi ? 'ग्राहक संपादित करा' : 'Edit Customer') : (isMarathi ? 'ग्राहक जोडा' : 'Add Customer')}
         </h2>
-        <form onSubmit={handleSubmit} noValidate>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Field label={isMarathi ? 'पूर्ण नाव' : 'Full Name'} name="name" placeholder="Ramesh Patel" required />
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'ग्राहक कोड (पर्यायी)' : 'Customer Code (optional)'}</label>
-              <input
-                type="text"
-                className="input"
-                placeholder="C001"
-                value={form.customerCode}
-                onChange={e => handleChange('customerCode', e.target.value)}
-                autoComplete="off"
-                maxLength={20}
-              />
-              {/* Show to staff checkbox — only visible when a code is entered */}
-              {form.customerCode.trim() && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', cursor: 'pointer', fontSize: '12px', color: '#525252' }}>
-                  <input
-                    type="checkbox"
-                    checked={form.showCodeToStaff}
-                    onChange={e => handleChange('showCodeToStaff', e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  {isMarathi ? 'कर्मचाऱ्यांना दाखवा' : 'Show to staff'}
-                </label>
-              )}
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          <div className="modal-body">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Field label={isMarathi ? 'पूर्ण नाव' : 'Full Name'} name="name" placeholder="Ramesh Patel" required />
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'ग्राहक कोड (पर्यायी)' : 'Customer Code (optional)'}</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="C001"
+                  value={form.customerCode}
+                  onChange={e => handleChange('customerCode', e.target.value)}
+                  autoComplete="off"
+                  maxLength={20}
+                />
+                {/* Show to staff checkbox — only visible when a code is entered */}
+                {form.customerCode.trim() && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', cursor: 'pointer', fontSize: '12px', color: '#525252' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.showCodeToStaff}
+                      onChange={e => handleChange('showCodeToStaff', e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    {isMarathi ? 'कर्मचाऱ्यांना दाखवा' : 'Show to staff'}
+                  </label>
+                )}
+              </div>
             </div>
-          </div>
-          <Field label={isMarathi ? 'फोन नंबर' : 'Phone Number'} name="phone" placeholder="9876543210" required />
-          <Field label={isMarathi ? 'पत्ता' : 'Address'} name="address" placeholder={isMarathi ? 'मुख्य रस्ता, पुणे' : '123 Main Street, Pune'} />
+            <Field label={isMarathi ? 'फोन नंबर' : 'Phone Number'} name="phone" placeholder="9876543210" required />
+            <Field label={isMarathi ? 'पत्ता' : 'Address'} name="address" placeholder={isMarathi ? 'मुख्य रस्ता, पुणे' : '123 Main Street, Pune'} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Field label={isMarathi ? 'सकाळ (लिटर)' : 'Morning (Liters)'} name="morning" placeholder="0" />
-            <Field label={isMarathi ? 'संध्याकाळ (लिटर)' : 'Evening (Liters)'} name="evening" placeholder="0" />
-          </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Field label={isMarathi ? 'सकाळ (लिटर)' : 'Morning (Liters)'} name="morning" placeholder="0" />
+              <Field label={isMarathi ? 'संध्याकाळ (लिटर)' : 'Evening (Liters)'} name="evening" placeholder="0" />
+            </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            {/* Default rate — always read-only, fetched from system */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {/* Default rate — always read-only, fetched from system */}
+              <div className="input-group">
+                <label className="input-label">
+                  {isMarathi ? 'डिफॉल्ट दर (₹/ली.)' : 'Default Rate (₹/L)'}
+                  <span style={{ fontSize: '10px', color: '#8D8D8D', marginLeft: '6px', fontWeight: 400 }}>
+                    {isMarathi ? '(बदलता येत नाही)' : '(read-only)'}
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  value={loadingRate ? (isMarathi ? 'लोड होत आहे...' : 'Loading...') : form.default_price}
+                  readOnly
+                  disabled
+                  style={{ backgroundColor: '#F4F4F4', color: '#525252', cursor: 'not-allowed' }}
+                />
+                <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
+                  {isMarathi ? 'डिफॉल्ट दर सेटिंग्समधून घेतला जातो.' : 'Fetched from Default Rate settings.'}
+                </div>
+              </div>
+
+              {/* Custom rate — locked until toggle is enabled */}
+              <div className="input-group">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                  <label className="input-label" style={{ margin: 0 }}>
+                    {isMarathi ? 'कस्टम दर (₹/ली.)' : 'Custom Rate (₹/L)'}
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: useCustomRate ? '#0F62FE' : '#8D8D8D', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={useCustomRate}
+                      onChange={e => {
+                        setUseCustomRate(e.target.checked);
+                        if (!e.target.checked) handleChange('custom_price', '');
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    {isMarathi ? 'कस्टम दर सेट करा' : 'Set custom rate'}
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="input"
+                  placeholder={useCustomRate ? (isMarathi ? 'उदा. ६५' : 'e.g. 65') : (isMarathi ? 'डिफॉल्ट वापरला जाईल' : 'Default will be used')}
+                  value={form.custom_price}
+                  onChange={e => handleChange('custom_price', e.target.value)}
+                  disabled={!useCustomRate}
+                  style={!useCustomRate ? { backgroundColor: '#F4F4F4', color: '#8D8D8D', cursor: 'not-allowed' } : errors.custom_price ? { borderColor: '#DA1E28' } : {}}
+                  autoComplete="off"
+                />
+                {errors.custom_price && (
+                  <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.custom_price}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Staff assignment */}
             <div className="input-group">
-              <label className="input-label">
-                {isMarathi ? 'डिफॉल्ट दर (₹/ली.)' : 'Default Rate (₹/L)'}
-                <span style={{ fontSize: '10px', color: '#8D8D8D', marginLeft: '6px', fontWeight: 400 }}>
-                  {isMarathi ? '(बदलता येत नाही)' : '(read-only)'}
-                </span>
-              </label>
-              <input
-                type="text"
+              <label className="input-label">{isMarathi ? 'नियुक्त कर्मचारी' : 'Assigned Staff'}</label>
+              <select
                 className="input"
-                value={loadingRate ? (isMarathi ? 'लोड होत आहे...' : 'Loading...') : form.default_price}
-                readOnly
-                disabled
-                style={{ backgroundColor: '#F4F4F4', color: '#525252', cursor: 'not-allowed' }}
-              />
+                value={form.assignedStaffId}
+                onChange={e => handleChange('assignedStaffId', e.target.value)}
+              >
+                <option value="">{isMarathi ? '— नियुक्त नाही (सर्व कर्मचारी वितरण करू शकतात) —' : '— Unassigned (all staff can deliver) —'}</option>
+                {staffList.map(s => (
+                  <option key={s._id} value={s._id}>{s.name} ({s.phone})</option>
+                ))}
+              </select>
               <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
-                {isMarathi ? 'डिफॉल्ट दर सेटिंग्समधून घेतला जातो.' : 'Fetched from Default Rate settings.'}
+                {isMarathi ? 'नियुक्त कर्मचाऱ्याला त्यांच्या वितरण यादीत हा ग्राहक दिसेल.' : 'Assigned staff will see this customer in their delivery list.'}
               </div>
             </div>
 
-            {/* Custom rate — locked until toggle is enabled */}
-            <div className="input-group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-                <label className="input-label" style={{ margin: 0 }}>
-                  {isMarathi ? 'कस्टम दर (₹/ली.)' : 'Custom Rate (₹/L)'}
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: useCustomRate ? '#0F62FE' : '#8D8D8D', fontWeight: 600 }}>
-                  <input
-                    type="checkbox"
-                    checked={useCustomRate}
-                    onChange={e => {
-                      setUseCustomRate(e.target.checked);
-                      if (!e.target.checked) handleChange('custom_price', '');
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  {isMarathi ? 'कस्टम दर सेट करा' : 'Set custom rate'}
-                </label>
-              </div>
-              <input
-                type="text"
-                inputMode="decimal"
-                className="input"
-                placeholder={useCustomRate ? (isMarathi ? 'उदा. ६५' : 'e.g. 65') : (isMarathi ? 'डिफॉल्ट वापरला जाईल' : 'Default will be used')}
-                value={form.custom_price}
-                onChange={e => handleChange('custom_price', e.target.value)}
-                disabled={!useCustomRate}
-                style={!useCustomRate ? { backgroundColor: '#F4F4F4', color: '#8D8D8D', cursor: 'not-allowed' } : errors.custom_price ? { borderColor: '#DA1E28' } : {}}
-                autoComplete="off"
-              />
-              {errors.custom_price && (
-                <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.custom_price}</div>
-              )}
-            </div>
+            <Field label={isMarathi ? 'नोंदी' : 'Notes'} name="notes" placeholder={isMarathi ? 'कोणत्याही विशेष सूचना...' : 'Any special instructions...'} />
           </div>
 
-          {/* Staff assignment */}
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'नियुक्त कर्मचारी' : 'Assigned Staff'}</label>
-            <select
-              className="input"
-              value={form.assignedStaffId}
-              onChange={e => handleChange('assignedStaffId', e.target.value)}
-            >
-              <option value="">{isMarathi ? '— नियुक्त नाही (सर्व कर्मचारी वितरण करू शकतात) —' : '— Unassigned (all staff can deliver) —'}</option>
-              {staffList.map(s => (
-                <option key={s._id} value={s._id}>{s.name} ({s.phone})</option>
-              ))}
-            </select>
-            <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
-              {isMarathi ? 'नियुक्त कर्मचाऱ्याला त्यांच्या वितरण यादीत हा ग्राहक दिसेल.' : 'Assigned staff will see this customer in their delivery list.'}
-            </div>
-          </div>
-
-          <Field label={isMarathi ? 'नोंदी' : 'Notes'} name="notes" placeholder={isMarathi ? 'कोणत्याही विशेष सूचना...' : 'Any special instructions...'} />
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+          <div className="modal-footer">
             <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
               {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : customer ? (isMarathi ? 'अपडेट करा' : 'Update') : (isMarathi ? 'ग्राहक जोडा' : 'Add Customer')}

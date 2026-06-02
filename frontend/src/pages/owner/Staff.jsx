@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, UserX, UserCheck, KeyRound, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, UserX, UserCheck, KeyRound, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
@@ -216,6 +216,7 @@ const Staff = () => {
 
 // ── Add Staff Modal ───────────────────────────────────────────
 const AddStaffModal = ({ onClose, onCreated }) => {
+  const mouseDownOnOverlay = React.useRef(false);
   const navigate = useNavigate();
   const { user } = useAuth();
   const [form, setForm] = useState({ name: '', phone: '', password: '' });
@@ -258,9 +259,37 @@ const AddStaffModal = ({ onClose, onCreated }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <h2 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '20px' }}>{isMarathi ? 'कर्मचारी जोडा' : 'Add Staff Member'}</h2>
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={18} />
+        </button>
+
+        <h2 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '20px', paddingRight: '24px' }}>{isMarathi ? 'कर्मचारी जोडा' : 'Add Staff Member'}</h2>
         <p style={{ color: '#525252', fontSize: '14px', marginBottom: '24px' }}>
           {isMarathi ? 'ते त्यांच्या फोन नंबर आणि पासवर्डने लॉगिन करतील.' : 'They will log in with their phone number and password.'}
         </p>
