@@ -44,7 +44,6 @@ const FeedbackPage = () => {
   const categories = [
     { value: 'bug', label: isMarathi ? 'त्रुटी / बग (Bug)' : 'Report a Bug' },
     { value: 'suggestion', label: isMarathi ? 'सूचना (Suggestion)' : 'Suggestion' },
-    { value: 'feature_request', label: isMarathi ? 'नवीन वैशिष्ट्य (Feature Request)' : 'Feature Request' },
     { value: 'support', label: isMarathi ? 'मदत / सपोर्ट (Support)' : 'Support Help' },
     { value: 'other', label: isMarathi ? 'इतर (Other)' : 'Other' }
   ];
@@ -66,7 +65,7 @@ const FeedbackPage = () => {
             borderRadius: '4px',
             display: 'flex',
             alignItems: 'center',
-            justify: 'center',
+            justifyContent: 'center',
             color: '#0F62FE'
           }}>
             <MessageSquare size={20} />

@@ -6,6 +6,7 @@ import ScrollToTop from './components/ScrollToTop';
 import SignOutGuard from './components/SignOutGuard';
 // ── Marathi i18n (self-contained — delete i18n/marathi/ to remove) ──
 import { MarathiProvider } from './i18n/marathi';
+import { Eye } from 'lucide-react';
 
 // ── Auth / Login ──────────────────────────────────────────────
 import OwnerLogin    from './pages/auth/OwnerLogin';
@@ -32,6 +33,7 @@ import SuperadminRequests  from './pages/superadmin/Requests';
 import SuperadminActivities from './pages/superadmin/Activities';
 import SuperadminImpersonation from './pages/superadmin/Impersonation';
 import SuperadminFeedbackList from './pages/superadmin/FeedbackList';
+import SuperadminAdmins from './pages/superadmin/Admins';
 
 // ── Owner ─────────────────────────────────────────────────────
 import OwnerLayout          from './layouts/OwnerLayout';
@@ -155,7 +157,14 @@ const OwnerCollectionGuard = ({ children }) => {
 const ImpersonationBanner = () => {
   const { user, logout } = useAuth();
   const [showConfirm, setShowConfirm] = React.useState(false);
+  const [windowWidth, setWindowWidth] = React.useState(window.innerWidth);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   if (!user || !user.impersonated) return null;
 
@@ -164,6 +173,10 @@ const ImpersonationBanner = () => {
     setShowConfirm(false);
     navigate('/app/superadmin');
   };
+
+  const hasSidebar = user && user.role !== 'staff';
+  const showSidebarOffset = hasSidebar && windowWidth > 768;
+  const marginLeft = showSidebarOffset ? '240px' : '0px';
 
   return (
     <>
@@ -181,10 +194,12 @@ const ImpersonationBanner = () => {
         zIndex: 99999,
         fontFamily: 'Inter, sans-serif',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        borderBottom: '1px solid rgba(255,255,255,0.2)'
+        borderBottom: '1px solid rgba(255,255,255,0.2)',
+        marginLeft: marginLeft,
+        transition: 'margin-left 0.25s ease'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '16px' }}>👁️</span>
+          <Eye size={16} style={{ flexShrink: 0 }} />
           <span>
             Impersonating {user.role.toUpperCase()}: <strong>{user.name}</strong> ({user.phone})
           </span>
@@ -275,6 +290,16 @@ const ImpersonationBanner = () => {
   );
 };
 
+const StaffHomeRedirect = () => {
+  const { user } = useAuth();
+  if (!user) return null;
+  const permissions = user.permissions || ['milk_delivery'];
+  if (!permissions.includes('milk_delivery') && permissions.includes('milk_collection')) {
+    return <Navigate to="/app/staff/collection" replace />;
+  }
+  return <Navigate to="/app/staff/delivery" replace />;
+};
+
 const App = () => {
   // Detect if running on the app domain (amritmanage-app.eurekai.in or localhost dev)
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -323,6 +348,7 @@ const App = () => {
                     <Route path="requests"    element={<SuperadminRequests />} />
                     <Route path="impersonate" element={<SuperadminImpersonation />} />
                     <Route path="feedback"    element={<SuperadminFeedbackList />} />
+                    <Route path="admins"      element={<SuperadminAdmins />} />
                   </Route>
 
                   {/* ── Owner ─────────────────────────────────── */}
@@ -359,7 +385,9 @@ const App = () => {
                       <StaffLayout />
                     </ProtectedRoute>
                   }>
-                    <Route index element={<StaffDelivery />} />
+                    <Route index element={<StaffHomeRedirect />} />
+                    <Route path="delivery" element={<StaffDelivery />} />
+                    <Route path="collection" element={<OwnerDailyCollection />} />
                   </Route>
 
                   {/* ── /app root ─────────────────────────────── */}

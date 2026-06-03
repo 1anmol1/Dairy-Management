@@ -42,12 +42,12 @@ const Upgrade = () => {
   const [plans, setPlans] = useState(null);
   const [loadingPlans, setLoadingPlans] = useState(true);
   // Pre-select plan from navigation state (e.g. from UpgradeGate button)
-  const [selectedPlan, setSelectedPlan] = useState(location.state?.selectedPlan || 'gold');
+  const [selectedPlan, setSelectedPlan] = useState(location.state?.selectedPlan || user?.subscription?.plan || 'gold');
   const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
   const [pendingDowngradePlan, setPendingDowngradePlan] = useState(null);
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [months, setMonths] = useState(1);
-  const [step, setStep] = useState('select'); // 'select' | 'details' | 'submitted'
+  const [step, setStep] = useState(location.state?.step || 'select'); // 'select' | 'details' | 'submitted'
   const [submitting, setSubmitting] = useState(false);
   const [existingRequest, setExistingRequest] = useState(null);
 
@@ -536,27 +536,27 @@ const Upgrade = () => {
                 <AlertTriangle size={20} color="#B28600" />
               </div>
               <h2 style={{ fontWeight: 700, fontSize: '18px' }}>
-                {isMarathi ? 'योजना बदलण्याचा विचार करत आहात?' : 'Thinking of switching plans?'}
+                {isMarathi ? 'योजना बदलण्याचा विचार करत आहात?' : 'Downgrade Plan Request'}
               </h2>
             </div>
 
             <p style={{ color: '#525252', fontSize: '14px', lineHeight: 1.7, marginBottom: '16px' }}>
               {isMarathi
-                ? <>तुम्ही सध्या <strong>{PLAN_DISPLAY[currentPlan]?.label}</strong> वर आहात. कमी योजनेवर जाण्यामुळे तुमच्या <strong>{PLAN_DISPLAY[currentPlan]?.label}</strong> च्या सर्व सुविधा परत न मिळणाऱ्या शुल्काशिवाय कमी होतील.</>
-                : <>You're currently on <strong>{PLAN_DISPLAY[currentPlan]?.label}</strong>. Downgrading will remove all <strong>{PLAN_DISPLAY[currentPlan]?.label}</strong> features — your current plan payment is non-refundable.</>}
+                ? <>तुमचे सध्याचे ग्राहक आणि कर्मचारी प्रमाण जास्त असल्याने, तुम्ही थेट डाउनग्रेड करू शकत नाही. तुमच्या ग्राहक आणि कर्मचाऱ्यांची संख्या निवडलेल्या कमी योजनेच्या मर्यादेत असल्याची खात्री करा.</>
+                : <>Because your active customer count and registered staff members exceed the limits of the selected lower plan, you cannot downgrade directly. Please verify that your records are within the new plan limits before proceeding.</>}
             </p>
 
             <div style={{ backgroundColor: '#FFF8E1', border: '1px solid #F1C21B', padding: '14px 16px', marginBottom: '16px', fontSize: '13px', color: '#B28600' }}>
               <strong>{isMarathi ? 'महत्त्वाचे:' : 'Important:'}</strong>{' '}
               {isMarathi
-                ? `तुमच्या ${PLAN_DISPLAY[currentPlan]?.label} योजनेचे शुल्क परत मिळणार नाही. सध्याचा बिलिंग कालावधी संपेपर्यंत तुम्हाला सर्व सुविधा मिळत राहतील — आत्ता बदल करण्याचा कोणताही फायदा नाही.`
-                : `Your ${PLAN_DISPLAY[currentPlan]?.label} plan payment is non-refundable. You'll retain full access until your current billing period ends — there's no benefit to switching now.`}
+                ? `डाउनग्रेड विनंती पुढे पाठवण्यापूर्वी, कृपया खात्री करा की तुमची ग्राहक आणि कर्मचारी मर्यादा नवीन योजनेशी जुळत आहे.`
+                : `Before proceeding with this downgrade request, please ensure your database size and active staff members conform to the lower plan constraints.`}
             </div>
 
             <p style={{ color: '#525252', fontSize: '13px', lineHeight: 1.6, marginBottom: '20px' }}>
               {isMarathi
-                ? 'आम्ही शिफारस करतो की तुम्ही तुमच्या सध्याच्या योजनेवर राहा आणि पुढील नूतनीकरणाच्या वेळी पुनर्विचार करा. तरीही पुढे जायचे असल्यास, तुमची डाउनग्रेड विनंती आमच्या टीमकडून तपासली जाईल.'
-                : 'We recommend staying on your current plan and reconsidering at your next renewal. If you still want to proceed, your downgrade request will be reviewed by our team.'}
+                ? 'तुम्हाला ही विनंती रद्द करायची आहे की मॅन्युअल पडताळणीसाठी पुढे जायचे आहे?'
+                : 'Would you like to cancel and remain on your current plan, or proceed to submit this request for manual review?'}
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -564,7 +564,7 @@ const Upgrade = () => {
                 className="btn btn-primary btn-full"
                 onClick={() => setShowDowngradeWarning(false)}
               >
-                {isMarathi ? `${PLAN_DISPLAY[currentPlan]?.label} ठेवा — सध्याच्या योजनेवर राहा` : `Keep ${PLAN_DISPLAY[currentPlan]?.label} — Stay on current plan`}
+                {isMarathi ? 'रद्द करा (सध्याची योजना ठेवा)' : 'Cancel (Keep Current Plan)'}
               </button>
               <button
                 className="btn btn-ghost btn-full"
@@ -575,7 +575,7 @@ const Upgrade = () => {
                   setPendingDowngradePlan(null);
                 }}
               >
-                {isMarathi ? 'डाउनग्रेड विनंती पुढे पाठवा' : 'Proceed with downgrade request'}
+                {isMarathi ? 'पुढे जा (विनंती सबमिट करा)' : 'Proceed (Submit Request)'}
               </button>
             </div>
           </div>

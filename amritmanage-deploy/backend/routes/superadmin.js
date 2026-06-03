@@ -7,8 +7,16 @@ const AuthLog = require('../models/AuthLog');
 const PlanConfig = require('../models/PlanConfig');
 const SystemConfig = require('../models/SystemConfig');
 const SubscriptionRequest = require('../models/SubscriptionRequest');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, checkPermission } = require('../middleware/auth');
 const { sendStartTrialEvent, sendSubscribeEvent } = require('../services/metaCapiService');
+
+// Helper to require main superadmin role
+const requireMainSuperadmin = (req, res, next) => {
+  if (req.user.parentAdminId) {
+    return res.status(403).json({ error: 'Access denied. Only the main Superadmin can perform this action.' });
+  }
+  next();
+};
 
 // All routes require superadmin role
 router.use(protect, authorize('superadmin'));
@@ -28,7 +36,7 @@ const PLAN_FEATURES = {
 };
 
 // ── GET /api/superadmin/owners ────────────────────────────────
-router.get('/owners', async (req, res, next) => {
+router.get('/owners', checkPermission('owners'), async (req, res, next) => {
   try {
     const { page = 1, limit = 20, status, search } = req.query;
     const query = { role: 'owner' };
@@ -83,7 +91,7 @@ router.get('/owners', async (req, res, next) => {
 });
 
 // ── POST /api/superadmin/owners ───────────────────────────────
-router.post('/owners', async (req, res, next) => {
+router.post('/owners', checkPermission('owners'), async (req, res, next) => {
   try {
     const {
       name, phone, email, password, businessName,
@@ -223,7 +231,7 @@ router.post('/owners', async (req, res, next) => {
 });
 
 // ── GET /api/superadmin/owners/:id ────────────────────────────
-router.get('/owners/:id', async (req, res, next) => {
+router.get('/owners/:id', checkPermission('owners'), async (req, res, next) => {
   try {
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
@@ -241,7 +249,7 @@ router.get('/owners/:id', async (req, res, next) => {
 });
 
 // ── PATCH /api/superadmin/owners/:id/subscription ─────────────
-router.patch('/owners/:id/subscription', async (req, res, next) => {
+router.patch('/owners/:id/subscription', checkPermission('owners'), async (req, res, next) => {
   try {
     const { status, plan, expiresAt, trialEndsAt, maxCustomers, maxStaff } = req.body;
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
@@ -323,7 +331,7 @@ router.patch('/owners/:id/subscription', async (req, res, next) => {
 });
 
 // ── PATCH /api/superadmin/owners/:id/features ─────────────────
-router.patch('/owners/:id/features', async (req, res, next) => {
+router.patch('/owners/:id/features', checkPermission('owners'), async (req, res, next) => {
   try {
     const { features } = req.body;
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
@@ -341,7 +349,7 @@ router.patch('/owners/:id/features', async (req, res, next) => {
 });
 
 // ── PATCH /api/superadmin/owners/:id/role ──────────────────────
-router.patch('/owners/:id/role', async (req, res, next) => {
+router.patch('/owners/:id/role', checkPermission('owners'), async (req, res, next) => {
   try {
     const { ownerRole } = req.body;
     if (!ownerRole || !['dairy_owner', 'milk_supplier'].includes(ownerRole)) {
@@ -360,13 +368,25 @@ router.patch('/owners/:id/role', async (req, res, next) => {
 });
 
 // ── PATCH /api/superadmin/owners/:id/toggle ───────────────────
-router.patch('/owners/:id/toggle', async (req, res, next) => {
+router.patch('/owners/:id/toggle', checkPermission('owners'), async (req, res, next) => {
   try {
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
 
     owner.isActive = !owner.isActive;
     await owner.save();
+
+    await AuthLog.create({
+      event: 'account_disabled',
+      role: 'owner',
+      userId: owner._id,
+      userName: owner.name,
+      userPhone: owner.phone,
+      detail: `Account ${owner.isActive ? 'enabled' : 'disabled'} by Superadmin ${req.user.name}`,
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent']
+    });
+
     res.json({ owner, message: `Account ${owner.isActive ? 'enabled' : 'disabled'}.` });
   } catch (err) {
     next(err);
@@ -398,6 +418,18 @@ router.patch('/password', async (req, res, next) => {
 
     admin.password = newPassword;
     await admin.save();
+
+    await AuthLog.create({
+      event: 'password_change',
+      role: 'superadmin',
+      userId: admin._id,
+      userName: admin.name,
+      userPhone: admin.phone,
+      detail: 'Superadmin changed their own password',
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent']
+    });
+
     res.json({ message: 'Password updated successfully.' });
   } catch (err) {
     next(err);
@@ -406,7 +438,7 @@ router.patch('/password', async (req, res, next) => {
 
 // ── PATCH /api/superadmin/owners/:id/password ────────────────
 // Superadmin resets an owner's password and optionally changes username
-router.patch('/owners/:id/password', async (req, res, next) => {
+router.patch('/owners/:id/password', checkPermission('owners'), async (req, res, next) => {
   try {
     const { newPassword, newUsername, verificationCode } = req.body;
     if (!newPassword || newPassword.length < 6) {
@@ -432,6 +464,18 @@ router.patch('/owners/:id/password', async (req, res, next) => {
     }
 
     await owner.save();
+
+    await AuthLog.create({
+      event: 'password_reset_success',
+      role: 'owner',
+      userId: owner._id,
+      userName: owner.name,
+      userPhone: owner.phone,
+      detail: `Password reset by Superadmin ${req.user.name}`,
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent']
+    });
+
     res.json({ message: 'Owner credentials updated.' });
   } catch (err) {
     next(err);
@@ -439,7 +483,7 @@ router.patch('/owners/:id/password', async (req, res, next) => {
 });
 
 // ── GET /api/superadmin/owners/:id/staff ─────────────────────
-router.get('/owners/:id/staff', async (req, res, next) => {
+router.get('/owners/:id/staff', checkPermission('owners'), async (req, res, next) => {
   try {
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
@@ -455,7 +499,7 @@ router.get('/owners/:id/staff', async (req, res, next) => {
 
 // ── POST /api/superadmin/owners/:id/staff ────────────────────
 // Superadmin adds a staff member on behalf of an owner
-router.post('/owners/:id/staff', async (req, res, next) => {
+router.post('/owners/:id/staff', checkPermission('owners'), async (req, res, next) => {
   try {
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
@@ -481,7 +525,7 @@ router.post('/owners/:id/staff', async (req, res, next) => {
 });
 
 // ── PATCH /api/superadmin/staff/:id/password ─────────────────
-router.patch('/staff/:id/password', async (req, res, next) => {
+router.patch('/staff/:id/password', checkPermission('owners'), async (req, res, next) => {
   try {
     const { newPassword, newUsername, verificationCode } = req.body;
     if (!newPassword || newPassword.length < 6) {
@@ -506,6 +550,18 @@ router.patch('/staff/:id/password', async (req, res, next) => {
     }
 
     await staff.save();
+
+    await AuthLog.create({
+      event: 'password_reset_success',
+      role: 'staff',
+      userId: staff._id,
+      userName: staff.name,
+      userPhone: staff.phone,
+      detail: `Password reset by Superadmin ${req.user.name}`,
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent']
+    });
+
     res.json({ message: 'Staff credentials updated.' });
   } catch (err) {
     next(err);
@@ -514,7 +570,7 @@ router.patch('/staff/:id/password', async (req, res, next) => {
 
 // ── GET /api/superadmin/owners/:id/customers ─────────────────
 // List customers for a specific owner
-router.get('/owners/:id/customers', async (req, res, next) => {
+router.get('/owners/:id/customers', checkPermission('owners'), async (req, res, next) => {
   try {
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
@@ -529,7 +585,7 @@ router.get('/owners/:id/customers', async (req, res, next) => {
 
 // ── POST /api/superadmin/owners/:id/customers ────────────────
 // Superadmin adds a customer on behalf of an owner
-router.post('/owners/:id/customers', async (req, res, next) => {
+router.post('/owners/:id/customers', checkPermission('owners'), async (req, res, next) => {
   try {
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
     if (!owner) return res.status(404).json({ error: 'Owner not found.' });
@@ -557,7 +613,7 @@ router.post('/owners/:id/customers', async (req, res, next) => {
 // ── PATCH /api/superadmin/owners/:id/whatsapp-numbers ────────
 // Superadmin can add extra WhatsApp numbers for an owner
 // (stored as additional phone numbers allowed to send messages)
-router.patch('/owners/:id/whatsapp-numbers', async (req, res, next) => {
+router.patch('/owners/:id/whatsapp-numbers', checkPermission('owners'), async (req, res, next) => {
   try {
     const { extraNumbers } = req.body; // array of phone numbers
     const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
@@ -580,7 +636,7 @@ router.patch('/owners/:id/whatsapp-numbers', async (req, res, next) => {
 });
 
 // ── GET /api/superadmin/stats ─────────────────────────────────
-router.get('/stats', async (req, res, next) => {
+router.get('/stats', checkPermission('dashboard'), async (req, res, next) => {
   try {
     const [totalOwners, activeOwners, trialOwners, totalCustomers, todayLogs] = await Promise.all([
       User.countDocuments({ role: 'owner' }),
@@ -600,7 +656,7 @@ router.get('/stats', async (req, res, next) => {
 //  PLAN CONFIG MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
-router.get('/plan-configs', async (req, res, next) => {
+router.get('/plan-configs', checkPermission('plans'), async (req, res, next) => {
   try {
     const configs = await PlanConfig.find().sort({ monthlyPrice: 1 }).lean();
     res.json({ configs });
@@ -609,7 +665,7 @@ router.get('/plan-configs', async (req, res, next) => {
   }
 });
 
-router.patch('/plan-configs/:plan', async (req, res, next) => {
+router.patch('/plan-configs/:plan', checkPermission('plans'), async (req, res, next) => {
   try {
     const { plan } = req.params;
     const { features, limits, monthlyPrice, setupFee, description, label } = req.body;
@@ -651,7 +707,7 @@ router.patch('/plan-configs/:plan', async (req, res, next) => {
   }
 });
 
-router.post('/plan-configs/:plan/apply-to-renewals', async (req, res, next) => {
+router.post('/plan-configs/:plan/apply-to-renewals', checkPermission('plans'), async (req, res, next) => {
   try {
     const { plan } = req.params;
     const config = await PlanConfig.findOne({ plan });
@@ -686,7 +742,7 @@ router.post('/plan-configs/:plan/apply-to-renewals', async (req, res, next) => {
 //   dateTo     — end date YYYY-MM-DD
 //   slot       — morning | evening
 //   page, limit
-router.get('/activities', async (req, res, next) => {
+router.get('/activities', checkPermission('activities'), async (req, res, next) => {
   try {
     const {
       ownerIds, staffIds, date, dateFrom, dateTo,
@@ -746,7 +802,7 @@ router.get('/activities', async (req, res, next) => {
 
 // ── GET /api/superadmin/activities/owners-list ────────────────
 // Returns all owners for the filter dropdown
-router.get('/activities/owners-list', async (req, res, next) => {
+router.get('/activities/owners-list', checkPermission('activities'), async (req, res, next) => {
   try {
     const owners = await User.find({ role: 'owner' })
       .select('_id name phone businessName')
@@ -760,7 +816,7 @@ router.get('/activities/owners-list', async (req, res, next) => {
 
 // ── GET /api/superadmin/activities/staff-list ─────────────────
 // Returns all staff (optionally filtered by ownerIds)
-router.get('/activities/staff-list', async (req, res, next) => {
+router.get('/activities/staff-list', checkPermission('activities'), async (req, res, next) => {
   try {
     const { ownerIds } = req.query;
     const query = { role: 'staff' };
@@ -781,7 +837,7 @@ router.get('/activities/staff-list', async (req, res, next) => {
 // ── POST /api/superadmin/reset-code ──────────────────────────
 // Superadmin generates a reset code for any user (owner/staff).
 // Code is logged to server console only — never returned in response.
-router.post('/reset-code', async (req, res, next) => {
+router.post('/reset-code', checkPermission('activities'), async (req, res, next) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId is required.' });
@@ -811,7 +867,7 @@ router.post('/reset-code', async (req, res, next) => {
 // ── GET /api/superadmin/auth-logs ────────────────────────────
 // Security/auth event log: logins, logouts, resets, failures
 // Query: event, role, userId, dateFrom, dateTo, page, limit
-router.get('/auth-logs', async (req, res, next) => {
+router.get('/auth-logs', checkPermission('activities'), async (req, res, next) => {
   try {
     const { event, role, userId, dateFrom, dateTo, page = 1, limit = 50 } = req.query;
     const query = {};
@@ -845,7 +901,7 @@ router.get('/auth-logs', async (req, res, next) => {
 });
 
 // ── GET /api/superadmin/feedback ──────────────────────────────
-router.get('/feedback', async (req, res, next) => {
+router.get('/feedback', checkPermission('feedback'), async (req, res, next) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
     const query = {};
@@ -870,7 +926,7 @@ router.get('/feedback', async (req, res, next) => {
 });
 
 // ── PATCH /api/superadmin/feedback/:id ─────────────────────────
-router.patch('/feedback/:id', async (req, res, next) => {
+router.patch('/feedback/:id', checkPermission('feedback'), async (req, res, next) => {
   try {
     const { status, adminNotes } = req.body;
     const Feedback = require('../models/Feedback');
@@ -888,7 +944,7 @@ router.patch('/feedback/:id', async (req, res, next) => {
 });
 
 // ── POST /api/superadmin/impersonate ──────────────────────────
-router.post('/impersonate', async (req, res, next) => {
+router.post('/impersonate', checkPermission('impersonate'), async (req, res, next) => {
   try {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: 'Phone number is required.' });
@@ -896,8 +952,8 @@ router.post('/impersonate', async (req, res, next) => {
     const targetUser = await User.findOne({ phone: phone.trim() });
     if (!targetUser) return res.status(404).json({ error: 'Account not found with that phone number.' });
 
-    if (targetUser.role === 'superadmin') {
-      return res.status(400).json({ error: 'Cannot impersonate another superadmin.' });
+    if (targetUser.role === 'superadmin' && !targetUser.parentAdminId) {
+      return res.status(400).json({ error: 'Cannot impersonate the main superadmin.' });
     }
 
     // Sign token with a special flag indicating it was impersonated by superadmin
@@ -929,10 +985,169 @@ router.post('/impersonate', async (req, res, next) => {
       ownerRole:       targetUser.ownerRole,
       features:        effectiveFeatures,
       onboardingDone:  targetUser.onboardingDone || false,
+      parentAdminId:   targetUser.parentAdminId,
+      permissions:     targetUser.permissions,
+      roleName:        targetUser.roleName,
       impersonated:    true
     };
 
     res.json({ token, user: payload });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/superadmin/admins ────────────────────────────────
+router.get('/admins', requireMainSuperadmin, async (req, res, next) => {
+  try {
+    const admins = await User.find({
+      role: 'superadmin',
+      parentAdminId: { $ne: null }
+    }).select('-password').sort({ createdAt: -1 });
+
+    res.json({ admins });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/superadmin/admins ───────────────────────────────
+router.post('/admins', requireMainSuperadmin, async (req, res, next) => {
+  try {
+    const { name, phone, email, username, password, roleName, permissions } = req.body;
+    if (!name || !phone || !email || !username || !password || !roleName) {
+      return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    // Check uniqueness
+    const exists = await User.findOne({
+      $or: [
+        { phone: phone.trim() },
+        { email: email.trim().toLowerCase() },
+        { username: username.trim().toLowerCase() }
+      ]
+    });
+    if (exists) {
+      return res.status(400).json({ error: 'An account with this phone, email, or username already exists.' });
+    }
+
+    const newAdmin = await User.create({
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim().toLowerCase(),
+      username: username.trim().toLowerCase(),
+      password,
+      role: 'superadmin',
+      parentAdminId: req.user._id,
+      roleName: roleName.trim(),
+      permissions: permissions || [],
+      isActive: true
+    });
+
+    // Log the event
+    await AuthLog.create({
+      event: 'password_change', // using password_change or other security action
+      role: 'superadmin',
+      userId: newAdmin._id,
+      userName: newAdmin.name,
+      userPhone: newAdmin.phone,
+      detail: `Sub-admin account created by ${req.user.name}`,
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent']
+    });
+
+    res.status(201).json({
+      message: 'Admin account created successfully.',
+      admin: {
+        _id: newAdmin._id,
+        name: newAdmin.name,
+        phone: newAdmin.phone,
+        email: newAdmin.email,
+        username: newAdmin.username,
+        roleName: newAdmin.roleName,
+        permissions: newAdmin.permissions,
+        isActive: newAdmin.isActive
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/superadmin/admins/:id ──────────────────────────
+router.patch('/admins/:id', requireMainSuperadmin, async (req, res, next) => {
+  try {
+    const { roleName, permissions, isActive } = req.body;
+    const admin = await User.findOne({ _id: req.params.id, parentAdminId: req.user._id });
+    if (!admin) return res.status(404).json({ error: 'Admin account not found.' });
+
+    let statusLogged = false;
+    if (isActive !== undefined && admin.isActive !== isActive) {
+      admin.isActive = isActive;
+      statusLogged = true;
+    }
+    if (roleName) admin.roleName = roleName.trim();
+    if (permissions) admin.permissions = permissions;
+
+    await admin.save();
+
+    if (statusLogged) {
+      await AuthLog.create({
+        event: 'account_disabled',
+        role: 'superadmin',
+        userId: admin._id,
+        userName: admin.name,
+        userPhone: admin.phone,
+        detail: `Sub-admin account ${isActive ? 'enabled' : 'disabled'} by ${req.user.name}`,
+        ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+        userAgent: req.headers['user-agent']
+      });
+    }
+
+    res.json({
+      message: 'Admin account updated successfully.',
+      admin: {
+        _id: admin._id,
+        name: admin.name,
+        phone: admin.phone,
+        email: admin.email,
+        username: admin.username,
+        roleName: admin.roleName,
+        permissions: admin.permissions,
+        isActive: admin.isActive
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/superadmin/admins/:id/password ─────────────────
+router.patch('/admins/:id/password', requireMainSuperadmin, async (req, res, next) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+
+    const admin = await User.findOne({ _id: req.params.id, parentAdminId: req.user._id });
+    if (!admin) return res.status(404).json({ error: 'Admin account not found.' });
+
+    admin.password = password;
+    await admin.save();
+
+    await AuthLog.create({
+      event: 'password_change',
+      role: 'superadmin',
+      userId: admin._id,
+      userName: admin.name,
+      userPhone: admin.phone,
+      detail: `Sub-admin password reset by ${req.user.name}`,
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent']
+    });
+
+    res.json({ message: 'Admin password reset successfully.' });
   } catch (err) {
     next(err);
   }

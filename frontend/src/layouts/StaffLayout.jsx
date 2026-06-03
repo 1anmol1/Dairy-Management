@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Phone, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import amritLogo from '../assets/Amritmanagelogo.png';
@@ -9,13 +9,20 @@ import { useMarathi } from '../i18n/marathi';
 const StaffLayout = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { t } = useMarathi();
+  const location = useLocation();
+  const { t, isMarathi } = useMarathi();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/loginto/staffaccess');
   };
+
+  const permissions = user?.permissions || ['milk_delivery'];
+  const hasDelivery = permissions.includes('milk_delivery');
+  const hasCollection = permissions.includes('milk_collection');
+  const showTabs = hasDelivery && hasCollection;
+  const currentPath = location.pathname;
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#F4F4F4', fontFamily: 'Inter, sans-serif' }}>
@@ -107,6 +114,55 @@ const StaffLayout = () => {
       {/* Click outside to close dropdown */}
       {profileOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setProfileOpen(false)} />
+      )}
+
+      {/* Navigation Tabs for multi-duty staff */}
+      {showTabs && (
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          borderBottom: '1px solid #E0E0E0',
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '24px',
+          position: 'sticky',
+          top: '52px',
+          zIndex: 98
+        }}>
+          <Link
+            to="/app/staff/delivery"
+            style={{
+              padding: '14px 16px',
+              fontSize: '14px',
+              fontWeight: 600,
+              textDecoration: 'none',
+              color: currentPath.includes('/delivery') ? '#0F62FE' : '#525252',
+              borderBottom: currentPath.includes('/delivery') ? '3px solid #0F62FE' : '3px solid transparent',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            {isMarathi ? 'दूध वितरण' : 'Milk Delivery'}
+          </Link>
+          <Link
+            to="/app/staff/collection"
+            style={{
+              padding: '14px 16px',
+              fontSize: '14px',
+              fontWeight: 600,
+              textDecoration: 'none',
+              color: currentPath.includes('/collection') ? '#0F62FE' : '#525252',
+              borderBottom: currentPath.includes('/collection') ? '3px solid #0F62FE' : '3px solid transparent',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            {isMarathi ? 'दूध संकलन' : 'Milk Collection'}
+          </Link>
+        </div>
       )}
 
       <Outlet />

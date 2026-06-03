@@ -5,6 +5,8 @@ const DailyLog = require('../models/DailyLog');
 const User = require('../models/User');
 const DailyCollection = require('../models/DailyCollection');
 const MessageTemplate = require('../models/MessageTemplate');
+const Farmer = require('../models/Farmer');
+const FarmerCollection = require('../models/FarmerCollection');
 const { protect, authorize, requireActiveSubscription } = require('../middleware/auth');
 const { sendDeliveryNotification, getSessionStatusDb } = require('../services/whatsappService');
 
@@ -259,6 +261,268 @@ router.get('/history', async (req, res, next) => {
       .lean();
 
     res.json({ logs, date: today });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+// ── GET /api/staff/farmers ─────────────────────────────────────
+router.get('/farmers', async (req, res, next) => {
+  try {
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const staffId = req.user._id;
+    const { active, search } = req.query;
+
+    const query = { ownerId };
+    if (active !== undefined) query.isActive = active === 'true';
+    if (req.user.role === 'staff') {
+      query.$or = [
+        { assignedStaffId: staffId },
+        { assignedStaffId: null },
+        { assignedStaffId: { $exists: false } }
+      ];
+    }
+
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        { name: { $regex: escaped, $options: 'i' } },
+        { phone: { $regex: escaped, $options: 'i' } },
+        { customerCode: { $regex: escaped, $options: 'i' } }
+      ];
+    }
+
+    const farmers = await Farmer.find(query).sort({ name: 1 }).lean();
+    res.json({ customers: farmers });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/staff/dairy-default-rates ──────────────────────────
+router.get('/dairy-default-rates', async (req, res, next) => {
+  try {
+    const dairyOwnerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const DairyDefaultRate = require('../models/DairyDefaultRate');
+    const activeRates = await DairyDefaultRate.find({ dairyOwnerId, isActive: true }).sort({ effectiveFrom: -1 }).lean();
+    
+    const defaultConfigs = {
+      Cow: { milkType: 'Cow', baseRate: 40, fatMultiplier: 0.12, snfMultiplier: 0.08, standardFat: 4.0, standardSNF: 8.5, bonusPerLiter: 0, deductionPerLiter: 0, standardCLR: 28, clrDeductionPerUnit: 0, effectiveFrom: new Date(), isActive: true },
+      Buffalo: { milkType: 'Buffalo', baseRate: 50, fatMultiplier: 0.15, snfMultiplier: 0.10, standardFat: 6.0, standardSNF: 9.0, bonusPerLiter: 0, deductionPerLiter: 0, standardCLR: 28, clrDeductionPerUnit: 0, effectiveFrom: new Date(), isActive: true },
+      Mixed: { milkType: 'Mixed', baseRate: 45, fatMultiplier: 0.13, snfMultiplier: 0.09, standardFat: 4.5, standardSNF: 8.7, bonusPerLiter: 0, deductionPerLiter: 0, standardCLR: 28, clrDeductionPerUnit: 0, effectiveFrom: new Date(), isActive: true }
+    };
+
+    activeRates.forEach(r => {
+      defaultConfigs[r.milkType] = r;
+    });
+
+    res.json({ configs: Object.values(defaultConfigs) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/staff/farmer-collections ──────────────────────────
+router.get('/farmer-collections', async (req, res, next) => {
+  try {
+    const { farmerId } = req.query;
+    if (!farmerId) {
+      return res.status(400).json({ error: 'farmerId is required.' });
+    }
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const collections = await FarmerCollection.find({ ownerId, farmerId })
+      .sort({ date: -1, time: -1 })
+      .limit(10)
+      .lean();
+    res.json({ collections });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── GET /api/staff/farmer-collections/next-number ───────────────
+router.get('/farmer-collections/next-number', async (req, res, next) => {
+  try {
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const dateStr = req.query.date || new Date().toISOString().split('T')[0];
+    const formattedDate = dateStr.replace(/-/g, '');
+    const count = await FarmerCollection.countDocuments({ ownerId, date: dateStr });
+    const seq = String(count + 1).padStart(4, '0');
+    const nextNum = `COL-${formattedDate}-${seq}`;
+    res.json({ nextNumber: nextNum });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/staff/farmer-collections ─────────────────────────
+router.post('/farmer-collections', async (req, res, next) => {
+  const mongoose = require('mongoose');
+  let session = null;
+  let useTransaction = false;
+
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+    useTransaction = true;
+  } catch (e) {
+    if (session) {
+      session.endSession();
+      session = null;
+    }
+  }
+
+  try {
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const collectedBy = req.user._id;
+    const {
+      farmerId,
+      date,
+      time,
+      shift,
+      milkType,
+      quantity,
+      fat,
+      snf,
+      clr,
+      ratePerLiter,
+      baseRate,
+      fatValue,
+      snfValue,
+      grossAmount,
+      bonusAmount,
+      deductionAmount,
+      netAmount,
+      notes
+    } = req.body;
+
+    const opt = useTransaction ? { session } : {};
+
+    if (!farmerId || !date || !time || !shift || !milkType || !quantity || !ratePerLiter || netAmount === undefined) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(400).json({ error: 'All required collection details must be provided.' });
+    }
+
+    // Prevent duplicate request submissions within the last 15 seconds
+    const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
+    const existingColl = await FarmerCollection.findOne({
+      ownerId,
+      farmerId,
+      date,
+      shift,
+      milkType,
+      quantity: parseFloat(quantity),
+      fat: parseFloat(fat),
+      snf: parseFloat(snf),
+      createdAt: { $gte: fifteenSecondsAgo }
+    }).session(useTransaction ? session : null);
+
+    if (existingColl) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(409).json({ error: 'Duplicate collection detected. Please wait a moment before trying again.' });
+    }
+
+    const formattedDate = date.replace(/-/g, '');
+    const count = await FarmerCollection.countDocuments({ ownerId, date }).session(useTransaction ? session : null);
+    const seq = String(count + 1).padStart(4, '0');
+    const collectionNumber = `COL-${formattedDate}-${seq}`;
+
+    const farmer = await Farmer.findOne({ _id: farmerId, ownerId }).session(useTransaction ? session : null);
+    if (!farmer) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(404).json({ error: 'Farmer not found.' });
+    }
+
+    const newCollection = new FarmerCollection({
+      ownerId,
+      dairyOwnerId: ownerId,
+      collectionNumber,
+      farmerId,
+      supplierId: farmerId,
+      date,
+      collectionDate: date,
+      time,
+      collectionTime: time,
+      shift,
+      milkType,
+      quantity: parseFloat(quantity),
+      fat: parseFloat(fat),
+      snf: parseFloat(snf),
+      clr: clr ? parseFloat(clr) : null,
+      ratePerLiter: parseFloat(ratePerLiter),
+      baseRate: baseRate ? parseFloat(baseRate) : 0,
+      fatValue: fatValue ? parseFloat(fatValue) : 0,
+      snfValue: snfValue ? parseFloat(snfValue) : 0,
+      grossAmount: parseFloat(grossAmount),
+      bonusAmount: parseFloat(bonusAmount),
+      deductionAmount: parseFloat(deductionAmount),
+      netAmount: parseFloat(netAmount),
+      notes: notes || '',
+      collectedBy
+    });
+
+    await newCollection.save(opt);
+
+    await Farmer.updateOne(
+      { _id: farmerId, ownerId },
+      { $inc: { balance: parseFloat(netAmount) } },
+      opt
+    );
+
+    if (useTransaction) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+
+    res.status(201).json({ success: true, collection: newCollection });
+  } catch (err) {
+    if (useTransaction && session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+    next(err);
+  }
+});
+
+// ── POST /api/staff/farmer-collections/send-whatsapp ───────────
+router.post('/farmer-collections/send-whatsapp', async (req, res, next) => {
+  try {
+    const { collectionId } = req.body;
+    if (!collectionId) {
+      return res.status(400).json({ error: 'collectionId is required.' });
+    }
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const coll = await FarmerCollection.findOne({ _id: collectionId, ownerId }).populate('farmerId');
+    if (!coll) {
+      return res.status(404).json({ error: 'Collection record not found.' });
+    }
+
+    const { sendMessage } = require('../services/whatsappService');
+    const farmer = coll.farmerId;
+    
+    const msg = `*Amrit Dairy Milk Collection Receipt*\n\n` +
+                `Receipt No: ${coll.collectionNumber}\n` +
+                `Date: ${coll.date} (${coll.shift === 'Morning' ? 'सकाळ' : 'संध्याकाळ'})\n` +
+                `Farmer: ${farmer.name} (${farmer.customerCode || 'N/A'})\n` +
+                `Milk Type: ${coll.milkType === 'Cow' ? 'गाय' : coll.milkType === 'Buffalo' ? 'म्हैस' : 'मिश्रित'}\n` +
+                `Qty: ${coll.quantity.toFixed(2)} L\n` +
+                `FAT: ${coll.fat.toFixed(2)}% | SNF: ${coll.snf.toFixed(2)}%\n` +
+                `Rate: ₹${coll.ratePerLiter.toFixed(2)}/L\n` +
+                `*Net Amount: ₹${coll.netAmount.toFixed(2)}*\n\n` +
+                `Thank you for delivering milk!`;
+
+    await sendMessage(ownerId.toString(), farmer.phone, msg);
+    res.json({ success: true, message: 'Receipt sent successfully via WhatsApp.' });
   } catch (err) {
     next(err);
   }

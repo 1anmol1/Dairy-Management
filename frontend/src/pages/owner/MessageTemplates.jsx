@@ -12,7 +12,7 @@
  *   {{date}}          — today's date
  */
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Edit2, Trash2, CheckCircle, Copy, BookOpen, Lock, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, CheckCircle, Copy, BookOpen, Lock, Search, X, AlertCircle, FileText, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -331,12 +331,12 @@ const DEFAULT_BODIES_MR = {
 };
 
 const MESSAGE_TYPES = [
-  { type: 'delivery',         label: '✅ Regular Delivery' },
-  { type: 'extra_delivery',   label: '➕ Extra Delivery' },
-  { type: 'no_delivery',      label: '❌ No Delivery' },
-  { type: 'payment_reminder', label: '💸 Pending Payment' },
-  { type: 'monthly_bill',     label: '📋 Monthly Bill' },
-  { type: 'custom',           label: '💬 Custom' },
+  { type: 'delivery',         label: 'Regular Delivery',  icon: CheckCircle },
+  { type: 'extra_delivery',   label: 'Extra Delivery',    icon: Plus },
+  { type: 'no_delivery',      label: 'No Delivery',       icon: X },
+  { type: 'payment_reminder', label: 'Pending Payment',   icon: AlertCircle },
+  { type: 'monthly_bill',     label: 'Monthly Bill',      icon: FileText },
+  { type: 'custom',           label: 'Custom',            icon: MessageSquare },
 ];
 
 const TYPE_LABELS = {
@@ -513,6 +513,7 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
                 type="button"
                 onClick={() => handleTypeSelect(t.type)}
                 style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '6px 14px', fontSize: '12px', fontWeight: 600,
                   border: `2px solid ${isSelected ? meta.color : '#E0E0E0'}`,
                   backgroundColor: isSelected ? meta.bg : '#FFFFFF',
@@ -521,7 +522,8 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
                   transition: 'all 0.1s', borderRadius: '20px'
                 }}
               >
-                {label}
+                {t.icon && React.createElement(t.icon, { size: 13, style: { flexShrink: 0 } })}
+                <span>{label}</span>
               </button>
             );
           })}
@@ -791,10 +793,16 @@ const MessageTemplates = () => {
   const isPlatinum = hasCustomTemplates || plan === 'platinum';
   const isGoldOrAbove = hasWhatsApp || hasCustomTemplates || plan === 'gold' || plan === 'platinum' || user?.subscription?.status === 'trial';
 
-  const GOLD_DEFAULT_TEMPLATE = {
+  const GOLD_DEFAULT_TEMPLATE = isMarathi ? {
+    name: 'नियमित वितरण',
+    type: 'delivery',
+    body: 'नमस्कार {{customerName}}, आज तुम्हाला {{quantity}} दूध वितरित केले गेले आहे. काही अडचण असल्यास संपर्क साधा: {{ownerPhone}}',
+    isDefault: true,
+    _isGoldDefault: true
+  } : {
     name: 'Regular Delivery',
     type: 'delivery',
-    body: 'Hi {{customerName}}, {{quantity}}L of milk has been delivered to you today. Any queries? Contact: {{ownerPhone}}',
+    body: 'Hi {{customerName}}, {{quantity}} of milk has been delivered to you today. Any queries? Contact: {{ownerPhone}}',
     isDefault: true,
     _isGoldDefault: true
   };

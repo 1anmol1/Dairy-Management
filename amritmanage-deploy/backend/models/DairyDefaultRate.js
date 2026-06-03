@@ -27,6 +27,16 @@ const dairyDefaultRateSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  standardFat: {
+    type: Number,
+    required: true,
+    default: 4.0
+  },
+  standardSNF: {
+    type: Number,
+    required: true,
+    default: 8.5
+  },
   bonusPerLiter: {
     type: Number,
     required: true,
@@ -37,6 +47,16 @@ const dairyDefaultRateSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0,
+    default: 0
+  },
+  standardCLR: {
+    type: Number,
+    required: true,
+    default: 28
+  },
+  clrDeductionPerUnit: {
+    type: Number,
+    required: true,
     default: 0
   },
   effectiveFrom: {

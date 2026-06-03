@@ -1,9 +1,5 @@
-/**
- * Superadmin — Subscription Requests
- * View all pending subscription requests, mark as called, activate.
- */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Phone, CheckCircle, X, RefreshCw, MapPin, Mail, Building2, Calculator } from 'lucide-react';
+import { Phone, CheckCircle, X, RefreshCw, MapPin, Mail, Building2, Calculator, Clock, XCircle, AlertCircle, Sparkles, TrendingUp, TrendingDown, Activity, Megaphone } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
@@ -11,11 +7,11 @@ import useWindowWidth from '../../hooks/useWindowWidth';
 import { PricingCalculatorModal, AddOwnerModal } from './Owners';
 
 const STATUS_COLORS = {
-  pending:   { bg: '#FFF8E1', color: '#B28600', border: '#F1C21B', label: '⏳ Pending' },
-  called:    { bg: '#EDF5FF', color: '#0043CE', border: 'rgba(15,98,254,0.3)', label: '📞 Called' },
-  activated: { bg: '#DEFBE6', color: '#0E6027', border: '#24A148', label: '✅ Activated' },
-  cancelled: { bg: '#F4F4F4', color: '#8D8D8D', border: '#E0E0E0', label: '❌ Cancelled' },
-  not_called: { bg: '#FFF1F1', color: '#DA1E28', border: '#DA1E28', label: '🚫 Not Called' }
+  pending:   { bg: '#FFF8E1', color: '#B28600', border: '#F1C21B', label: 'Pending', icon: Clock },
+  called:    { bg: '#EDF5FF', color: '#0043CE', border: 'rgba(15,98,254,0.3)', label: 'Called', icon: Phone },
+  activated: { bg: '#DEFBE6', color: '#0E6027', border: '#24A148', label: 'Activated', icon: CheckCircle },
+  cancelled: { bg: '#F4F4F4', color: '#8D8D8D', border: '#E0E0E0', label: 'Cancelled', icon: XCircle },
+  not_called: { bg: '#FFF1F1', color: '#DA1E28', border: '#DA1E28', label: 'Not Called', icon: AlertCircle }
 };
 
 const PLAN_COLORS = {
@@ -159,9 +155,13 @@ const Requests = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
                           <div style={{ fontWeight: 700, fontSize: '15px' }}>{owner?.name || req.contactName}</div>
                           <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
                             fontSize: '11px', fontWeight: 700, padding: '2px 8px',
                             backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}`
                           }}>
+                            {sc.icon && React.createElement(sc.icon, { size: 11 })}
                             {sc.label}
                           </span>
                           <span style={{
@@ -176,47 +176,60 @@ const Requests = () => {
 
                           {req.isRenewal ? (
                             <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
                               fontSize: '11px', fontWeight: 700, padding: '2px 8px',
                               backgroundColor: '#EDF5FF',
                               color: '#0043CE',
                               border: '1px solid rgba(15,98,254,0.3)',
                               textTransform: 'capitalize'
                             }}>
-                              🔄 Renewal
+                              <RefreshCw size={11} /> Renewal
                             </span>
                           ) : (
                             <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
                               fontSize: '11px', fontWeight: 700, padding: '2px 8px',
                               backgroundColor: '#E5F6FF',
                               color: '#0053DE',
                               border: '1px solid rgba(0,83,222,0.3)',
                               textTransform: 'capitalize'
                             }}>
-                              🌱 New Purchase
+                              <Sparkles size={11} /> New Purchase
                             </span>
                           )}
 
                           {req.isRenewal && req.changeType && (
                             <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
                               fontSize: '11px', fontWeight: 700, padding: '2px 8px',
                               backgroundColor: req.changeType === 'upgrade' ? '#DEFBE6' : req.changeType === 'downgrade' ? '#FFF1F1' : '#F4F4F4',
                               color: req.changeType === 'upgrade' ? '#0E6027' : req.changeType === 'downgrade' ? '#DA1E28' : '#525252',
                               border: `1px solid ${req.changeType === 'upgrade' ? '#24A148' : req.changeType === 'downgrade' ? '#DA1E28' : '#E0E0E0'}`,
                               textTransform: 'capitalize'
                             }}>
-                              {req.changeType === 'upgrade' ? '📈 Upgrade' : req.changeType === 'downgrade' ? '📉 Downgrade' : '⚖️ Same Plan'} 
+                              {req.changeType === 'upgrade' ? <TrendingUp size={11} /> : req.changeType === 'downgrade' ? <TrendingDown size={11} /> : <Activity size={11} />}
+                              {req.changeType === 'upgrade' ? 'Upgrade' : req.changeType === 'downgrade' ? 'Downgrade' : 'Same Plan'}
                               {req.currentPlan && ` (from ${req.currentPlan})`}
                             </span>
                           )}
 
                           <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
                             fontSize: '11px', fontWeight: 700, padding: '2px 8px',
                             backgroundColor: req.source === 'ads_landing' ? '#FFF3E0' : '#F4F4F4',
                             color: req.source === 'ads_landing' ? '#E65100' : '#525252',
                             border: `1px solid ${req.source === 'ads_landing' ? '#FFB74D' : '#E0E0E0'}`,
                             textTransform: 'uppercase'
                           }}>
-                            {req.source === 'ads_landing' ? '📢 Ads Landing' : `Source: ${req.source || 'organic'}`}
+                            {req.source === 'ads_landing' ? <><Megaphone size={11} /> Ads Landing</> : `Source: ${req.source || 'organic'}`}
                           </span>
                         </div>
 

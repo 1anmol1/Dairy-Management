@@ -9,7 +9,7 @@ const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const PlanConfig = require('../models/PlanConfig');
 const SubscriptionRequest = require('../models/SubscriptionRequest');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, checkPermission } = require('../middleware/auth');
 const {
   sendLeadEvent,
   sendCompleteRegistrationEvent,
@@ -266,7 +266,7 @@ router.get('/my-request', protect, authorize('owner'), async (req, res, next) =>
 
 // ── GET /api/payment/requests (superadmin) ────────────────────
 // List all pending subscription requests
-router.get('/requests', protect, authorize('superadmin'), async (req, res, next) => {
+router.get('/requests', protect, authorize('superadmin'), checkPermission('requests'), async (req, res, next) => {
   try {
     const { status = 'pending' } = req.query;
     const requests = await SubscriptionRequest.find(status ? { status } : {})
@@ -281,7 +281,7 @@ router.get('/requests', protect, authorize('superadmin'), async (req, res, next)
 
 // ── PATCH /api/payment/requests/:id/activate (superadmin) ─────
 // Superadmin activates a subscription request after calling the owner
-router.patch('/requests/:id/activate', protect, authorize('superadmin'), async (req, res, next) => {
+router.patch('/requests/:id/activate', protect, authorize('superadmin'), checkPermission('requests'), async (req, res, next) => {
   try {
     const { adminNotes } = req.body;
     const request = await SubscriptionRequest.findById(req.params.id);
@@ -363,7 +363,7 @@ router.patch('/requests/:id/activate', protect, authorize('superadmin'), async (
 });
 
 // ── PATCH /api/payment/requests/:id/status (superadmin) ───────
-router.patch('/requests/:id/status', protect, authorize('superadmin'), async (req, res, next) => {
+router.patch('/requests/:id/status', protect, authorize('superadmin'), checkPermission('requests'), async (req, res, next) => {
   try {
     const { status, adminNotes } = req.body;
     const request = await SubscriptionRequest.findById(req.params.id);

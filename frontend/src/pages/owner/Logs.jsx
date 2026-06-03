@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   ClipboardList, CheckCircle, XCircle,
   ChevronLeft, ChevronRight, Edit2, Trash2, X,
-  Filter, Search, Calendar, Users, UserCheck, ChevronDown, ChevronUp
+  Filter, Search, Calendar, Users, UserCheck, ChevronDown, ChevronUp,
+  Sun, Moon
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
@@ -473,18 +474,20 @@ const Logs = () => {
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     {[
-                      { v: '', label: isMarathi ? 'सर्व' : 'All' },
-                      { v: 'morning', label: isMarathi ? '☀ सकाळ' : '☀ Morning' },
-                      { v: 'evening', label: isMarathi ? '🌙 संध्याकाळ' : '🌙 Evening' }
+                      { v: '', label: isMarathi ? 'सर्व' : 'All', icon: null },
+                      { v: 'morning', label: isMarathi ? 'सकाळ' : 'Morning', icon: Sun },
+                      { v: 'evening', label: isMarathi ? 'संध्याकाळ' : 'Evening', icon: Moon }
                     ].map(s => (
                       <button key={s.v} onClick={() => setPendingSlot(s.v)} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '4px',
                         padding: '6px 12px', border: '1px solid #E0E0E0', cursor: 'pointer',
                         fontSize: '12px', fontWeight: 600,
                         backgroundColor: pendingSlot === s.v ? '#161616' : '#FFFFFF',
                         color: pendingSlot === s.v ? '#FFFFFF' : '#525252',
                         transition: 'all 0.1s'
                       }}>
-                        {s.label}
+                        {s.icon && React.createElement(s.icon, { size: 12 })}
+                        <span>{s.label}</span>
                       </button>
                     ))}
                   </div>
@@ -612,8 +615,9 @@ const Logs = () => {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '2px' }}>{log.customerId?.name}</div>
                             <div style={{ fontSize: '12px', color: '#525252', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                              <span className={`badge ${log.slot === 'morning' ? 'badge-yellow' : 'badge-blue'}`} style={{ fontSize: '11px' }}>
-                                {log.slot === 'morning' ? '☀' : '🌙'} {isMarathi ? (log.slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : log.slot}
+                              <span className={`badge ${log.slot === 'morning' ? 'badge-yellow' : 'badge-blue'}`} style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                {log.slot === 'morning' ? <Sun size={11} /> : <Moon size={11} />}
+                                <span>{isMarathi ? (log.slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : log.slot}</span>
                               </span>
                               <span style={{ fontWeight: 700 }}>{log.delivered_qty}{L}</span>
                               {view !== VIEW.DAY && (
@@ -672,8 +676,7 @@ const Logs = () => {
                         <th>{isMarathi ? 'अतिरिक्त' : 'Extra'}</th>
                         <th>{isMarathi ? 'एकूण' : 'Total'}</th>
                         <th>{isMarathi ? 'रक्कम' : 'Amount'}</th>
-                        <th>{isMarathi ? 'कर्मचारी' : 'Staff'}</th>
-                        <th>WA</th>
+                        <th>{isMarathi ? 'द्वारे वितरित' : 'Delivered By'}</th>
                         <th>{isMarathi ? 'क्रिया' : 'Actions'}</th>
                       </tr>
                     </thead>
@@ -690,8 +693,9 @@ const Logs = () => {
                             <div style={{ fontSize: '12px', color: '#8D8D8D' }}>{log.customerId?.phone}</div>
                           </td>
                           <td>
-                            <span className={`badge ${log.slot === 'morning' ? 'badge-yellow' : 'badge-blue'}`}>
-                              {log.slot === 'morning' ? '☀' : '🌙'} {isMarathi ? (log.slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : log.slot}
+                            <span className={`badge ${log.slot === 'morning' ? 'badge-yellow' : 'badge-blue'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                              {log.slot === 'morning' ? <Sun size={11} /> : <Moon size={11} />}
+                              <span>{isMarathi ? (log.slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : log.slot}</span>
                             </span>
                           </td>
                           <td>{log.base_qty}{L}</td>
@@ -703,11 +707,6 @@ const Logs = () => {
                           <td style={{ fontWeight: 700 }}>{log.delivered_qty}{L}</td>
                           <td style={{ fontWeight: 600 }}>₹{log.amount_calculated.toFixed(2)}</td>
                           <td style={{ fontSize: '13px', color: '#525252' }}>{log.staffId?.name}</td>
-                          <td>
-                            {log.whatsappSent
-                              ? <CheckCircle size={15} color="#24A148" />
-                              : <XCircle size={15} color="#C6C6C6" />}
-                          </td>
                           <td>
                             <div style={{ display: 'flex', gap: '4px' }}>
                               <button className="btn btn-ghost btn-sm"
@@ -785,70 +784,74 @@ const EditLogModal = ({ log, onClose, onSaved }) => {
       onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
     >
       <div className="modal" style={{ maxWidth: '420px', position: 'relative' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingRight: '24px' }}>
-          <div>
-            <h2 style={{ fontWeight: 700, fontSize: '18px' }}>{isMarathi ? 'नोंद संपादित करा' : 'Edit Log Entry'}</h2>
-            <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
-              {log.customerId?.name} · {isMarathi ? (log.slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : log.slot} · {log.date}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              position: 'absolute',
-              top: '16px',
-              right: '16px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#8D8D8D',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '4px',
-              transition: 'background-color 0.2s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ backgroundColor: '#F4F4F4', padding: '12px 16px', marginBottom: '20px', fontSize: '13px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <span style={{ color: '#525252' }}>{isMarathi ? 'मूळ प्रमाण' : 'Base quantity'}</span>
-            <span style={{ fontWeight: 600 }}>{log.base_qty}{L}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <span style={{ color: '#525252' }}>{isMarathi ? 'दर' : 'Rate'}</span>
-            <span style={{ fontWeight: 600 }}>₹{log.price_per_liter}/{L}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E0E0E0', paddingTop: '8px', marginTop: '4px' }}>
-            <span style={{ color: '#525252' }}>{isMarathi ? 'एकूण पूर्वावलोकन' : 'Preview total'}</span>
-            <span style={{ fontWeight: 700, color: '#0F62FE' }}>
-              {preview.delivered.toFixed(1)}{L} = ₹{preview.amount.toFixed(2)}
-            </span>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 10,
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={18} />
+        </button>
 
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'अतिरिक्त लिटर (संपादन करता येते)' : 'Extra Liters (editable)'}</label>
-            <input type="text" inputMode="decimal" className="input" placeholder="0"
-              value={extraQty} onChange={e => setExtraQty(e.target.value)} autoFocus />
-            <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
-              {isMarathi ? 'मूळ प्रमाण बदलता येत नाही. फक्त अतिरिक्त लिटर बदलता येतात.' : 'Base qty is locked. Only extra liters can be adjusted.'}
+          <div className="modal-body" style={{ margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingRight: '24px' }}>
+              <div>
+                <h2 style={{ fontWeight: 700, fontSize: '18px' }}>{isMarathi ? 'नोंद संपादित करा' : 'Edit Log Entry'}</h2>
+                <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
+                  {log.customerId?.name} · {isMarathi ? (log.slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : log.slot} · {log.date}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: '#F4F4F4', padding: '12px 16px', marginBottom: '20px', fontSize: '13px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'मूळ प्रमाण' : 'Base quantity'}</span>
+                <span style={{ fontWeight: 600 }}>{log.base_qty}{L}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'दर' : 'Rate'}</span>
+                <span style={{ fontWeight: 600 }}>₹{log.price_per_liter}/{L}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E0E0E0', paddingTop: '8px', marginTop: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'एकूण पूर्वावलोकन' : 'Preview total'}</span>
+                <span style={{ fontWeight: 700, color: '#0F62FE' }}>
+                  {preview.delivered.toFixed(1)}{L} = ₹{preview.amount.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'अतिरिक्त लिटर (संपादन करता येते)' : 'Extra Liters (editable)'}</label>
+              <input type="text" inputMode="decimal" className="input" placeholder="0"
+                value={extraQty} onChange={e => setExtraQty(e.target.value)} autoFocus />
+              <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
+                {isMarathi ? 'मूळ प्रमाण बदलता येत नाही. फक्त अतिरिक्त लिटर बदलता येतात.' : 'Base qty is locked. Only extra liters can be adjusted.'}
+              </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'नोंदी' : 'Notes'}</label>
+              <input type="text" className="input" placeholder={isMarathi ? 'पर्यायी नोंद...' : 'Optional note...'}
+                value={notes} onChange={e => setNotes(e.target.value)} />
             </div>
           </div>
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'नोंदी' : 'Notes'}</label>
-            <input type="text" className="input" placeholder={isMarathi ? 'पर्यायी नोंद...' : 'Optional note...'}
-              value={notes} onChange={e => setNotes(e.target.value)} />
-          </div>
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+          <div className="modal-footer" style={{ marginTop: '20px' }}>
             <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
               {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : (isMarathi ? 'बदल जतन करा' : 'Save Changes')}

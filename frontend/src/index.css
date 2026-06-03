@@ -249,6 +249,13 @@ tr:hover td {
 .modal:has(.modal-body) {
   overflow: hidden;
 }
+.modal > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
 .modal-body {
   flex: 1;
   overflow-y: auto;
@@ -437,13 +444,14 @@ tr:hover td {
     padding: 20px;
     margin: 12px;
     max-width: calc(100vw - 24px) !important;
-    max-height: 85vh;
+    max-height: calc(100vh - 24px);
     display: flex;
     flex-direction: column;
   }
   .modal-overlay {
     padding: 12px;
-    align-items: flex-end;
+    align-items: center;
+    justify-content: center;
   }
   .stat-value {
     font-size: 22px;

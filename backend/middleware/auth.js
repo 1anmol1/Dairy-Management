@@ -199,4 +199,25 @@ const requireFeature = (featureName) => {
   };
 };
 
-module.exports = { protect, authorize, requireActiveSubscription, requireFeature, invalidateOwnerCache };
+const checkPermission = (permission) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    // Main superadmin has no parentAdminId, so they have all permissions
+    if (req.user.role === 'superadmin' && !req.user.parentAdminId) {
+      return next();
+    }
+    // Sub-admins have parentAdminId and their permissions are listed
+    if (req.user.role === 'superadmin' && req.user.parentAdminId) {
+      if (req.user.permissions && req.user.permissions.includes(permission)) {
+        return next();
+      }
+      return res.status(403).json({ error: `Access denied. Requires '${permission}' permission.` });
+    }
+    // If not superadmin, let other middlewares handle it
+    next();
+  };
+};
+
+module.exports = { protect, authorize, requireActiveSubscription, requireFeature, invalidateOwnerCache, checkPermission };

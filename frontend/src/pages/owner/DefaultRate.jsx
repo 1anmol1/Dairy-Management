@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Milk, TrendingUp, TrendingDown, Minus, Plus, History } from 'lucide-react';
+import { Milk, TrendingUp, TrendingDown, Minus, Plus, History, HelpCircle } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
@@ -385,43 +385,45 @@ const SetRateModal = ({ currentRate, onClose, onSaved }) => {
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-          <Milk size={20} color="#0F62FE" />
-          <h2 style={{ fontWeight: 700, fontSize: '20px' }}>{isMarathi ? 'डिफॉल्ट दर सेट करा' : 'Set Default Rate'}</h2>
-        </div>
-        <p style={{ color: '#525252', fontSize: '14px', marginBottom: '24px' }}>
-          {isMarathi
-            ? 'हा दर नवीन ग्राहकांसाठी डिफॉल्ट म्हणून वापरला जाईल.'
-            : 'This rate will be used as the default for new customers.'}
-          {currentRate && ` ${isMarathi ? 'सध्याचा दर' : 'Current rate'}: ₹${currentRate}/${isMarathi ? 'ली.' : 'L'}`}
-        </p>
         <form onSubmit={handleSubmit}>
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'प्रति लिटर दर (₹) *' : 'Rate per Litre (₹) *'}</label>
-            <input
-              type="number"
-              className="input"
-              placeholder={isMarathi ? 'उदा. ५५ किंवा ५५.५०' : 'e.g. 55 or 55.50'}
-              value={rate}
-              onChange={e => setRate(e.target.value)}
-              min="0"
-              step="0.5"
-              required
-              autoFocus
-            />
+          <div className="modal-body" style={{ margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+              <Milk size={20} color="#0F62FE" />
+              <h2 style={{ fontWeight: 700, fontSize: '20px' }}>{isMarathi ? 'डिफॉल्ट दर सेट करा' : 'Set Default Rate'}</h2>
+            </div>
+            <p style={{ color: '#525252', fontSize: '14px', marginBottom: '24px' }}>
+              {isMarathi
+                ? 'हा दर नवीन ग्राहकांसाठी डिफॉल्ट म्हणून वापरला जाईल.'
+                : 'This rate will be used as the default for new customers.'}
+              {currentRate && ` ${isMarathi ? 'सध्याचा दर' : 'Current rate'}: ₹${currentRate}/${isMarathi ? 'ली.' : 'L'}`}
+            </p>
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'प्रति लिटर दर (₹) *' : 'Rate per Litre (₹) *'}</label>
+              <input
+                type="number"
+                className="input"
+                placeholder={isMarathi ? 'उदा. ५५ किंवा ५५.५०' : 'e.g. 55 or 55.50'}
+                value={rate}
+                onChange={e => setRate(e.target.value)}
+                min="0"
+                step="0.5"
+                required
+                autoFocus
+              />
+            </div>
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'नोंद (पर्यायी)' : 'Note (optional)'}</label>
+              <input
+                type="text"
+                className="input"
+                placeholder={isMarathi ? 'उदा. हंगामी दरवाढ' : 'e.g. Seasonal price increase'}
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                maxLength={200}
+              />
+            </div>
           </div>
-          <div className="input-group">
-            <label className="input-label">{isMarathi ? 'नोंद (पर्यायी)' : 'Note (optional)'}</label>
-            <input
-              type="text"
-              className="input"
-              placeholder={isMarathi ? 'उदा. हंगामी दरवाढ' : 'e.g. Seasonal price increase'}
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              maxLength={200}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+          <div className="modal-footer" style={{ marginTop: '20px' }}>
             <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
               {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : (isMarathi ? 'दर सेट करा' : 'Set Rate')}
@@ -448,8 +450,12 @@ const DairyDefaultRateSection = () => {
   const [baseRate, setBaseRate] = useState('');
   const [fatMultiplier, setFatMultiplier] = useState('');
   const [snfMultiplier, setSnfMultiplier] = useState('');
+  const [standardFat, setStandardFat] = useState('4.0');
+  const [standardSNF, setStandardSNF] = useState('8.5');
   const [bonusPerLiter, setBonusPerLiter] = useState('');
   const [deductionPerLiter, setDeductionPerLiter] = useState('');
+  const [standardCLR, setStandardCLR] = useState('28');
+  const [clrDeductionPerUnit, setClrDeductionPerUnit] = useState('0');
   const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().split('T')[0]);
 
   const fetchRates = useCallback(async () => {
@@ -469,8 +475,12 @@ const DairyDefaultRateSection = () => {
         setBaseRate(String(currentConfig.baseRate ?? ''));
         setFatMultiplier(String(currentConfig.fatMultiplier ?? ''));
         setSnfMultiplier(String(currentConfig.snfMultiplier ?? ''));
+        setStandardFat(String(currentConfig.standardFat ?? '4.0'));
+        setStandardSNF(String(currentConfig.standardSNF ?? '8.5'));
         setBonusPerLiter(String(currentConfig.bonusPerLiter ?? '0'));
         setDeductionPerLiter(String(currentConfig.deductionPerLiter ?? '0'));
+        setStandardCLR(String(currentConfig.standardCLR ?? '28'));
+        setClrDeductionPerUnit(String(currentConfig.clrDeductionPerUnit ?? '0'));
         if (currentConfig.effectiveFrom) {
           setEffectiveFrom(new Date(currentConfig.effectiveFrom).toISOString().split('T')[0]);
         }
@@ -478,8 +488,12 @@ const DairyDefaultRateSection = () => {
         setBaseRate('');
         setFatMultiplier('');
         setSnfMultiplier('');
+        setStandardFat('4.0');
+        setStandardSNF('8.5');
         setBonusPerLiter('0');
         setDeductionPerLiter('0');
+        setStandardCLR('28');
+        setClrDeductionPerUnit('0');
       }
     } catch (err) {
       toast.error('Failed to load default rate configurations.');
@@ -494,7 +508,7 @@ const DairyDefaultRateSection = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!baseRate || !fatMultiplier || !snfMultiplier || !effectiveFrom) {
+    if (!baseRate || !fatMultiplier || !snfMultiplier || !standardFat || !standardSNF || !effectiveFrom) {
       toast.error(isMarathi ? 'कृपया सर्व आवश्यक फील्ड भरा.' : 'Please fill all required fields.');
       return;
     }
@@ -505,8 +519,12 @@ const DairyDefaultRateSection = () => {
         baseRate: parseFloat(baseRate),
         fatMultiplier: parseFloat(fatMultiplier),
         snfMultiplier: parseFloat(snfMultiplier),
+        standardFat: parseFloat(standardFat),
+        standardSNF: parseFloat(standardSNF),
         bonusPerLiter: parseFloat(bonusPerLiter || 0),
         deductionPerLiter: parseFloat(deductionPerLiter || 0),
+        standardCLR: parseFloat(standardCLR || 28),
+        clrDeductionPerUnit: parseFloat(clrDeductionPerUnit || 0),
         effectiveFrom
       });
       toast.success(isMarathi ? 'दर नियम यशस्वीरित्या जतन केले!' : 'Default rate rules saved successfully!');
@@ -547,17 +565,43 @@ const DairyDefaultRateSection = () => {
       </div>
 
       <div className="card" style={{ padding: '24px' }}>
-        <h3 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '20px' }}>
-          {isMarathi ? `${activeTab === 'Cow' ? 'गाय' : activeTab === 'Buffalo' ? 'म्हैस' : 'मिश्रित'} दूध दर नियम` : `${activeTab} Milk Pricing Rules`}
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ fontWeight: 700, fontSize: '16px', margin: 0 }}>
+            {isMarathi ? `${activeTab === 'Cow' ? 'गाय' : activeTab === 'Buffalo' ? 'म्हैस' : 'मिश्रित'} दूध दर नियम` : `${activeTab} Milk Pricing Rules`}
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowFormulaModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: 'none',
+              background: 'none',
+              color: '#0F62FE',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              backgroundColor: '#0F62FE0D',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#0F62FE1A'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#0F62FE0D'}
+          >
+            <HelpCircle size={16} />
+            {isMarathi ? 'हे कसे काम करते ते पहा' : 'View how this works'}
+          </button>
+        </div>
 
         {loading ? (
           <div style={{ padding: '20px', textAlign: 'center' }}>
             <div className="spinner" style={{ margin: 'auto' }} />
           </div>
         ) : (
-          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
               
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'मूळ दर (Base Rate) (₹/L)' : 'Base Rate (₹/L)'}</label>
@@ -568,23 +612,55 @@ const DairyDefaultRateSection = () => {
               </div>
 
               <div className="input-group">
-                <label className="input-label">{isMarathi ? 'फॅट Multiplier (FAT Rate)' : 'FAT Rate Multiplier'}</label>
+                <label className="input-label">{isMarathi ? 'प्रमाणित फॅट (Standard FAT %)' : 'Standard FAT %'}</label>
                 <input
-                  type="number" className="input" step="0.0001" min="0" required
+                  type="number" className="input" step="0.1" min="0" max="15" required
+                  value={standardFat} onChange={e => setStandardFat(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'फॅट बोनस दर (FAT Bonus per 0.1% ₹)' : 'FAT Bonus per 0.1% (₹)'}</label>
+                <input
+                  type="number" className="input" step="0.01" min="0" required
                   value={fatMultiplier} onChange={e => setFatMultiplier(e.target.value)}
                 />
               </div>
 
               <div className="input-group">
-                <label className="input-label">{isMarathi ? 'एसएनएफ Multiplier (SNF Rate)' : 'SNF Rate Multiplier'}</label>
+                <label className="input-label">{isMarathi ? 'प्रमाणित एसएनएफ (Standard SNF %)' : 'Standard SNF %'}</label>
                 <input
-                  type="number" className="input" step="0.0001" min="0" required
+                  type="number" className="input" step="0.1" min="0" max="15" required
+                  value={standardSNF} onChange={e => setStandardSNF(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'एसएनएफ बोनस दर (SNF Bonus per 0.1% ₹)' : 'SNF Bonus per 0.1% (₹)'}</label>
+                <input
+                  type="number" className="input" step="0.01" min="0" required
                   value={snfMultiplier} onChange={e => setSnfMultiplier(e.target.value)}
                 />
               </div>
 
               <div className="input-group">
-                <label className="input-label">{isMarathi ? 'बोनस / लिटर (₹/L)' : 'Bonus Per Liter (₹/L)'}</label>
+                <label className="input-label">{isMarathi ? 'प्रमाणित सीएलआर (Standard CLR)' : 'Standard CLR (Baseline)'}</label>
+                <input
+                  type="number" className="input" step="0.1" min="0" required
+                  value={standardCLR} onChange={e => setStandardCLR(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'कमी सीएलआर वजावट दर (₹/L/Unit)' : 'CLR Deduction Rate (₹/L/Unit)'}</label>
+                <input
+                  type="number" className="input" step="0.01" min="0" required
+                  value={clrDeductionPerUnit} onChange={e => setClrDeductionPerUnit(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'इतर बोनस / लिटर (₹/L)' : 'Manual Bonus Per Liter (₹/L)'}</label>
                 <input
                   type="number" className="input" step="0.01" min="0" required
                   value={bonusPerLiter} onChange={e => setBonusPerLiter(e.target.value)}
@@ -592,7 +668,7 @@ const DairyDefaultRateSection = () => {
               </div>
 
               <div className="input-group">
-                <label className="input-label">{isMarathi ? 'वजावट / लिटर (₹/L)' : 'Deduction Per Liter (₹/L)'}</label>
+                <label className="input-label">{isMarathi ? 'इतर वजावट / लिटर (₹/L)' : 'Manual Deduction Per Liter (₹/L)'}</label>
                 <input
                   type="number" className="input" step="0.01" min="0" required
                   value={deductionPerLiter} onChange={e => setDeductionPerLiter(e.target.value)}
@@ -633,10 +709,10 @@ const DairyDefaultRateSection = () => {
                   <th style={{ padding: '12px 16px' }}>{isMarathi ? 'तारीख' : 'Effective Date'}</th>
                   <th style={{ padding: '12px 16px' }}>{isMarathi ? 'दूध प्रकार' : 'Milk Type'}</th>
                   <th style={{ padding: '12px 16px' }}>{isMarathi ? 'मूळ दर' : 'Base Rate'}</th>
-                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'FAT Multiplier' : 'FAT Mult.'}</th>
-                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'SNF Multiplier' : 'SNF Mult.'}</th>
-                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'बोनस' : 'Bonus'}</th>
-                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'वजावट' : 'Deduction'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'Std. FAT / बोनस दर' : 'Std. FAT / Bonus'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'Std. SNF / बोनस दर' : 'Std. SNF / Bonus'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'Std. CLR / वजावट' : 'Std. CLR / Ded.'}</th>
+                  <th style={{ padding: '12px 16px' }}>{isMarathi ? 'मॅन्युअल बोनस / वजावट' : 'Manual Bonus/Ded.'}</th>
                   <th style={{ padding: '12px 16px' }}>{isMarathi ? 'स्थिती' : 'Status'}</th>
                 </tr>
               </thead>
@@ -650,10 +726,18 @@ const DairyDefaultRateSection = () => {
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px' }}>₹{h.baseRate.toFixed(2)}/L</td>
-                    <td style={{ padding: '12px 16px' }}>{h.fatMultiplier.toFixed(4)}</td>
-                    <td style={{ padding: '12px 16px' }}>{h.snfMultiplier.toFixed(4)}</td>
-                    <td style={{ padding: '12px 16px' }}>+₹{h.bonusPerLiter.toFixed(2)}/L</td>
-                    <td style={{ padding: '12px 16px' }}>-₹{h.deductionPerLiter.toFixed(2)}/L</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {h.standardFat?.toFixed(1) || '4.0'}% / ₹{(h.fatMultiplier || 0).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {h.standardSNF?.toFixed(1) || '8.5'}% / ₹{(h.snfMultiplier || 0).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {h.standardCLR || '28'} / ₹{(h.clrDeductionPerUnit || 0).toFixed(2)}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      +₹{h.bonusPerLiter.toFixed(2)} / -₹{h.deductionPerLiter.toFixed(2)}
+                    </td>
                     <td style={{ padding: '12px 16px' }}>
                       <span className={`badge ${h.isActive ? 'badge-green' : 'badge-red'}`}>
                         {h.isActive ? (isMarathi ? 'सक्रिय' : 'Active') : (isMarathi ? 'निष्क्रिय' : 'Inactive')}
@@ -667,6 +751,169 @@ const DairyDefaultRateSection = () => {
         )}
       </div>
 
+      {/* View How This Works Modal */}
+      {showFormulaModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          padding: '16px',
+          backdropFilter: 'blur(2px)'
+        }}>
+          <div className="card" style={{
+            width: '100%',
+            maxWidth: '680px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '28px',
+            position: 'relative',
+            animation: 'modalSlideIn 0.3s ease'
+          }}>
+            <button
+              onClick={() => setShowFormulaModal(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: 'none',
+                border: 'none',
+                fontSize: '22px',
+                color: '#8D8D8D',
+                cursor: 'pointer',
+                padding: '4px'
+              }}
+            >
+              &times;
+            </button>
+
+            <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px', color: '#161616', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <HelpCircle size={22} color="#0F62FE" />
+              {isMarathi ? 'दर मोजणी सूत्र मार्गदर्शिका' : 'Milk Rate Calculation Guide'}
+            </h2>
+            <p style={{ color: '#525252', fontSize: '13px', marginBottom: '20px', lineHeight: 1.5 }}>
+              {isMarathi
+                ? 'अमृतमॅनेज तुमची दूध गुणवत्ता आणि दरांचे मोजमाप खालील प्रमाणे अचूक व पारदर्शक पद्धतीने करते.'
+                : 'Here is a detailed breakdown of how AmritManage calculates payout rates for your milk collection entries.'}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              {/* Formula Panel */}
+              <div style={{ backgroundColor: '#EDF5FF', borderLeft: '4px solid #0F62FE', padding: '16px', borderRadius: '4px' }}>
+                <div style={{ fontSize: '11px', textTransform: 'uppercase', tracking: '0.5px', color: '#0043CE', fontWeight: 700, marginBottom: '6px' }}>
+                  {isMarathi ? 'अंतिम दर सूत्र' : 'Final Rate Formula'}
+                </div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#002D9C', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  Rate/L = Base Rate + Fat Bonus + SNF Bonus + Manual Bonus - Manual Deduction - CLR Deduction
+                </div>
+              </div>
+
+              {/* Sub-formulas */}
+              <div>
+                <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>{isMarathi ? 'घटक मोजणी सूत्रे' : 'Component Calculations'}</h4>
+                <ul style={{ paddingLeft: '20px', margin: 0, fontSize: '13px', lineHeight: 1.6, color: '#393939', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <li>
+                    <strong>{isMarathi ? '१. फॅट बोनस (Fat Bonus):' : '1. Fat Bonus:'}</strong><br/>
+                    <code>(Actual Fat % - Standard Fat %) &times; 10 &times; (Fat Bonus per 0.1%)</code><br/>
+                    <span style={{ fontSize: '12px', color: '#6F6F6F' }}>
+                      {isMarathi 
+                        ? '*टीप: जर प्रत्यक्ष फॅट प्रमाणित फॅटपेक्षा कमी असेल, तर हा बोनस ऋण (वजा) होतो.' 
+                        : '*Note: If actual fat is below standard fat, this calculation results in a reduction.'}
+                    </span>
+                  </li>
+                  <li>
+                    <strong>{isMarathi ? '२. एसएनएफ बोनस (SNF Bonus):' : '2. SNF Bonus:'}</strong><br/>
+                    <code>(Actual SNF % - Standard SNF %) &times; 10 &times; (SNF Bonus per 0.1%)</code>
+                  </li>
+                  <li>
+                    <strong>{isMarathi ? '३. सीएलआर वजावट (CLR Deduction):' : '3. CLR Deduction:'}</strong><br/>
+                    <code>(Standard CLR - Actual CLR) &times; CLR Deduction Rate</code><br/>
+                    <span style={{ fontSize: '12px', color: '#6F6F6F' }}>
+                      {isMarathi
+                        ? '(केवळ प्रत्यक्ष सीएलआर हा प्रमाणित सीएलआरपेक्षा कमी असल्यासच वजावट लागू होते)'
+                        : '(Applied only if actual CLR is below the standard CLR benchmark)'}
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Auto-calculate Richmond explanation */}
+              <div style={{ backgroundColor: '#F4F4F4', padding: '16px', borderRadius: '4px', border: '1px solid #E0E0E0' }}>
+                <h4 style={{ fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#161616' }}>
+                  🥛 {isMarathi ? 'एसएनएफ स्वयंचलित मोजणी (Richmond Formula)' : 'Auto-Calculated SNF (Richmond Formula)'}
+                </h4>
+                <p style={{ fontSize: '13px', margin: 0, lineHeight: 1.5, color: '#525252' }}>
+                  {isMarathi
+                    ? 'दूध संकलन करताना मालक किंवा कर्मचाऱ्यांचा वेळ वाचवण्यासाठी, केवळ फॅट आणि सीएलआर भरल्यास एसएनएफ आपोआप मोजला जातो:'
+                    : 'To make entry faster, when you input Fat and CLR, the system automatically estimates SNF using the Indian dairy standard formula:'}
+                </p>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#161616', marginTop: '8px', fontFamily: 'monospace' }}>
+                  SNF % = (CLR / 4) + (0.2 &times; FAT) + 0.36
+                </div>
+              </div>
+
+              {/* Example Card */}
+              <div style={{ border: '1px solid #E0E0E0', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{ background: '#F4F4F4', padding: '10px 16px', fontWeight: 700, fontSize: '13px', borderBottom: '1px solid #E0E0E0' }}>
+                  {isMarathi ? 'दर मोजणीचे प्रात्यक्षिक उदाहरण' : 'Real-world Calculation Example'}
+                </div>
+                <div style={{ padding: '16px', fontSize: '12px', lineHeight: 1.6, color: '#393939' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '12px' }}>
+                    <div>
+                      <strong>{isMarathi ? 'सेट केलेले नियम:' : 'Pricing Rules:'}</strong>
+                      <div style={{ color: '#525252', fontSize: '11px', marginTop: '4px' }}>
+                        Base Rate: ₹40.00 /L<br/>
+                        Std. FAT: 4.0% | Bonus: ₹0.12 (per 0.1%)<br/>
+                        Std. SNF: 8.5% | Bonus: ₹0.08 (per 0.1%)<br/>
+                        Std. CLR: 28 | CLR Ded. Rate: ₹0.20
+                      </div>
+                    </div>
+                    <div>
+                      <strong>{isMarathi ? 'दूध नमुना (Milk Sample):' : 'Collected Milk Sample:'}</strong>
+                      <div style={{ color: '#525252', fontSize: '11px', marginTop: '4px' }}>
+                        FAT: 4.5%<br/>
+                        CLR: 26.0 (SNF calculated: 8.8%)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #F4F4F4', paddingTop: '8px' }}>
+                    <strong>{isMarathi ? 'पायरी-दर-पायरी मोजणी:' : 'Step-by-Step Payout:'}</strong>
+                    <div style={{ marginTop: '4px', fontFamily: 'monospace', color: '#525252' }}>
+                      Fat Bonus = (4.5 - 4.0) &times; 10 &times; ₹0.12 = +₹0.60/L<br/>
+                      SNF Bonus = (8.8 - 8.5) &times; 10 &times; ₹0.08 = +₹0.24/L<br/>
+                      CLR Deduction = (28 - 26) &times; ₹0.20 = -₹0.40/L<br/>
+                      <strong>Final Rate = 40.00 + 0.60 + 0.24 - 0.40 = ₹40.44 /L</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <button
+              onClick={() => setShowFormulaModal(false)}
+              className="btn btn-secondary btn-full"
+              style={{ marginTop: '24px' }}
+            >
+              {isMarathi ? 'बंद करा' : 'Got it, Close'}
+            </button>
+          </div>
+        </div>
+      )}
+      <style>{`
+        @keyframes modalSlideIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 };

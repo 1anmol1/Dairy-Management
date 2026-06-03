@@ -36,6 +36,7 @@ const DailyCollectionDailyOwner = () => {
   const toast = useToast();
   const { isMarathi } = useMarathi();
   const { user } = useAuth();
+  const apiPrefix = user?.role === 'staff' ? '/staff' : '/owner';
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
 
@@ -103,7 +104,7 @@ const DailyCollectionDailyOwner = () => {
     const fetchFarmers = async () => {
       setLoadingFarmers(true);
       try {
-        const { data } = await api.get('/owner/farmers', { params: { active: 'true', limit: 1000 } });
+        const { data } = await api.get(`${apiPrefix}/farmers`, { params: { active: 'true', limit: 1000 } });
         setFarmers(data.customers || []);
       } catch (err) {
         toast.error('Failed to load farmers list.');
@@ -113,25 +114,25 @@ const DailyCollectionDailyOwner = () => {
     };
     const fetchStaff = async () => {
       try {
-        const { data } = await api.get('/owner/staff');
+        const { data } = await api.get(`${apiPrefix}/staff`);
         setStaffList(data.staff || []);
       } catch (err) { /* ignore */ }
     };
     fetchFarmers();
     fetchStaff();
-  }, [toast]);
+  }, [toast, apiPrefix]);
 
   // Fetch dairy default rate rules when component mounts or changes
   const fetchDairyRates = useCallback(async () => {
     try {
-      const { data } = await api.get('/owner/dairy-default-rates');
+      const { data } = await api.get(`${apiPrefix}/dairy-default-rates`);
       if (data.configs) {
         setDairyRates(data.configs);
       }
     } catch (err) {
       console.error('Failed to load dairy rates:', err.message);
     }
-  }, []);
+  }, [apiPrefix]);
 
   useEffect(() => {
     fetchDairyRates();
@@ -140,12 +141,12 @@ const DailyCollectionDailyOwner = () => {
   // Fetch next collection number
   const fetchNextCollectionNumber = useCallback(async () => {
     try {
-      const { data } = await api.get(`/owner/farmer-collections/next-number?date=${date}`);
+      const { data } = await api.get(`${apiPrefix}/farmer-collections/next-number?date=${date}`);
       setCollectionNumber(data.nextNumber);
     } catch {
       setCollectionNumber('COL-10001');
     }
-  }, [date]);
+  }, [date, apiPrefix]);
 
   useEffect(() => {
     fetchNextCollectionNumber();
@@ -156,14 +157,14 @@ const DailyCollectionDailyOwner = () => {
     if (!farmerId) return;
     setLoadingHistory(true);
     try {
-      const { data } = await api.get(`/owner/farmer-collections?farmerId=${farmerId}`);
+      const { data } = await api.get(`${apiPrefix}/farmer-collections?farmerId=${farmerId}`);
       setHistory(data.collections || []);
     } catch (err) {
       console.error('Failed to fetch farmer history:', err.message);
     } finally {
       setLoadingHistory(false);
     }
-  }, []);
+  }, [apiPrefix]);
 
   useEffect(() => {
     if (selectedFarmer) {
@@ -225,31 +226,54 @@ const DailyCollectionDailyOwner = () => {
     const bRate = activeRateConfig.baseRate;
     const fMult = activeRateConfig.fatMultiplier;
     const sMult = activeRateConfig.snfMultiplier;
+    const stdFat = activeRateConfig.standardFat ?? 4.0;
+    const stdSnf = activeRateConfig.standardSNF ?? 8.5;
 
     const fVal = parseFloat(fat) || 0;
     const sVal = parseFloat(snf) || 0;
     const qVal = parseFloat(quantity) || 0;
 
-    const calculatedFatValue = fVal * fMult;
-    const calculatedSnfValue = sVal * sMult;
+    // Fat Bonus = (Actual Fat - Standard Fat) * 10 * Fat Bonus per 0.1%
+    const calculatedFatValue = (fVal - stdFat) * 10 * fMult;
+    // SNF Bonus = (Actual SNF - Standard SNF) * 10 * SNF Bonus per 0.1%
+    const calculatedSnfValue = (sVal - stdSnf) * 10 * sMult;
 
     const calculatedFinalRate = Math.max(0, bRate + calculatedFatValue + calculatedSnfValue);
     setBaseRate(bRate);
-    setFatBonus(calculatedFatValue); // fat value addition
-    setSnfBonus(calculatedSnfValue); // snf value addition
+    setFatBonus(calculatedFatValue); // fat value addition/reduction
+    setSnfBonus(calculatedSnfValue); // snf value addition/reduction
     setFinalRate(calculatedFinalRate);
 
     // Payment Summary Formulas
     const gross = qVal * calculatedFinalRate;
     const bonus = qVal * (activeRateConfig.bonusPerLiter || 0);
-    const deduction = qVal * (activeRateConfig.deductionPerLiter || 0);
+    
+    const clrVal = parseFloat(clr) || 0;
+    let clrDeduction = 0;
+    const stdCLR = activeRateConfig.standardCLR ?? 28;
+    const clrDedPerUnit = activeRateConfig.clrDeductionPerUnit ?? 0;
+    if (clrVal > 0 && clrVal < stdCLR) {
+      clrDeduction = (stdCLR - clrVal) * clrDedPerUnit;
+    }
+    
+    const deduction = qVal * ((activeRateConfig.deductionPerLiter || 0) + clrDeduction);
     const net = gross + bonus - deduction;
 
     setGrossAmount(gross);
     setBonusAmount(bonus);
     setDeductionAmount(deduction);
     setNetAmount(net);
-  }, [date, milkType, quantity, fat, snf, dairyRates]);
+  }, [date, milkType, quantity, fat, snf, clr, dairyRates]);
+
+  // Auto-calculate SNF using Richmond's formula when FAT or CLR is edited
+  useEffect(() => {
+    const fVal = parseFloat(fat);
+    const cVal = parseFloat(clr);
+    if (!isNaN(fVal) && !isNaN(cVal) && cVal > 0) {
+      const calculatedSnf = (cVal / 4) + (0.2 * fVal) + 0.36;
+      setSnf(String(parseFloat(calculatedSnf.toFixed(2))));
+    }
+  }, [fat, clr]);
 
   // Save transaction handler
   const handleSave = async (isNew = false) => {
@@ -276,6 +300,14 @@ const DailyCollectionDailyOwner = () => {
       return;
     }
 
+    // Re-run calculations locally to guarantee fresh values in payload
+    const stdFat = activeRateConfig.standardFat ?? 4.0;
+    const stdSnf = activeRateConfig.standardSNF ?? 8.5;
+    const fVal = parseFloat(fat) || 0;
+    const sVal = parseFloat(snf) || 0;
+    const calculatedFatValue = (fVal - stdFat) * 10 * activeRateConfig.fatMultiplier;
+    const calculatedSnfValue = (sVal - stdSnf) * 10 * activeRateConfig.snfMultiplier;
+
     setSaving(true);
     try {
       const payload = {
@@ -290,8 +322,8 @@ const DailyCollectionDailyOwner = () => {
         clr: clr ? parseFloat(clr) : undefined,
         ratePerLiter: finalRate,
         baseRate: activeRateConfig.baseRate,
-        fatValue: parseFloat(fat || 0) * activeRateConfig.fatMultiplier,
-        snfValue: parseFloat(snf || 0) * activeRateConfig.snfMultiplier,
+        fatValue: calculatedFatValue,
+        snfValue: calculatedSnfValue,
         grossAmount,
         bonusAmount,
         deductionAmount,
@@ -299,7 +331,7 @@ const DailyCollectionDailyOwner = () => {
         notes: notes.trim()
       };
 
-      const { data } = await api.post('/owner/farmer-collections', payload);
+      const { data } = await api.post(`${apiPrefix}/farmer-collections`, payload);
       toast.success(isMarathi ? 'दूध संकलन यशस्वीरित्या जतन केले!' : 'Milk collection saved successfully!');
       
       // Update running farmer balance locally
@@ -367,26 +399,43 @@ const DailyCollectionDailyOwner = () => {
   };
 
   // WhatsApp receipt sender
-  const [sendingWa, setSendingWa] = useState(false);
-  const handleSendWhatsApp = async () => {
-    if (!savedRecord) {
+  const handleSendWhatsApp = () => {
+    if (!savedRecord || !selectedFarmer) {
       toast.error(isMarathi ? 'कृपया संदेश पाठवण्यापूर्वी आधी संकलन जतन करा.' : 'Please save the collection before sending WhatsApp.');
       return;
     }
-    setSendingWa(true);
-    try {
-      await api.post('/owner/farmer-collections/send-whatsapp', { collectionId: savedRecord._id });
-      toast.success(isMarathi ? 'व्हाट्सएप पावती यशस्वीरित्या पाठवली!' : 'WhatsApp receipt sent successfully!');
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send WhatsApp message.');
-    } finally {
-      setSendingWa(false);
+    const phone = selectedFarmer.phone;
+    if (!phone) {
+      toast.error(isMarathi ? 'शेतकऱ्याचा फोन नंबर उपलब्ध नाही.' : 'Farmer phone not available.');
+      return;
     }
+    let clean = phone.replace(/\D/g, '');
+    if (clean.length === 10)          clean = '91' + clean;
+    else if (clean.startsWith('0'))   clean = '91' + clean.slice(1);
+
+    const isMr = selectedFarmer.language === 'mr' || isMarathi;
+    const dateStr = savedRecord.date || new Date().toLocaleDateString('en-IN');
+    const shiftStr = savedRecord.shift === 'Morning' ? (isMr ? 'सकाळ' : 'Morning') : (isMr ? 'संध्याकाळ' : 'Evening');
+    const typeStr = savedRecord.milkType === 'Cow' ? (isMr ? 'गाय' : 'Cow') : savedRecord.milkType === 'Buffalo' ? (isMr ? 'म्हैस' : 'Buffalo') : (isMr ? 'मिश्रित' : 'Mixed');
+
+    const msg = isMr 
+      ? `🥛 *दूध संकलन पावती* — ${dateStr}\n-------------------------------\nशेतकरी: *${selectedFarmer.name}*\nवेळ: *${shiftStr}*\nदूध प्रकार: *${typeStr}*\nप्रमाण: *${savedRecord.quantity} ली.*\nFAT: *${savedRecord.fat}%* | SNF: *${savedRecord.snf}%*\nदर: *₹${savedRecord.ratePerLiter}/ली.*\nएकूण देय: *₹${savedRecord.netAmount.toFixed(2)}*\n-------------------------------\nअमृत डेअरीद्वारे पाठवले.`
+      : `🥛 *Milk Collection Receipt* — ${dateStr}\n-------------------------------\nFarmer: *${selectedFarmer.name}*\nShift: *${shiftStr}*\nMilk Type: *${typeStr}*\nQty: *${savedRecord.quantity} L*\nFAT: *${savedRecord.fat}%* | SNF: *${savedRecord.snf}%*\nRate: *₹${savedRecord.ratePerLiter}/L*\nNet Payable: *₹${savedRecord.netAmount.toFixed(2)}*\n-------------------------------\nSent via Amrit Dairy.`;
+
+    const url = `https://api.whatsapp.com/send?phone=${clean}&text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+    toast.success(isMarathi ? 'WhatsApp उघडले!' : 'WhatsApp opened!');
   };
 
   const formattedAmount = (val) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
   };
+
+  const activeRateConfig = dairyRates.find(r => r.milkType === milkType);
+  const stdFat = activeRateConfig?.standardFat ?? 4.0;
+  const stdSnf = activeRateConfig?.standardSNF ?? 8.5;
+  const stdClr = activeRateConfig?.standardCLR ?? 28;
+  const baseRateVal = activeRateConfig?.baseRate ?? 0;
 
   return (
     <div style={{ maxWidth: '100%', paddingBottom: isMobile ? '80px' : '24px' }}>
@@ -454,7 +503,7 @@ const DailyCollectionDailyOwner = () => {
               <h3 style={{ fontWeight: 700, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                 <Users size={16} color="#0F62FE" /> {isMarathi ? '२. शेतकरी निवड' : '2. Farmer Information'}
               </h3>
-              {!selectedFarmer && (
+              {!selectedFarmer && user?.role !== 'staff' && (
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
@@ -549,6 +598,30 @@ const DailyCollectionDailyOwner = () => {
               <Droplets size={16} color="#0F62FE" /> {isMarathi ? '३. दूध संकलन नोंदी' : '3. Milk Collection Entry'}
             </h3>
             
+            {activeRateConfig && (
+              <div style={{
+                backgroundColor: '#EDF5FF',
+                borderLeft: '4px solid #0F62FE',
+                padding: '10px 14px',
+                fontSize: '12.5px',
+                color: '#161616',
+                marginBottom: '16px',
+                borderRadius: '0 4px 4px 0',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '16px',
+                alignItems: 'center'
+              }}>
+                <span style={{ fontWeight: 600, color: '#0F62FE' }}>
+                  {isMarathi ? `${milkType === 'Cow' ? 'गाय' : milkType === 'Buffalo' ? 'म्हैस' : 'मिश्रित'} दर पत्रक:` : `${milkType} Rate Config:`}
+                </span>
+                <span>{isMarathi ? 'मूळ दर:' : 'Base Rate:'} <strong>₹{baseRateVal.toFixed(2)}/L</strong></span>
+                <span>{isMarathi ? 'प्रमाणित फॅट:' : 'Std FAT:'} <strong>{stdFat}%</strong> (± ₹{(activeRateConfig.fatMultiplier * 10).toFixed(2)} per 1%)</span>
+                <span>{isMarathi ? 'प्रमाणित एसएनएफ:' : 'Std SNF:'} <strong>{stdSnf}%</strong> (± ₹{(activeRateConfig.snfMultiplier * 10).toFixed(2)} per 1%)</span>
+                <span>{isMarathi ? 'प्रमाणित सीएलआर:' : 'Std CLR:'} <strong>{stdClr}</strong></span>
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '16px' }}>
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'दूध प्रकार' : 'Milk Type'}</label>
@@ -557,6 +630,11 @@ const DailyCollectionDailyOwner = () => {
                   <option value="Buffalo">{isMarathi ? 'Buffalo (म्हैस)' : 'Buffalo'}</option>
                   <option value="Mixed">{isMarathi ? 'Mixed (मिश्रित)' : 'Mixed'}</option>
                 </select>
+                {activeRateConfig && (
+                  <span style={{ fontSize: '11px', color: '#24A148', marginTop: '2px', display: 'block', fontWeight: 600 }}>
+                    {isMarathi ? `आधारभूत दर: ₹${baseRateVal.toFixed(2)}/ली.` : `Base Rate: ₹${baseRateVal.toFixed(2)}/L`}
+                  </span>
+                )}
               </div>
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'मात्रा (लिटर) *' : 'Quantity (Liters) *'}</label>
@@ -566,18 +644,38 @@ const DailyCollectionDailyOwner = () => {
                 />
               </div>
               <div className="input-group">
-                <label className="input-label">{isMarathi ? 'फॅट % (FAT) *' : 'FAT % *'}</label>
+                <label className="input-label">{isMarathi ? 'फॅट % (FAT) * (० - १५%)' : 'FAT % * (0 - 15%)'}</label>
                 <input
                   type="number" step="0.01" className="input"
-                  placeholder="0.00" value={fat} onChange={e => setFat(e.target.value)}
+                  placeholder="0.00" value={fat} onChange={e => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d{0,2}(\.\d{0,2})?$/.test(val)) {
+                      if (val === '' || parseFloat(val) <= 15) {
+                        setFat(val);
+                      }
+                    }
+                  }}
                 />
+                <span style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '2px', display: 'block' }}>
+                  {isMarathi ? `मर्यादा: ०.०० ते १५.००% | प्रमाणित फॅट: ${stdFat}%` : `Limit: 0.00 to 15.00% | Std FAT: ${stdFat}%`}
+                </span>
               </div>
               <div className="input-group">
-                <label className="input-label">{isMarathi ? 'एसएनएफ % (SNF) *' : 'SNF % *'}</label>
+                <label className="input-label">{isMarathi ? 'एसएनएफ % (SNF) * (० - १५%)' : 'SNF % * (0 - 15%)'}</label>
                 <input
                   type="number" step="0.01" className="input"
-                  placeholder="0.00" value={snf} onChange={e => setSnf(e.target.value)}
+                  placeholder="0.00" value={snf} onChange={e => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d{0,2}(\.\d{0,2})?$/.test(val)) {
+                      if (val === '' || parseFloat(val) <= 15) {
+                        setSnf(val);
+                      }
+                    }
+                  }}
                 />
+                <span style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '2px', display: 'block' }}>
+                  {isMarathi ? `मर्यादा: ०.०० ते १५.००% | प्रमाणित एसएनएफ: ${stdSnf}%` : `Limit: 0.00 to 15.00% | Std SNF: ${stdSnf}%`}
+                </span>
               </div>
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'सीएलआर (CLR)' : 'CLR (Optional)'}</label>
@@ -585,6 +683,19 @@ const DailyCollectionDailyOwner = () => {
                   type="number" className="input"
                   placeholder="0" value={clr} onChange={e => setClr(e.target.value)}
                 />
+                <span style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '2px', display: 'block' }}>
+                  {isMarathi ? `प्रमाणित सीएलआर: ${stdClr}` : `Standard CLR: ${stdClr}`}
+                </span>
+                {(() => {
+                  if (clr && parseFloat(clr) < stdClr) {
+                    return (
+                      <span style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        ⚠️ {isMarathi ? `कमी सीएलआर! (प्रमाणित: ${stdClr} पेक्षा कमी, वजावट लागू होईल)` : `Low CLR! (Below standard ${stdClr}, deduction will apply)`}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           </div>
@@ -793,13 +904,9 @@ const DailyCollectionDailyOwner = () => {
               
               <button
                 className="btn btn-ghost" style={{ flex: 1, border: '1px solid #24A148', color: '#24A148', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                onClick={handleSendWhatsApp} disabled={!savedRecord || sendingWa}
+                onClick={handleSendWhatsApp} disabled={!savedRecord}
               >
-                {sendingWa ? (
-                  <div className="spinner" style={{ width: '14px', height: '14px' }} />
-                ) : (
-                  <><MessageSquare size={16} /> {isMarathi ? 'व्हॉट्सॲप पावती' : 'WhatsApp Receipt'}</>
-                )}
+                <MessageSquare size={16} /> {isMarathi ? 'व्हॉट्सॲप पावती' : 'WhatsApp Receipt'}
               </button>
             </div>
           </div>
@@ -808,14 +915,14 @@ const DailyCollectionDailyOwner = () => {
 
       </div>
 
-      {showAddFarmerModal && (
+      {showAddFarmerModal && user?.role !== 'staff' && (
         <FarmerModal
           farmer={null}
           onClose={() => setShowAddFarmerModal(false)}
           onSaved={async () => {
             // Re-fetch farmers
             try {
-              const { data } = await api.get('/owner/farmers', { params: { active: 'true', limit: 1000 } });
+              const { data } = await api.get(`${apiPrefix}/farmers`, { params: { active: 'true', limit: 1000 } });
               setFarmers(data.customers || []);
               toast.success(isMarathi ? 'नवीन शेतकरी यशस्वीरित्या जोडला गेला!' : 'New farmer added successfully!');
             } catch (err) { /* ignore */ }

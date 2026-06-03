@@ -186,29 +186,6 @@ const Delivery = () => {
       <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0', padding: '16px', marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <div style={{ fontSize: '13px', color: '#8D8D8D' }}>{today}</div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '12px',
-            fontWeight: 600,
-            padding: '4px 8px',
-            borderRadius: '12px',
-            backgroundColor: whatsappStatus === 'authenticated' ? '#DEFBE6' : '#FFF1F1',
-            color: whatsappStatus === 'authenticated' ? '#0E6027' : '#DA1E28',
-            border: `1.5px solid ${whatsappStatus === 'authenticated' ? '#24A148' : '#DA1E28'}`
-          }}>
-            <span style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: whatsappStatus === 'authenticated' ? '#24A148' : '#DA1E28',
-              display: 'inline-block'
-            }} />
-            {whatsappStatus === 'authenticated'
-              ? (isMarathi ? 'WhatsApp: सुरू आहे' : 'WhatsApp: Connected')
-              : (isMarathi ? 'WhatsApp: बंद आहे' : 'WhatsApp: Disconnected')}
-          </div>
         </div>
 
         {/* Quota banner */}
@@ -349,11 +326,11 @@ const Delivery = () => {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', backgroundColor: morningDelivered ? '#DEFBE6' : '#F4F4F4', color: morningDelivered ? '#0E6027' : '#8D8D8D', border: `1px solid ${morningDelivered ? '#24A148' : '#E0E0E0'}` }}>
-                      ☀ {morningDelivered ? `${customer.morning?.delivered_qty}${isMarathi ? 'ली.' : 'L'}` : `${customer.base_requirement?.morning || 0}${isMarathi ? 'ली.' : 'L'}`}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, padding: '2px 8px', backgroundColor: morningDelivered ? '#DEFBE6' : '#F4F4F4', color: morningDelivered ? '#0E6027' : '#8D8D8D', border: `1px solid ${morningDelivered ? '#24A148' : '#E0E0E0'}` }}>
+                      <Sun size={11} /> {morningDelivered ? `${customer.morning?.delivered_qty}${isMarathi ? 'ली.' : 'L'}` : `${customer.base_requirement?.morning || 0}${isMarathi ? 'ली.' : 'L'}`}
                     </span>
-                    <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', backgroundColor: eveningDelivered ? '#EDF5FF' : '#F4F4F4', color: eveningDelivered ? '#0043CE' : '#8D8D8D', border: `1px solid ${eveningDelivered ? '#0F62FE' : '#E0E0E0'}` }}>
-                      🌙 {eveningDelivered ? `${customer.evening?.delivered_qty}${isMarathi ? 'ली.' : 'L'}` : `${customer.base_requirement?.evening || 0}${isMarathi ? 'ली.' : 'L'}`}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, padding: '2px 8px', backgroundColor: eveningDelivered ? '#EDF5FF' : '#F4F4F4', color: eveningDelivered ? '#0043CE' : '#8D8D8D', border: `1px solid ${eveningDelivered ? '#0F62FE' : '#E0E0E0'}` }}>
+                      <Moon size={11} /> {eveningDelivered ? `${customer.evening?.delivered_qty}${isMarathi ? 'ली.' : 'L'}` : `${customer.base_requirement?.evening || 0}${isMarathi ? 'ली.' : 'L'}`}
                     </span>
                   </div>
                 </div>
@@ -368,8 +345,9 @@ const Delivery = () => {
                   </div>
                 ) : (
                   <div>
-                    <div style={{ fontSize: '13px', color: '#525252', marginBottom: '10px' }}>
-                      {activeSlot === 'morning' ? '☀ ' : '🌙 '}{isMarathi ? (activeSlot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : (activeSlot === 'morning' ? 'Morning' : 'Evening')} {isMarathi ? 'मूळ' : 'base'}: <strong>{baseQty}{isMarathi ? 'ली.' : 'L'}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#525252', marginBottom: '10px' }}>
+                      {activeSlot === 'morning' ? <Sun size={13} color="#FFB300" /> : <Moon size={13} color="#3F51B5" />}
+                      <span>{isMarathi ? (activeSlot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : (activeSlot === 'morning' ? 'Morning' : 'Evening')} {isMarathi ? 'मूळ' : 'base'}: <strong>{baseQty}{isMarathi ? 'ली.' : 'L'}</strong></span>
                       {extra > 0 && <span style={{ color: '#FF832B', marginLeft: '8px' }}>+ {extra}{isMarathi ? 'ली.' : 'L'} {isMarathi ? 'अतिरिक्त = ' : 'extra = '}<strong>{totalQty}{isMarathi ? 'ली.' : 'L'}</strong></span>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>

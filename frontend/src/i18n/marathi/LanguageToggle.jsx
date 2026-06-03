@@ -3,6 +3,25 @@ import { useMarathi } from './MarathiContext';
 
 const LanguageToggle = ({ style = {} }) => {
   const { isMarathi, toggle } = useMarathi();
+  const [hovered, setHovered] = React.useState(false);
+
+  const baseBg = style.backgroundColor !== undefined ? style.backgroundColor : (isMarathi ? '#EDF5FF' : '#FFFFFF');
+  const baseBorder = style.borderColor !== undefined ? style.borderColor : '#E0E0E0';
+  const baseColor = style.color !== undefined ? style.color : (isMarathi ? '#0F62FE' : '#525252');
+
+  const isDarkTheme = baseBg === 'transparent' || baseBg === 'none' || baseColor === '#C6C6C6';
+  
+  const hoverBg = isDarkTheme
+    ? 'rgba(255, 255, 255, 0.08)'
+    : (isMarathi ? '#D0E8FF' : '#F4F4F4');
+    
+  const hoverBorder = isDarkTheme
+    ? '#8D8D8D'
+    : '#0F62FE';
+    
+  const hoverColor = isDarkTheme
+    ? '#FFFFFF'
+    : (isMarathi ? '#0F62FE' : '#161616');
 
   return (
     <button
@@ -17,23 +36,17 @@ const LanguageToggle = ({ style = {} }) => {
         fontSize: '13px',
         fontWeight: 600,
         fontFamily: isMarathi ? '"Noto Sans Devanagari", sans-serif' : 'Inter, sans-serif',
-        border: '1px solid #E0E0E0',
-        backgroundColor: isMarathi ? '#EDF5FF' : '#FFFFFF',
-        color: isMarathi ? '#0F62FE' : '#525252',
         cursor: 'pointer',
         borderRadius: '2px',
         transition: 'all 0.15s',
         letterSpacing: isMarathi ? '0' : '0.2px',
-        ...style
+        ...style,
+        backgroundColor: hovered ? hoverBg : baseBg,
+        borderColor: hovered ? hoverBorder : baseBorder,
+        color: hovered ? hoverColor : baseColor
       }}
-      onMouseOver={e => {
-        e.currentTarget.style.backgroundColor = isMarathi ? '#D0E8FF' : '#F4F4F4';
-        e.currentTarget.style.borderColor = '#0F62FE';
-      }}
-      onMouseOut={e => {
-        e.currentTarget.style.backgroundColor = isMarathi ? '#EDF5FF' : '#FFFFFF';
-        e.currentTarget.style.borderColor = '#E0E0E0';
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {/* Globe icon */}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

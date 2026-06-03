@@ -30,7 +30,7 @@ const ConfirmModal = ({
       onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
       onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onCancel(); }}
     >
-      <div className="modal" style={{ maxWidth: '400px', textAlign: 'center', position: 'relative' }}>
+      <div className="modal" style={{ maxWidth: '400px', textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column' }}>
         <button
           type="button"
           onClick={onCancel}
@@ -48,6 +48,7 @@ const ConfirmModal = ({
             justifyContent: 'center',
             borderRadius: '4px',
             transition: 'background-color 0.2s',
+            zIndex: 10,
           }}
           onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
           onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -55,20 +56,24 @@ const ConfirmModal = ({
           <X size={18} />
         </button>
 
-        <div style={{
-          width: 52, height: 52, borderRadius: '50%',
-          backgroundColor: danger ? '#FFF1F1' : '#FFF8E1',
-          border: `2px solid ${danger ? '#DA1E28' : '#F1C21B'}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 16px'
-        }}>
-          <AlertTriangle size={24} color={danger ? '#DA1E28' : '#B28600'} />
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: 0 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: '50%',
+            backgroundColor: danger ? '#FFF1F1' : '#FFF8E1',
+            border: `2px solid ${danger ? '#DA1E28' : '#F1C21B'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '8px auto 16px',
+            flexShrink: 0
+          }}>
+            <AlertTriangle size={24} color={danger ? '#DA1E28' : '#B28600'} />
+          </div>
+          <h3 style={{ fontWeight: 700, fontSize: '18px', marginBottom: '8px' }}>{title}</h3>
+          {message && (
+            <p style={{ color: '#525252', fontSize: '14px', marginBottom: '8px', lineHeight: 1.5 }}>{message}</p>
+          )}
         </div>
-        <h3 style={{ fontWeight: 700, fontSize: '18px', marginBottom: '8px' }}>{title}</h3>
-        {message && (
-          <p style={{ color: '#525252', fontSize: '14px', marginBottom: '24px', lineHeight: 1.5 }}>{message}</p>
-        )}
-        <div style={{ display: 'flex', gap: '12px', marginTop: message ? '0' : '24px' }}>
+
+        <div className="modal-footer" style={{ marginTop: '20px' }}>
           <button
             type="button"
             className="btn btn-ghost btn-full"

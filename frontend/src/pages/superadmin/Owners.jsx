@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, ToggleLeft, ToggleRight, Settings,
-  ChevronDown, ChevronUp, KeyRound, Users, Check, X, RefreshCw, Calculator,
+  ChevronDown, ChevronUp, KeyRound, Users, User, FileText, Check, X, RefreshCw, Calculator,
   ChevronLeft, LogIn
 } from 'lucide-react';
 import api from '../../api/axios';
@@ -166,21 +166,19 @@ const Owners = () => {
     );
   };
 
-  if (viewingStaffOwner) {
-    return (
-      <StaffList
-        owner={viewingStaffOwner}
-        onBack={() => setViewingStaffOwner(null)}
-        handleImpersonate={handleImpersonate}
-        setPwModal={setPwModal}
-      />
-    );
-  }
-
   return (
     <div style={{ maxWidth: '100%', overflowX: 'hidden' }}>
-      <div className="page-header">
-        <h1 className="page-title">
+      {viewingStaffOwner ? (
+        <StaffList
+          owner={viewingStaffOwner}
+          onBack={() => setViewingStaffOwner(null)}
+          handleImpersonate={handleImpersonate}
+          setPwModal={setPwModal}
+        />
+      ) : (
+        <>
+          <div className="page-header">
+            <h1 className="page-title">
           Owner Accounts <span style={{ color: '#8D8D8D', fontWeight: 400, fontSize: '16px' }}>({total})</span>
         </h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -225,9 +223,15 @@ const Owners = () => {
                 padding: '10px 16px', fontSize: '12px', minWidth: '160px'
               }}>
                 <div style={{ fontWeight: 700, color: c.text, textTransform: 'uppercase', marginBottom: '6px' }}>{p}</div>
-                <div style={{ color: '#525252' }}>👥 {lim.customers} customers</div>
-                <div style={{ color: '#525252' }}>🧑 {lim.users} users</div>
-                <div style={{ color: '#525252' }}>🧾 {lim.billing} billing</div>
+                <div style={{ color: '#525252', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Users size={12} color="#8D8D8D" /> {lim.customers} customers
+                </div>
+                <div style={{ color: '#525252', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <User size={12} color="#8D8D8D" /> {lim.users} users
+                </div>
+                <div style={{ color: '#525252', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <FileText size={12} color="#8D8D8D" /> {lim.billing} billing
+                </div>
               </div>
             );
           })}
@@ -626,6 +630,7 @@ const Owners = () => {
           )}
         </div>
       </div>
+    </>)}
 
       {showAddModal && <AddOwnerModal onClose={() => setShowAddModal(false)} onCreated={fetchOwners} prefillData={addModalPrefill} />}
       {pwModal && <PasswordModal target={pwModal} onClose={() => setPwModal(null)} />}
@@ -1271,6 +1276,8 @@ const PasswordModal = ({ target, onClose }) => {
 
 // ── Staff List Sub-view Page ──────────────────────────────────
 const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
@@ -1333,6 +1340,38 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
               <div className="empty-state-icon"><Users size={40} /></div>
               <h3>No staff members found</h3>
               <p>This owner has not registered any staff members yet.</p>
+            </div>
+          ) : isMobile ? (
+            /* Mobile card list */
+            <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {staff.map(s => (
+                <div key={s._id} style={{ border: '1px solid #E0E0E0', padding: '14px', backgroundColor: '#FFFFFF', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '15px', color: '#161616' }}>{s.name}</div>
+                      <div style={{ fontSize: '13px', color: '#525252', marginTop: '2px', fontWeight: 500 }}>{s.phone}</div>
+                    </div>
+                    <span className={`badge ${s.isActive ? 'badge-green' : 'badge-red'}`}>
+                      {s.isActive ? 'Active' : 'Disabled'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#8D8D8D', marginBottom: '12px' }}>
+                    Created on: {new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => handleImpersonate(s.phone, s.name)}
+                      style={{ flex: 1, color: '#0F62FE', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: '1px solid #0F62FE', borderRadius: '4px', height: '36px' }}>
+                      <LogIn size={14} /> Login
+                    </button>
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => setPwModal({ type: 'staff', id: s._id, name: s.name })}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: '1px solid #E0E0E0', borderRadius: '4px', height: '36px' }}>
+                      <KeyRound size={14} /> Reset PW
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="table-wrap">
@@ -1662,7 +1701,7 @@ const RoleConfirmModal = ({ target, onClose, onConfirm }) => {
       onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
       onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
     >
-      <div className="modal" style={{ maxWidth: '400px', position: 'relative' }}>
+      <div className="modal" style={{ maxWidth: '400px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
         <button
           type="button"
           onClick={onClose}
@@ -1680,6 +1719,7 @@ const RoleConfirmModal = ({ target, onClose, onConfirm }) => {
             justifyContent: 'center',
             borderRadius: '4px',
             transition: 'background-color 0.2s',
+            zIndex: 10,
           }}
           onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
           onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -1687,16 +1727,18 @@ const RoleConfirmModal = ({ target, onClose, onConfirm }) => {
           <X size={20} />
         </button>
 
-        <h3 style={{ fontWeight: 700, fontSize: '18px', marginBottom: '12px', marginTop: '8px' }}>
-          Change Business Mode?
-        </h3>
-        <p style={{ color: '#525252', fontSize: '14.5px', marginBottom: '24px', lineHeight: 1.5, textAlign: 'left' }}>
-          Are you sure you want to change the role of <strong>{target.name}</strong> from <strong>{currentRoleLabel}</strong> to <strong>{newRoleLabel}</strong>?
-          <br /><br />
-          <span style={{ color: '#DA1E28', fontWeight: 600 }}>Note:</span> This will adjust the sidebar options and system permissions for this owner.
-        </p>
+        <div className="modal-body" style={{ margin: 0 }}>
+          <h3 style={{ fontWeight: 700, fontSize: '18px', marginBottom: '12px', marginTop: '8px' }}>
+            Change Business Mode?
+          </h3>
+          <p style={{ color: '#525252', fontSize: '14.5px', marginBottom: '8px', lineHeight: 1.5, textAlign: 'left' }}>
+            Are you sure you want to change the role of <strong>{target.name}</strong> from <strong>{currentRoleLabel}</strong> to <strong>{newRoleLabel}</strong>?
+            <br /><br />
+            <span style={{ color: '#DA1E28', fontWeight: 600 }}>Note:</span> This will adjust the sidebar options and system permissions for this owner.
+          </p>
+        </div>
 
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="modal-footer" style={{ marginTop: '20px' }}>
           <button
             type="button"
             className="btn btn-ghost btn-full"

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MessageSquare, Star, CheckCircle, Clock, RefreshCw, User, MessageCircle, AlertCircle } from 'lucide-react';
+import { MessageSquare, Star, CheckCircle, Clock, RefreshCw, User, MessageCircle, AlertCircle, Eye } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
 
 const STATUS_COLORS = {
-  pending:   { bg: '#FFF8E1', color: '#B28600', border: '#F1C21B', label: '⏳ Pending' },
-  in_review: { bg: '#EDF5FF', color: '#0043CE', border: 'rgba(15,98,254,0.3)', label: '🔎 In Review' },
-  resolved:  { bg: '#DEFBE6', color: '#0E6027', border: '#24A148', label: '✅ Resolved' }
+  pending:   { bg: '#FFF8E1', color: '#B28600', border: '#F1C21B', label: 'Pending', icon: Clock },
+  in_review: { bg: '#EDF5FF', color: '#0043CE', border: 'rgba(15,98,254,0.3)', label: 'In Review', icon: Eye },
+  resolved:  { bg: '#DEFBE6', color: '#0E6027', border: '#24A148', label: 'Resolved', icon: CheckCircle }
 };
 
 const TYPE_COLORS = {
@@ -152,9 +152,13 @@ const FeedbackList = () => {
                             {fb.type}
                           </span>
                           <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
                             fontSize: '11px', fontWeight: 700, padding: '2px 8px',
                             backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}`
                           }}>
+                            {sc.icon && React.createElement(sc.icon, { size: 11 })}
                             {sc.label}
                           </span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '6px' }}>
@@ -238,35 +242,41 @@ const FeedbackList = () => {
             </h3>
             
             <form onSubmit={handleUpdate}>
-              <div className="input-group" style={{ marginBottom: '16px' }}>
-                <label className="input-label">Status</label>
-                <select
-                  className="input"
-                  value={statusVal}
-                  onChange={e => setStatusVal(e.target.value)}
-                  style={{ height: '40px', backgroundColor: '#FFF' }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in_review">In Review</option>
-                  <option value="resolved">Resolved</option>
-                </select>
+              <div className="modal-body" style={{ margin: 0 }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#161616', marginBottom: '16px' }}>
+                  Update Feedback Status
+                </h3>
+                
+                <div className="input-group" style={{ marginBottom: '16px' }}>
+                  <label className="input-label">Status</label>
+                  <select
+                    className="input"
+                    value={statusVal}
+                    onChange={e => setStatusVal(e.target.value)}
+                    style={{ height: '40px', backgroundColor: '#FFF' }}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in_review">In Review</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                </div>
+
+                <div className="input-group" style={{ marginBottom: '8px' }}>
+                  <label className="input-label">Admin Notes</label>
+                  <textarea
+                    className="input"
+                    value={adminNotes}
+                    onChange={e => setAdminNotes(e.target.value)}
+                    placeholder="e.g. Added to future feature requests backlog, fixed bug in hotfix, etc."
+                    style={{ minHeight: '100px', resize: 'vertical', padding: '10px' }}
+                  />
+                </div>
               </div>
 
-              <div className="input-group" style={{ marginBottom: '24px' }}>
-                <label className="input-label">Admin Notes</label>
-                <textarea
-                  className="input"
-                  value={adminNotes}
-                  onChange={e => setAdminNotes(e.target.value)}
-                  placeholder="e.g. Added to future feature requests backlog, fixed bug in hotfix, etc."
-                  style={{ minHeight: '100px', resize: 'vertical', padding: '10px' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <div className="modal-footer" style={{ marginTop: '20px' }}>
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm"
+                  className="btn btn-ghost btn-full"
                   onClick={() => setSelectedFeedback(null)}
                   disabled={updating}
                 >
@@ -274,7 +284,7 @@ const FeedbackList = () => {
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary btn-sm"
+                  className="btn btn-primary btn-full"
                   disabled={updating}
                 >
                   {updating ? 'Updating...' : 'Save Changes'}

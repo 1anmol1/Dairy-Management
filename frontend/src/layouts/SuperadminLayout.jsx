@@ -34,130 +34,160 @@ const SuperadminLayout = () => {
     { to: '/app/superadmin/feedback',   icon: MessageSquare, label: 'User Feedbacks' }
   ];
 
-  const SidebarContent = () => (
-    <>
-      {/* Logo — PNG asset */}
-      <Link to="/app/superadmin" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
-        <div style={{ marginBottom: '6px' }}>
-          <img
-            src={amritLogo}
-            alt="Amrit Manage"
-            style={{ height: '30px', width: 'auto', display: 'block', filter: 'brightness(0) invert(1)' }}
-          />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Shield size={12} color="#DA1E28" />
-          <span style={{ color: '#8D8D8D', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Super Admin
-          </span>
-        </div>
-      </Link>
+  // Filter nav items based on sub-admin permissions
+  const filteredNavItems = navItems.filter(item => {
+    if (user?.role !== 'superadmin') return false;
 
-      {/* Nav */}
-      <nav className="sidebar-nav">
-        {navItems.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <item.icon size={18} />
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
+    if (user?.parentAdminId) {
+      if (item.to === '/app/superadmin') return user.permissions?.includes('dashboard');
+      if (item.to === '/app/superadmin/owners') return user.permissions?.includes('owners');
+      if (item.to === '/app/superadmin/impersonate') return user.permissions?.includes('impersonate');
+      if (item.to === '/app/superadmin/activities') return user.permissions?.includes('activities');
+      if (item.to === '/app/superadmin/plans') return user.permissions?.includes('plans');
+      if (item.to === '/app/superadmin/requests') return user.permissions?.includes('requests');
+      if (item.to === '/app/superadmin/feedback') return user.permissions?.includes('feedback');
+    }
+    return true;
+  });
 
-      {/* Footer: profile + logout */}
-      <div className="sidebar-footer">
-        {/* Profile card */}
-        <div
-          className="sidebar-profile"
-          onClick={() => setProfileOpen(p => !p)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && setProfileOpen(p => !p)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: '50%',
-                backgroundColor: '#DA1E28',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '14px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0
-              }}>
-                {user?.name?.charAt(0)?.toUpperCase() || 'S'}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{
-                  color: '#FFFFFF', fontWeight: 600, fontSize: '13px',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  maxWidth: '120px'
-                }}>
-                  {user?.name}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
-                  <Shield size={10} color="#DA1E28" />
-                  <span style={{ fontSize: '10px', color: '#8D8D8D' }}>Super Admin</span>
-                </div>
-              </div>
-            </div>
-            {profileOpen
-              ? <ChevronUp size={14} color="#8D8D8D" />
-              : <ChevronDown size={14} color="#8D8D8D" />}
-          </div>
-
-          {/* Expanded info */}
-          {profileOpen && (
-            <div style={{ marginTop: '12px', borderTop: '1px solid #393939', paddingTop: '12px' }}
-              onClick={e => e.stopPropagation()}>
-              {user?.phone && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <Phone size={12} color="#8D8D8D" />
-                  <span style={{ fontSize: '12px', color: '#C6C6C6' }}>{user.phone}</span>
-                </div>
-              )}
-              {user?.email && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <Mail size={12} color="#8D8D8D" />
-                  <span style={{ fontSize: '12px', color: '#C6C6C6', wordBreak: 'break-all' }}>{user.email}</span>
-                </div>
-              )}
-              {user?.username && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                  <Shield size={12} color="#8D8D8D" />
-                  <span style={{ fontSize: '12px', color: '#C6C6C6' }}>@{user.username}</span>
-                </div>
-              )}
-              <button
-                className="btn btn-ghost btn-sm btn-full"
-                style={{ fontSize: '12px', height: '32px', borderColor: '#525252', color: '#C6C6C6' }}
-                onClick={() => { setShowPwModal(true); setProfileOpen(false); setSidebarOpen(false); }}
-              >
-                <KeyRound size={12} /> Change Password
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Sign-out reminder */}
-        <div style={{ fontSize: '11px', color: '#8D8D8D', textAlign: 'center', marginBottom: '8px', lineHeight: 1.4, padding: '0 4px' }}>
-          Sign out when done to keep your account secure.
-        </div>
-
-        {/* Logout */}
-        <button className="btn btn-danger btn-sm btn-full" onClick={handleLogout}>
-          <LogOut size={14} /> Sign Out
-        </button>
-      </div>
-    </>
-  );
+  // Main superadmin gets the extra "Sub-admins" menu item
+  if (user?.role === 'superadmin' && !user?.parentAdminId) {
+    const ownersIndex = filteredNavItems.findIndex(i => i.to === '/app/superadmin/owners');
+    if (ownersIndex !== -1) {
+      filteredNavItems.splice(ownersIndex + 1, 0, {
+        to: '/app/superadmin/admins',
+        icon: Shield,
+        label: 'Manage Sub-Admins'
+      });
+    } else {
+      filteredNavItems.push({
+        to: '/app/superadmin/admins',
+        icon: Shield,
+        label: 'Manage Sub-Admins'
+      });
+    }
+  }
 
   return (
     <div className="app-layout">
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <SidebarContent />
+        {/* Logo — PNG asset */}
+        <Link to="/app/superadmin" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
+          <div style={{ marginBottom: '6px' }}>
+            <img
+              src={amritLogo}
+              alt="Amrit Manage"
+              style={{ height: '30px', width: 'auto', display: 'block', filter: 'brightness(0) invert(1)' }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Shield size={12} color="#DA1E28" />
+            <span style={{ color: '#8D8D8D', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {user?.parentAdminId ? `${user.roleName || 'Sub Admin'}` : 'Super Admin'}
+            </span>
+          </div>
+        </Link>
+
+        {/* Nav */}
+        <nav className="sidebar-nav">
+          {filteredNavItems.map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <item.icon size={18} />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Footer: profile + logout */}
+        <div className="sidebar-footer">
+          {/* Profile card */}
+          <div
+            className="sidebar-profile"
+            onClick={() => setProfileOpen(p => !p)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && setProfileOpen(p => !p)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: '50%',
+                  backgroundColor: '#DA1E28',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '14px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0
+                }}>
+                  {user?.name?.charAt(0)?.toUpperCase() || 'S'}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    color: '#FFFFFF', fontWeight: 600, fontSize: '13px',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    maxWidth: '120px'
+                  }}>
+                    {user?.name}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+                    <Shield size={10} color="#DA1E28" />
+                    <span style={{ fontSize: '10px', color: '#8D8D8D' }}>
+                      {user?.parentAdminId ? `${user.roleName || 'Sub Admin'}` : 'Super Admin'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {profileOpen
+                ? <ChevronUp size={14} color="#8D8D8D" />
+                : <ChevronDown size={14} color="#8D8D8D" />}
+            </div>
+
+            {/* Expanded info */}
+            {profileOpen && (
+              <div style={{ marginTop: '12px', borderTop: '1px solid #393939', paddingTop: '12px' }}
+                onClick={e => e.stopPropagation()}>
+                {user?.phone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Phone size={12} color="#8D8D8D" />
+                    <span style={{ fontSize: '12px', color: '#C6C6C6' }}>{user.phone}</span>
+                  </div>
+                )}
+                {user?.email && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Mail size={12} color="#8D8D8D" />
+                    <span style={{ fontSize: '12px', color: '#C6C6C6', wordBreak: 'break-all' }}>{user.email}</span>
+                  </div>
+                )}
+                {user?.username && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <Shield size={12} color="#8D8D8D" />
+                    <span style={{ fontSize: '12px', color: '#C6C6C6' }}>@{user.username}</span>
+                  </div>
+                )}
+                <button
+                  className="btn btn-ghost btn-sm btn-full"
+                  style={{ fontSize: '12px', height: '32px', borderColor: '#525252', color: '#C6C6C6' }}
+                  onClick={() => { setShowPwModal(true); setProfileOpen(false); setSidebarOpen(false); }}
+                >
+                  <KeyRound size={12} /> Change Password
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Sign-out reminder */}
+          <div style={{ fontSize: '11px', color: '#8D8D8D', textAlign: 'center', marginBottom: '8px', lineHeight: 1.4, padding: '0 4px' }}>
+            Sign out when done to keep your account secure.
+          </div>
+
+          {/* Logout */}
+          <button className="btn btn-danger btn-sm btn-full" onClick={handleLogout}>
+            <LogOut size={14} /> Sign Out
+          </button>
+        </div>
       </aside>
 
       <div className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}

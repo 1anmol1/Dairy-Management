@@ -233,7 +233,11 @@ const OwnerDashboard = () => {
                       : (isMarathi ? 'ट्रायल संपल्यानंतर डेटा आणि वैशिष्ट्ये टिकवण्यासाठी अपग्रेड करा.' : 'Upgrade to keep your data and features after the trial ends.')}
                 </div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => navigate('/app/owner/upgrade')}>
+              <button className="btn btn-primary btn-sm" onClick={() => {
+                const plan = user?.subscription?.plan || 'gold';
+                const targetStep = (isExpired || subExpiringSoon) ? 'details' : 'select';
+                navigate('/app/owner/upgrade', { state: { selectedPlan: plan, step: targetStep } });
+              }}>
                 {isExpired
                   ? (isMarathi ? 'आता नूतनीकरण करा' : 'Renew Now')
                   : subExpiringSoon

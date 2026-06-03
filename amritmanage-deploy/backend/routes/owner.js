@@ -9,6 +9,7 @@ const DefaultRate = require('../models/DefaultRate');
 const DailyCollection = require('../models/DailyCollection');
 const MessageTemplate = require('../models/MessageTemplate');
 const SystemConfig = require('../models/SystemConfig');
+const AuthLog = require('../models/AuthLog');
 const { protect, authorize, requireActiveSubscription } = require('../middleware/auth');
 
 router.use(protect, authorize('owner'), requireActiveSubscription);
@@ -275,7 +276,7 @@ router.get('/staff', async (req, res, next) => {
   try {
     // Only return fields staff management UI needs — never return password hash
     const staff = await User.find({ ownerId: req.user._id, role: 'staff' })
-      .select('_id name phone isActive createdAt')
+      .select('_id name phone isActive createdAt permissions')
       .sort({ createdAt: -1 })
       .lean();
     res.json({ staff });
@@ -287,7 +288,7 @@ router.get('/staff', async (req, res, next) => {
 // POST /api/owner/staff
 router.post('/staff', async (req, res, next) => {
   try {
-    const { name, phone, password } = req.body;
+    const { name, phone, password, permissions } = req.body;
     if (!name || !phone || !password) {
       return res.status(400).json({ error: 'Name, phone, and password are required.' });
     }
@@ -304,13 +305,56 @@ router.post('/staff', async (req, res, next) => {
     const existing = await User.findOne({ phone: phone.trim() });
     if (existing) return res.status(400).json({ error: 'Phone already registered.' });
 
+    let staffPerms = ['milk_delivery'];
+    if (req.user.ownerRole === 'dairy_owner' && Array.isArray(permissions)) {
+      staffPerms = permissions.filter(p => ['milk_delivery', 'milk_collection'].includes(p));
+      if (staffPerms.length === 0) staffPerms = ['milk_delivery'];
+    }
+
     const staff = await User.create({
       name, phone: phone.trim(), password,
       role: 'staff',
-      ownerId: req.user._id
+      ownerId: req.user._id,
+      ownerRole: req.user.ownerRole,
+      permissions: staffPerms
     });
 
     res.status(201).json({ staff });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/owner/staff/:id
+router.put('/staff/:id', async (req, res, next) => {
+  try {
+    const { name, phone, password, permissions } = req.body;
+    const staff = await User.findOne({ _id: req.params.id, ownerId: req.user._id, role: 'staff' });
+    if (!staff) return res.status(404).json({ error: 'Staff not found.' });
+
+    if (name) staff.name = name.trim();
+    if (phone) {
+      const ph = phone.trim();
+      if (ph !== staff.phone) {
+        const existing = await User.findOne({ phone: ph });
+        if (existing) return res.status(400).json({ error: 'Phone already registered.' });
+        staff.phone = ph;
+      }
+    }
+    if (password) {
+      staff.password = password;
+    }
+
+    staff.ownerRole = req.user.ownerRole;
+
+    if (req.user.ownerRole === 'dairy_owner' && Array.isArray(permissions)) {
+      let staffPerms = permissions.filter(p => ['milk_delivery', 'milk_collection'].includes(p));
+      if (staffPerms.length === 0) staffPerms = ['milk_delivery'];
+      staff.permissions = staffPerms;
+    }
+
+    await staff.save();
+    res.json({ staff });
   } catch (err) {
     next(err);
   }
@@ -359,6 +403,18 @@ router.patch('/password', async (req, res, next) => {
 
     owner.password = newPassword;
     await owner.save();
+
+    await AuthLog.create({
+      event: 'password_change',
+      role: 'owner',
+      userId: owner._id,
+      userName: owner.name,
+      userPhone: owner.phone,
+      detail: 'Owner changed their own password',
+      ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent']
+    });
+
     res.json({ message: 'Password updated successfully.' });
   } catch (err) {
     next(err);
@@ -1148,9 +1204,9 @@ router.get('/dairy-default-rates', async (req, res, next) => {
     
     // If empty, generate standard defaults in memory
     const defaultConfigs = {
-      Cow: { milkType: 'Cow', baseRate: 40, fatMultiplier: 0.12, snfMultiplier: 0.08, bonusPerLiter: 0, deductionPerLiter: 0, effectiveFrom: new Date(), isActive: true },
-      Buffalo: { milkType: 'Buffalo', baseRate: 50, fatMultiplier: 0.15, snfMultiplier: 0.10, bonusPerLiter: 0, deductionPerLiter: 0, effectiveFrom: new Date(), isActive: true },
-      Mixed: { milkType: 'Mixed', baseRate: 45, fatMultiplier: 0.13, snfMultiplier: 0.09, bonusPerLiter: 0, deductionPerLiter: 0, effectiveFrom: new Date(), isActive: true }
+      Cow: { milkType: 'Cow', baseRate: 40, fatMultiplier: 0.12, snfMultiplier: 0.08, standardFat: 4.0, standardSNF: 8.5, bonusPerLiter: 0, deductionPerLiter: 0, standardCLR: 28, clrDeductionPerUnit: 0, effectiveFrom: new Date(), isActive: true },
+      Buffalo: { milkType: 'Buffalo', baseRate: 50, fatMultiplier: 0.15, snfMultiplier: 0.10, standardFat: 6.0, standardSNF: 9.0, bonusPerLiter: 0, deductionPerLiter: 0, standardCLR: 28, clrDeductionPerUnit: 0, effectiveFrom: new Date(), isActive: true },
+      Mixed: { milkType: 'Mixed', baseRate: 45, fatMultiplier: 0.13, snfMultiplier: 0.09, standardFat: 4.5, standardSNF: 8.7, bonusPerLiter: 0, deductionPerLiter: 0, standardCLR: 28, clrDeductionPerUnit: 0, effectiveFrom: new Date(), isActive: true }
     };
 
     activeRates.forEach(r => {
@@ -1169,7 +1225,7 @@ router.get('/dairy-default-rates', async (req, res, next) => {
 router.post('/dairy-default-rates', async (req, res, next) => {
   try {
     const dairyOwnerId = req.user._id;
-    const { milkType, baseRate, fatMultiplier, snfMultiplier, bonusPerLiter, deductionPerLiter, effectiveFrom } = req.body;
+    const { milkType, baseRate, fatMultiplier, snfMultiplier, standardFat, standardSNF, bonusPerLiter, deductionPerLiter, standardCLR, clrDeductionPerUnit, effectiveFrom } = req.body;
 
     if (!milkType || baseRate === undefined || fatMultiplier === undefined || snfMultiplier === undefined || bonusPerLiter === undefined || deductionPerLiter === undefined || !effectiveFrom) {
       return res.status(400).json({ error: 'All default rate configuration fields are required.' });
@@ -1187,8 +1243,12 @@ router.post('/dairy-default-rates', async (req, res, next) => {
       baseRate: parseFloat(baseRate),
       fatMultiplier: parseFloat(fatMultiplier),
       snfMultiplier: parseFloat(snfMultiplier),
+      standardFat: standardFat !== undefined ? parseFloat(standardFat) : 4.0,
+      standardSNF: standardSNF !== undefined ? parseFloat(standardSNF) : 8.5,
       bonusPerLiter: parseFloat(bonusPerLiter),
       deductionPerLiter: parseFloat(deductionPerLiter),
+      standardCLR: standardCLR !== undefined ? parseFloat(standardCLR) : 28,
+      clrDeductionPerUnit: clrDeductionPerUnit !== undefined ? parseFloat(clrDeductionPerUnit) : 0,
       effectiveFrom: new Date(effectiveFrom),
       isActive: true,
       createdBy: dairyOwnerId,
@@ -1262,6 +1322,28 @@ router.post('/farmer-collections', async (req, res, next) => {
         session.endSession();
       }
       return res.status(400).json({ error: 'All required collection details must be provided.' });
+    }
+
+    // Prevent duplicate request submissions within the last 15 seconds
+    const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
+    const existingColl = await FarmerCollection.findOne({
+      ownerId,
+      farmerId,
+      date,
+      shift,
+      milkType,
+      quantity: parseFloat(quantity),
+      fat: parseFloat(fat),
+      snf: parseFloat(snf),
+      createdAt: { $gte: fifteenSecondsAgo }
+    }).session(useTransaction ? session : null);
+
+    if (existingColl) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(409).json({ error: 'Duplicate collection detected. Please wait a moment before trying again.' });
     }
 
     const formattedDate = date.replace(/-/g, '');

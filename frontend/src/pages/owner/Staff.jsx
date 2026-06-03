@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, UserX, UserCheck, KeyRound, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Plus, UserX, UserCheck, KeyRound, RefreshCw, ChevronDown, ChevronUp, X, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
@@ -14,9 +14,11 @@ import { getCache, setCache, invalidateCache } from '../../utils/cache';
 const CACHE_KEY = 'owner/staff';
 
 const Staff = () => {
+  const { user } = useAuth();
   const [staff, setStaff] = useState(() => getCache(CACHE_KEY) || []);
   const [loading, setLoading] = useState(!getCache(CACHE_KEY));
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
   const [pwTarget, setPwTarget] = useState(null);
   const [confirmDisable, setConfirmDisable] = useState(null);
   const [disabling, setDisabling] = useState(false);
@@ -27,6 +29,24 @@ const Staff = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
   const [expandedId, setExpandedId] = useState(null);
+
+  const renderDuties = (permissions) => {
+    const perms = permissions || ['milk_delivery'];
+    return (
+      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+        {perms.includes('milk_delivery') && (
+          <span className="badge badge-green" style={{ fontSize: '11px' }}>
+            {isMarathi ? 'दूध वितरण' : 'Milk Delivery'}
+          </span>
+        )}
+        {perms.includes('milk_collection') && (
+          <span className="badge badge-blue" style={{ fontSize: '11px', backgroundColor: '#8A3FFC', color: '#FFFFFF' }}>
+            {isMarathi ? 'दूध संकलन' : 'Milk Collection'}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   const fetchStaff = useCallback(async (force = false) => {
     if (!force) {
@@ -136,11 +156,24 @@ const Staff = () => {
                               <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'फोन' : 'Phone'}: </span><strong>{s.phone}</strong></div>
                               <div><span style={{ color: '#8D8D8D' }}>{isMarathi ? 'जोडले' : 'Added'}: </span><strong>{new Date(s.createdAt).toLocaleDateString('en-IN')}</strong></div>
                             </div>
+                            {user?.ownerRole === 'dairy_owner' && (
+                              <div style={{ marginBottom: '12px', fontSize: '13px' }}>
+                                <span style={{ color: '#8D8D8D' }}>{isMarathi ? 'कर्तव्ये: ' : 'Duties: '}</span>
+                                <div style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: '4px' }}>
+                                  {renderDuties(s.permissions)}
+                                </div>
+                              </div>
+                            )}
                             <div style={{ display: 'flex', gap: '8px' }}>
                               {s.isActive && (
-                                <button className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={() => setConfirmDisable(s)}>
-                                  <UserX size={13} /> {isMarathi ? 'अक्षम करा' : 'Disable'}
-                                </button>
+                                <>
+                                  <button className="btn btn-ghost btn-sm" style={{ flex: 1, border: '1px solid #E0E0E0' }} onClick={(e) => { e.stopPropagation(); setEditTarget(s); }}>
+                                    <Pencil size={13} /> {isMarathi ? 'संपादन करा' : 'Edit'}
+                                  </button>
+                                  <button className="btn btn-danger btn-sm" style={{ flex: 1 }} onClick={(e) => { e.stopPropagation(); setConfirmDisable(s); }}>
+                                    <UserX size={13} /> {isMarathi ? 'अक्षम करा' : 'Disable'}
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -157,6 +190,7 @@ const Staff = () => {
                         <th>{isMarathi ? 'नाव' : 'Name'}</th>
                         <th>{isMarathi ? 'फोन' : 'Phone'}</th>
                         <th>{isMarathi ? 'स्थिती' : 'Status'}</th>
+                        {user?.ownerRole === 'dairy_owner' && <th>{isMarathi ? 'कर्तव्ये' : 'Duties'}</th>}
                         <th>{isMarathi ? 'जोडले' : 'Added'}</th>
                         <th>{isMarathi ? 'क्रिया' : 'Actions'}</th>
                       </tr>
@@ -171,15 +205,23 @@ const Staff = () => {
                               {s.isActive ? (isMarathi ? 'सक्रिय' : 'Active') : (isMarathi ? 'अक्षम' : 'Disabled')}
                             </span>
                           </td>
+                          {user?.ownerRole === 'dairy_owner' && (
+                            <td>{renderDuties(s.permissions)}</td>
+                          )}
                           <td style={{ fontSize: '13px', color: '#8D8D8D' }}>
                             {new Date(s.createdAt).toLocaleDateString('en-IN')}
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '8px' }}>
                               {s.isActive && (
-                                <button className="btn btn-danger btn-sm" onClick={() => setConfirmDisable(s)}>
-                                  <UserX size={13} /> {isMarathi ? 'अक्षम करा' : 'Disable'}
-                                </button>
+                                <>
+                                  <button className="btn btn-ghost btn-sm" style={{ border: '1px solid #E0E0E0' }} onClick={() => setEditTarget(s)}>
+                                    <Pencil size={13} /> {isMarathi ? 'संपादन करा' : 'Edit'}
+                                  </button>
+                                  <button className="btn btn-danger btn-sm" onClick={() => setConfirmDisable(s)}>
+                                    <UserX size={13} /> {isMarathi ? 'अक्षम करा' : 'Disable'}
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
@@ -195,6 +237,7 @@ const Staff = () => {
       </div>
 
       {showAddModal && <AddStaffModal onClose={() => setShowAddModal(false)} onCreated={fetchStaff} />}
+      {editTarget && <EditStaffModal member={editTarget} onClose={() => setEditTarget(null)} onUpdated={fetchStaff} />}
 
       {confirmDisable && (
         <ConfirmModal
@@ -220,6 +263,7 @@ const AddStaffModal = ({ onClose, onCreated }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [form, setForm] = useState({ name: '', phone: '', password: '' });
+  const [permissions, setPermissions] = useState(['milk_delivery']);
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const { isMarathi } = useMarathi();
@@ -228,7 +272,7 @@ const AddStaffModal = ({ onClose, onCreated }) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post('/owner/staff', form);
+      await api.post('/owner/staff', { ...form, permissions });
       toast.success(isMarathi ? 'कर्मचारी खाते तयार केले.' : 'Staff account created.');
       invalidateCache(CACHE_KEY);
       onCreated();
@@ -306,10 +350,201 @@ const AddStaffModal = ({ onClose, onCreated }) => {
                 required {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
             </div>
           ))}
+
+          {user?.ownerRole === 'dairy_owner' && (
+            <div className="input-group" style={{ marginBottom: '16px' }}>
+              <label className="input-label">{isMarathi ? 'कर्तव्ये (एक किंवा दोन्ही निवडा)' : 'Duties (Select one or both)'}</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                  <input
+                    type="checkbox"
+                    checked={permissions.includes('milk_delivery')}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setPermissions(p => [...p, 'milk_delivery']);
+                      } else {
+                        if (permissions.length > 1) {
+                          setPermissions(p => p.filter(item => item !== 'milk_delivery'));
+                        } else {
+                          toast.error(isMarathi ? 'किमान एक कर्तव्य निवडले पाहिजे.' : 'At least one duty must be selected.');
+                        }
+                      }
+                    }}
+                  />
+                  <span>{isMarathi ? 'दूध वितरण (Milk Delivery)' : 'Milk Delivery'}</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                  <input
+                    type="checkbox"
+                    checked={permissions.includes('milk_collection')}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setPermissions(p => [...p, 'milk_collection']);
+                      } else {
+                        if (permissions.length > 1) {
+                          setPermissions(p => p.filter(item => item !== 'milk_collection'));
+                        } else {
+                          toast.error(isMarathi ? 'किमान एक कर्तव्य निवडले पाहिजे.' : 'At least one duty must be selected.');
+                        }
+                      }
+                    }}
+                  />
+                  <span>{isMarathi ? 'दूध संकलन (Milk Collection)' : 'Milk Collection'}</span>
+                </label>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
             <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
             <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
               {loading ? (isMarathi ? 'तयार होत आहे...' : 'Creating...') : (isMarathi ? 'कर्मचारी तयार करा' : 'Create Staff')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ── Edit Staff Modal ──────────────────────────────────────────
+const EditStaffModal = ({ member, onClose, onUpdated }) => {
+  const mouseDownOnOverlay = React.useRef(false);
+  const { user } = useAuth();
+  const [form, setForm] = useState({
+    name: member.name || '',
+    phone: member.phone || '',
+    password: ''
+  });
+  const [permissions, setPermissions] = useState(member.permissions || ['milk_delivery']);
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+  const { isMarathi } = useMarathi();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = {
+        name: form.name,
+        phone: form.phone,
+        permissions
+      };
+      if (form.password) {
+        payload.password = form.password;
+      }
+      await api.put(`/owner/staff/${member._id}`, payload);
+      toast.success(isMarathi ? 'कर्मचारी खाते अपडेट केले.' : 'Staff account updated.');
+      invalidateCache(CACHE_KEY);
+      onUpdated();
+      onClose();
+    } catch (err) {
+      const errMsg = err.response?.data?.error || '';
+      toast.error(errMsg || (isMarathi ? 'कर्मचारी अपडेट करण्यात अयशस्वी.' : 'Failed to update staff.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={18} />
+        </button>
+
+        <h2 style={{ fontWeight: 700, marginBottom: '8px', fontSize: '20px', paddingRight: '24px' }}>
+          {isMarathi ? 'कर्मचारी संपादन करा' : 'Edit Staff Member'}
+        </h2>
+        <p style={{ color: '#525252', fontSize: '14px', marginBottom: '24px' }}>
+          {isMarathi ? 'कर्मचारी माहिती सुधारा.' : 'Update staff member information.'}
+        </p>
+        <form onSubmit={handleSubmit}>
+          {[
+            { key: 'name', label: isMarathi ? 'पूर्ण नाव' : 'Full Name', type: 'text', placeholder: isMarathi ? 'सुरेश कुमार' : 'Suresh Kumar' },
+            { key: 'phone', label: isMarathi ? 'फोन नंबर' : 'Phone Number', type: 'tel', placeholder: '9876543210' },
+            { key: 'password', label: isMarathi ? 'नवीन पासवर्ड (बदलायचा असल्यास प्रविष्ट करा)' : 'New Password (leave blank to keep current)', type: 'password', placeholder: isMarathi ? 'किमान ६ अक्षरे' : 'Min 6 characters' }
+          ].map(f => (
+            <div key={f.key} className="input-group">
+              <label className="input-label">{f.label}</label>
+              <input type={f.type} className="input" placeholder={f.placeholder}
+                value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
+                required={f.key !== 'password'} {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
+            </div>
+          ))}
+
+          {user?.ownerRole === 'dairy_owner' && (
+            <div className="input-group" style={{ marginBottom: '16px' }}>
+              <label className="input-label">{isMarathi ? 'कर्तव्ये (एक किंवा दोन्ही निवडा)' : 'Duties (Select one or both)'}</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                  <input
+                    type="checkbox"
+                    checked={permissions.includes('milk_delivery')}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setPermissions(p => [...p, 'milk_delivery']);
+                      } else {
+                        if (permissions.length > 1) {
+                          setPermissions(p => p.filter(item => item !== 'milk_delivery'));
+                        } else {
+                          toast.error(isMarathi ? 'किमान एक कर्तव्य निवडले पाहिजे.' : 'At least one duty must be selected.');
+                        }
+                      }
+                    }}
+                  />
+                  <span>{isMarathi ? 'दूध वितरण (Milk Delivery)' : 'Milk Delivery'}</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                  <input
+                    type="checkbox"
+                    checked={permissions.includes('milk_collection')}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setPermissions(p => [...p, 'milk_collection']);
+                      } else {
+                        if (permissions.length > 1) {
+                          setPermissions(p => p.filter(item => item !== 'milk_collection'));
+                        } else {
+                          toast.error(isMarathi ? 'किमान एक कर्तव्य निवडले पाहिजे.' : 'At least one duty must be selected.');
+                        }
+                      }
+                    }}
+                  />
+                  <span>{isMarathi ? 'दूध संकलन (Milk Collection)' : 'Milk Collection'}</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
+            <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+              {loading ? (isMarathi ? 'अपडेट होत आहे...' : 'Updating...') : (isMarathi ? 'जतन करा' : 'Save Changes')}
             </button>
           </div>
         </form>

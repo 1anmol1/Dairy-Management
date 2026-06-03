@@ -131,6 +131,19 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'organic',
     index: true
+  },
+  parentAdminId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  roleName: {
+    type: String,
+    default: ''
+  },
+  permissions: {
+    type: [String],
+    default: []
   }
 }, {
   timestamps: true

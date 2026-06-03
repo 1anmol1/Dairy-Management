@@ -139,133 +139,129 @@ const OwnerLayout = () => {
     subStatus === 'active' ? 'badge-green' :
     subStatus === 'trial'  ? 'badge-blue'  : 'badge-red';
 
-  const SidebarContent = () => (
-    <>
-      {/* Logo */}
-      <Link to="/app/owner" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
-        <img src={amritLogo} alt="Amrit Manage" style={{ height: '32px', width: 'auto', display: 'block', marginBottom: '4px', filter: 'brightness(0) invert(1)' }} />
-        {user?.businessName && (
-          <div style={{ color: '#8D8D8D', fontSize: '12px', marginTop: '2px' }}>{user.businessName}</div>
-        )}
-      </Link>
-
-      {/* Nav */}
-      <nav className="sidebar-nav">
-        {navItems.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            onClick={() => setSidebarOpen(false)}
-          >
-            <item.icon size={18} />
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
-
-      {/* Footer: profile + logout */}
-      <div className="sidebar-footer">
-        {/* Profile card */}
-        <div
-          className="sidebar-profile"
-          onClick={() => setProfileOpen(p => !p)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && setProfileOpen(p => !p)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            {/* Avatar + name */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: '50%',
-                backgroundColor: '#0F62FE',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '14px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0
-              }}>
-                {user?.name?.charAt(0)?.toUpperCase() || 'O'}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{
-                  color: '#FFFFFF', fontWeight: 600, fontSize: '13px',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  maxWidth: '120px'
-                }}>
-                  {user?.name}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
-                  <span className={`badge ${subBadgeClass}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
-                    {subStatus?.toUpperCase()}
-                  </span>
-                  <span style={{ fontSize: '10px', color: '#8D8D8D', textTransform: 'capitalize' }}>
-                    {user?.subscription?.plan}
-                  </span>
-                </div>
-              </div>
-            </div>
-            {profileOpen
-              ? <ChevronUp size={14} color="#8D8D8D" />
-              : <ChevronDown size={14} color="#8D8D8D" />}
-          </div>
-
-          {/* Expanded profile info */}
-          {profileOpen && (
-            <div style={{ marginTop: '12px', borderTop: '1px solid #393939', paddingTop: '12px' }}
-              onClick={e => e.stopPropagation()}>
-              {user?.phone && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <Phone size={12} color="#8D8D8D" />
-                  <span style={{ fontSize: '12px', color: '#C6C6C6' }}>{user.phone}</span>
-                </div>
-              )}
-              {user?.email && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <Mail size={12} color="#8D8D8D" />
-                  <span style={{ fontSize: '12px', color: '#C6C6C6', wordBreak: 'break-all' }}>{user.email}</span>
-                </div>
-              )}
-              {user?.businessName && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                  <Building2 size={12} color="#8D8D8D" />
-                  <span style={{ fontSize: '12px', color: '#C6C6C6' }}>{user.businessName}</span>
-                </div>
-              )}
-              <button
-                className="btn btn-ghost btn-sm btn-full"
-                style={{ fontSize: '12px', height: '32px', borderColor: '#525252', color: '#C6C6C6' }}
-                onClick={() => { setShowPwModal(true); setProfileOpen(false); setSidebarOpen(false); }}
-              >
-                <KeyRound size={12} /> {t('app.changePassword', 'Change Password')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Language toggle */}
-        <div style={{ marginBottom: '8px' }}>
-          <LanguageToggle style={{ width: '100%', justifyContent: 'center', borderColor: '#525252', backgroundColor: 'transparent', color: '#C6C6C6' }} />
-        </div>
-
-        {/* Sign-out reminder */}
-        <div style={{ fontSize: '11px', color: '#8D8D8D', textAlign: 'center', marginBottom: '8px', lineHeight: 1.4, padding: '0 4px' }}>
-          {isMarathi
-            ? 'तुमचा डेटा सुरक्षित ठेवण्यासाठी वापर झाल्यावर साइन आउट करा.'
-            : 'Sign out when done to keep your account secure.'}
-        </div>
-
-        {/* Logout */}
-        <button className="btn btn-danger btn-sm btn-full" onClick={handleLogout}>
-          <LogOut size={14} /> {t('app.signOut', 'Sign Out')}
-        </button>
-      </div>
-    </>
-  );
-
   return (
     <div className="app-layout">
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <SidebarContent />
+        {/* Logo */}
+        <Link to="/app/owner" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
+          <img src={amritLogo} alt="Amrit Manage" style={{ height: '32px', width: 'auto', display: 'block', marginBottom: '4px', filter: 'brightness(0) invert(1)' }} />
+          {user?.businessName && (
+            <div style={{ color: '#8D8D8D', fontSize: '12px', marginTop: '2px' }}>{user.businessName}</div>
+          )}
+        </Link>
+
+        {/* Nav */}
+        <nav className="sidebar-nav">
+          {navItems.map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              onClick={() => setSidebarOpen(false)}
+            >
+              <item.icon size={18} />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Footer: profile + logout */}
+        <div className="sidebar-footer">
+          {/* Profile card */}
+          <div
+            className="sidebar-profile"
+            onClick={() => setProfileOpen(p => !p)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && setProfileOpen(p => !p)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {/* Avatar + name */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: '50%',
+                  backgroundColor: '#0F62FE',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '14px', fontWeight: 700, color: '#FFFFFF', flexShrink: 0
+                }}>
+                  {user?.name?.charAt(0)?.toUpperCase() || 'O'}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    color: '#FFFFFF', fontWeight: 600, fontSize: '13px',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    maxWidth: '120px'
+                  }}>
+                    {user?.name}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+                    <span className={`badge ${subBadgeClass}`} style={{ fontSize: '9px', padding: '1px 6px' }}>
+                      {subStatus?.toUpperCase()}
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#8D8D8D', textTransform: 'capitalize' }}>
+                      {user?.subscription?.plan}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {profileOpen
+                ? <ChevronUp size={14} color="#8D8D8D" />
+                : <ChevronDown size={14} color="#8D8D8D" />}
+            </div>
+
+            {/* Expanded profile info */}
+            {profileOpen && (
+              <div style={{ marginTop: '12px', borderTop: '1px solid #393939', paddingTop: '12px' }}
+                onClick={e => e.stopPropagation()}>
+                {user?.phone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Phone size={12} color="#8D8D8D" />
+                    <span style={{ fontSize: '12px', color: '#C6C6C6' }}>{user.phone}</span>
+                  </div>
+                )}
+                {user?.email && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <Mail size={12} color="#8D8D8D" />
+                    <span style={{ fontSize: '12px', color: '#C6C6C6', wordBreak: 'break-all' }}>{user.email}</span>
+                  </div>
+                )}
+                {user?.businessName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    <Building2 size={12} color="#8D8D8D" />
+                    <span style={{ fontSize: '12px', color: '#C6C6C6' }}>{user.businessName}</span>
+                  </div>
+                )}
+                {!user?.impersonated && (
+                  <button
+                    className="btn btn-ghost btn-sm btn-full"
+                    style={{ fontSize: '12px', height: '32px', borderColor: '#525252', color: '#C6C6C6' }}
+                    onClick={() => { setShowPwModal(true); setProfileOpen(false); setSidebarOpen(false); }}
+                  >
+                    <KeyRound size={12} /> {t('app.changePassword', 'Change Password')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Language toggle */}
+          <div style={{ marginBottom: '8px' }}>
+            <LanguageToggle style={{ width: '100%', justifyContent: 'center', borderColor: '#525252', backgroundColor: 'transparent', color: '#C6C6C6' }} />
+          </div>
+
+          {/* Sign-out reminder */}
+          <div style={{ fontSize: '11px', color: '#8D8D8D', textAlign: 'center', marginBottom: '8px', lineHeight: 1.4, padding: '0 4px' }}>
+            {isMarathi
+              ? 'तुमचा डेटा सुरक्षित ठेवण्यासाठी वापर झाल्यावर साइन आउट करा.'
+              : 'Sign out when done to keep your account secure.'}
+          </div>
+
+          {/* Logout */}
+          <button className="btn btn-danger btn-sm btn-full" onClick={handleLogout}>
+            <LogOut size={14} /> {t('app.signOut', 'Sign Out')}
+          </button>
+        </div>
       </aside>
 
       <div className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}

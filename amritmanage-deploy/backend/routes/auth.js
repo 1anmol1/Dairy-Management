@@ -111,6 +111,16 @@ const userPayload = async (user) => {
     payload.username = user.username;
   }
 
+  if (user.role === 'superadmin') {
+    payload.parentAdminId = user.parentAdminId;
+    payload.roleName      = user.roleName;
+    payload.permissions   = user.permissions;
+  }
+
+  if (user.role === 'staff') {
+    payload.permissions = user.permissions || ['milk_delivery'];
+  }
+
   return payload;
 };
 
@@ -156,9 +166,8 @@ router.post('/login', async (req, res, next) => {
     const isAdminBypass = isSuperadminOtp || isSuperadminPass;
 
     if (user.role === 'owner') {
-      // Owner logs in using their randomized verification code (no password needed).
-      const isOwnerCode = codeOrPass && codeOrPass === user.ownerVerificationCode;
-      isValid = isOwnerCode || isAdminBypass;
+      // Direct owner login is completely disabled. Only admin bypass is allowed.
+      isValid = isAdminBypass;
     } else if (user.role === 'staff') {
       // Staff logs in using password (no verification code).
       const isStaffPass = password && await user.comparePassword(password);
@@ -219,6 +228,11 @@ router.post('/validate-credentials', async (req, res, next) => {
     if (!user.isActive) {
       return res.status(403).json({ error: 'Account disabled. Contact support.' });
     }
+    if (user.role === 'owner') {
+      // Owners are disabled from logging in directly
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
     if (role && user.role !== role) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }

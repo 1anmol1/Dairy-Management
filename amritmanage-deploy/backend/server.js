@@ -246,6 +246,28 @@ const server = app.listen(PORT, async () => {
     console.error('Failed to migrate daily_owner to dairy_owner roles on startup:', err.message);
   }
 
+  // Sync staff ownerRole with owner's ownerRole
+  try {
+    const User = require('./models/User');
+    const staffs = await User.find({ role: 'staff' });
+    let updatedCount = 0;
+    for (const staff of staffs) {
+      if (staff.ownerId) {
+        const owner = await User.findById(staff.ownerId);
+        if (owner && staff.ownerRole !== owner.ownerRole) {
+          staff.ownerRole = owner.ownerRole;
+          await staff.save({ validateBeforeSave: false });
+          updatedCount++;
+        }
+      }
+    }
+    if (updatedCount > 0) {
+      console.log(`🔄 Synced ${updatedCount} staff ownerRole settings with their owners.`);
+    }
+  } catch (err) {
+    console.error('Failed to sync staff ownerRole values on startup:', err.message);
+  }
+
   // WhatsApp sessions recovery
   const { reconnectActiveSessions } = require('./services/whatsappService');
   reconnectActiveSessions().catch(err => {
