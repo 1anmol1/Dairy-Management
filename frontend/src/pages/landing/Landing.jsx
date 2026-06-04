@@ -123,9 +123,9 @@ const LandingPage = () => {
         fontFamily: isMarathi ? '"Noto Sans Devanagari", sans-serif' : 'Inter, sans-serif'
       }}>
         {isMarathi ? (
-          <span>अम्रित मॅनेजचा प्रचार करा आणि मिळवा ४०% कमिशन! <Link to="/promote" style={{ color: '#0F62FE', textDecoration: 'underline', marginLeft: '6px', fontWeight: 700 }}>अधिक जाणून घ्या →</Link></span>
+          <span>अम्रित मॅनेजचा प्रचार करा आणि मिळवा ४०% + १०% आवर्ती बक्षीस! <Link to="/promote" style={{ color: '#0F62FE', textDecoration: 'underline', marginLeft: '6px', fontWeight: 700 }}>अधिक जाणून घ्या →</Link></span>
         ) : (
-          <span>Promote Amrit Manage & Earn 40% Commission! <Link to="/promote" style={{ color: '#0F62FE', textDecoration: 'underline', marginLeft: '6px', fontWeight: 700 }}>Learn More →</Link></span>
+          <span>Promote Amrit Manage & Earn 40% + 10% Recurring Reward! <Link to="/promote" style={{ color: '#0F62FE', textDecoration: 'underline', marginLeft: '6px', fontWeight: 700 }}>Learn More →</Link></span>
         )}
       </div>
 

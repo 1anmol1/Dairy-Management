@@ -34,6 +34,7 @@ import SuperadminActivities from './pages/superadmin/Activities';
 import SuperadminImpersonation from './pages/superadmin/Impersonation';
 import SuperadminFeedbackList from './pages/superadmin/FeedbackList';
 import SuperadminAdmins from './pages/superadmin/Admins';
+import SuperadminRecycleBin from './pages/superadmin/RecycleBin';
 
 // ── Owner ─────────────────────────────────────────────────────
 import OwnerLayout          from './layouts/OwnerLayout';
@@ -137,11 +138,20 @@ const AppGate = () => {
   return <Navigate to="/securelogin/ownerlogin" replace />;
 };
 
-// ── Protected route — no redirects, show 404 for unauthenticated ─
+// ── Protected route — redirect to correct login page if unauthenticated ─
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <NotFound />;
+  if (!user) {
+    const path = window.location.pathname;
+    if (path.includes('/superadmin')) {
+      return <Navigate to="/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login" replace />;
+    }
+    if (path.includes('/staff')) {
+      return <Navigate to="/loginto/staffaccess" replace />;
+    }
+    return <Navigate to="/securelogin/ownerlogin" replace />;
+  }
   if (allowedRoles && !allowedRoles.includes(user.role)) return <SignOutGuard>{null}</SignOutGuard>;
   return children;
 };
@@ -300,8 +310,7 @@ const StaffHomeRedirect = () => {
   return <Navigate to="/app/staff/delivery" replace />;
 };
 
-const App = () => {
-  // Detect if running on the app domain (amritmanage-app.eurekai.in or localhost dev)
+const RootRoute = () => {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const isAppSubdomain =
     hostname === 'amritmanage-app.eurekai.in' ||
@@ -309,6 +318,13 @@ const App = () => {
     hostname === 'localhost' ||
     hostname === '127.0.0.1';
 
+  if (isAppSubdomain) {
+    return <PrivateAccessPortal />;
+  }
+  return <SignOutGuard><LandingPage /></SignOutGuard>;
+};
+
+const App = () => {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
@@ -317,104 +333,93 @@ const App = () => {
             <ImpersonationBanner />
             <ScrollToTop />
             <Routes>
-              {isAppSubdomain ? (
-                /* ── APP SUBDOMAIN (app.amritmanage.eurekai.in) ── */
-                <>
-                  {/* Root → Private Access Portal */}
-                  <Route path="/" element={<PrivateAccessPortal />} />
+              {/* ── Root URL conditional landing ── */}
+              <Route path="/" element={<RootRoute />} />
 
-                  {/* ── Secure login URLs ─────────────────────── */}
-                  <Route path="/securelogin/ownerlogin"  element={<SignOutGuard><OwnerLogin /></SignOutGuard>} />
-                  <Route path="/loginto/staffaccess"     element={<SignOutGuard><StaffLogin /></SignOutGuard>} />
-                  <Route path="/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login" element={<SignOutGuard><AdminLogin /></SignOutGuard>} />
+              {/* ── Public Landing pages ─────────────────────── */}
+              <Route path="/promote"      element={<SignOutGuard><PromotePage /></SignOutGuard>} />
+              <Route path="/landing"      element={<SignOutGuard><AdsLanding /></SignOutGuard>} />
+              <Route path="/features"     element={<SignOutGuard><FeaturesPage /></SignOutGuard>} />
+              <Route path="/pricing"      element={<SignOutGuard><PricingPage /></SignOutGuard>} />
+              <Route path="/how-it-works" element={<SignOutGuard><HowItWorks /></SignOutGuard>} />
+              <Route path="/faq"          element={<SignOutGuard><FAQPage /></SignOutGuard>} />
+              <Route path="/privacy"      element={<SignOutGuard><PrivacyPage /></SignOutGuard>} />
+              <Route path="/terms"        element={<SignOutGuard><TermsPage /></SignOutGuard>} />
+              <Route path="/start"        element={<SignOutGuard><TrialSignup /></SignOutGuard>} />
 
-                  {/* ── Legacy → 404 ──────────────────────────── */}
-                  <Route path="/ownerlogin"  element={<NotFound />} />
-                  <Route path="/staffaccess" element={<NotFound />} />
-                  <Route path="/app/login"   element={<NotFound />} />
-                  <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
-                  <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+              {/* ── Secure login URLs ─────────────────────── */}
+              <Route path="/securelogin/ownerlogin"  element={<SignOutGuard><OwnerLogin /></SignOutGuard>} />
+              <Route path="/loginto/staffaccess"     element={<SignOutGuard><StaffLogin /></SignOutGuard>} />
+              <Route path="/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login" element={<SignOutGuard><AdminLogin /></SignOutGuard>} />
 
-                  {/* ── Superadmin ────────────────────────────── */}
-                  <Route path="/app/superadmin" element={
-                    <ProtectedRoute allowedRoles={['superadmin']}>
-                      <SuperadminLayout />
-                    </ProtectedRoute>
-                  }>
-                    <Route index element={<SuperadminDashboard />} />
-                    <Route path="owners"      element={<SuperadminOwners />} />
-                    <Route path="activities"  element={<SuperadminActivities />} />
-                    <Route path="plans"       element={<SuperadminPlans />} />
-                    <Route path="requests"    element={<SuperadminRequests />} />
-                    <Route path="impersonate" element={<SuperadminImpersonation />} />
-                    <Route path="feedback"    element={<SuperadminFeedbackList />} />
-                    <Route path="admins"      element={<SuperadminAdmins />} />
-                  </Route>
+              {/* ── Legacy → 404 ──────────────────────────── */}
+              <Route path="/ownerlogin"  element={<NotFound />} />
+              <Route path="/staffaccess" element={<NotFound />} />
+              <Route path="/app/login"   element={<NotFound />} />
+              <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+              <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
 
-                  {/* ── Owner ─────────────────────────────────── */}
-                  <Route path="/app/owner" element={
-                    <ProtectedRoute allowedRoles={['owner']}>
-                      <OwnerLayout />
-                    </ProtectedRoute>
-                  }>
-                    <Route index element={<OwnerDashboard />} />
-                    <Route path="customers"         element={<OwnerCustomers />} />
-                    <Route path="farmers"           element={<OwnerFarmers />} />
-                    <Route path="staff"             element={<OwnerStaff />} />
-                    <Route path="collection"        element={<OwnerDailyCollection />} />
-                    <Route path="logs"              element={<OwnerLogs />} />
-                    <Route path="billing"           element={<OwnerBilling />} />
-                    <Route path="whatsapp"          element={<OwnerWhatsApp />} />
-                    <Route path="default-rate"      element={<OwnerDefaultRate />} />
-                    <Route path="upgrade"           element={<OwnerUpgrade />} />
-                    <Route path="message-templates" element={<OwnerMessageTemplates />} />
-                    <Route path="delivery"          element={<StaffDelivery />} />
-                    <Route path="feedback"          element={<FeedbackPage />} />
-                  </Route>
+              {/* ── Superadmin ────────────────────────────── */}
+              <Route path="/app/superadmin" element={
+                <ProtectedRoute allowedRoles={['superadmin']}>
+                  <SuperadminLayout />
+                </ProtectedRoute>
+              }>
+                <Route index element={<SuperadminDashboard />} />
+                <Route path="owners"      element={<SuperadminOwners />} />
+                <Route path="activities"  element={<SuperadminActivities />} />
+                <Route path="plans"       element={<SuperadminPlans />} />
+                <Route path="requests"    element={<SuperadminRequests />} />
+                <Route path="impersonate" element={<SuperadminImpersonation />} />
+                <Route path="feedback"    element={<SuperadminFeedbackList />} />
+                <Route path="admins"      element={<SuperadminAdmins />} />
+                <Route path="recycle-bin" element={<SuperadminRecycleBin />} />
+              </Route>
 
-                  {/* ── Onboarding ────────────────────────────── */}
-                  <Route path="/app/owner/onboarding" element={
-                    <ProtectedRoute allowedRoles={['owner']}>
-                      <OwnerOnboarding />
-                    </ProtectedRoute>
-                  } />
+              {/* ── Owner ─────────────────────────────────── */}
+              <Route path="/app/owner" element={
+                <ProtectedRoute allowedRoles={['owner']}>
+                  <OwnerLayout />
+                </ProtectedRoute>
+              }>
+                <Route index element={<OwnerDashboard />} />
+                <Route path="customers"         element={<OwnerCustomers />} />
+                <Route path="farmers"           element={<OwnerFarmers />} />
+                <Route path="staff"             element={<OwnerStaff />} />
+                <Route path="collection"        element={<OwnerDailyCollection />} />
+                <Route path="logs"              element={<OwnerLogs />} />
+                <Route path="billing"           element={<OwnerBilling />} />
+                <Route path="whatsapp"          element={<OwnerWhatsApp />} />
+                <Route path="default-rate"      element={<OwnerDefaultRate />} />
+                <Route path="upgrade"           element={<OwnerUpgrade />} />
+                <Route path="message-templates" element={<OwnerMessageTemplates />} />
+                <Route path="delivery"          element={<StaffDelivery />} />
+                <Route path="feedback"          element={<FeedbackPage />} />
+              </Route>
 
-                  {/* ── Staff ─────────────────────────────────── */}
-                  <Route path="/app/staff" element={
-                    <ProtectedRoute allowedRoles={['staff']}>
-                      <StaffLayout />
-                    </ProtectedRoute>
-                  }>
-                    <Route index element={<StaffHomeRedirect />} />
-                    <Route path="delivery" element={<StaffDelivery />} />
-                    <Route path="collection" element={<OwnerDailyCollection />} />
-                  </Route>
+              {/* ── Onboarding ────────────────────────────── */}
+              <Route path="/app/owner/onboarding" element={
+                <ProtectedRoute allowedRoles={['owner']}>
+                  <OwnerOnboarding />
+                </ProtectedRoute>
+              } />
 
-                  {/* ── /app root ─────────────────────────────── */}
-                  <Route path="/app" element={<AppGate />} />
+              {/* ── Staff ─────────────────────────────────── */}
+              <Route path="/app/staff" element={
+                <ProtectedRoute allowedRoles={['staff']}>
+                  <StaffLayout />
+                </ProtectedRoute>
+              }>
+                <Route index element={<StaffHomeRedirect />} />
+                <Route path="delivery" element={<StaffDelivery />} />
+                <Route path="collection" element={<OwnerDailyCollection />} />
+              </Route>
 
-                  {/* ── Promote ────────────────────────────────── */}
-                  <Route path="/promote" element={<PromotePage />} />
+              {/* ── /app root ─────────────────────────────── */}
+              <Route path="/app" element={<AppGate />} />
 
-                  {/* ── 404 ───────────────────────────────────── */}
-                  <Route path="*" element={<NotFound />} />
-                </>
-              ) : (
-                /* ── MARKETING DOMAIN (amritmanage.eurekai.in) ── */
-                <>
-                  <Route path="/"             element={<SignOutGuard><LandingPage /></SignOutGuard>} />
-                  <Route path="/promote"      element={<SignOutGuard><PromotePage /></SignOutGuard>} />
-                  <Route path="/landing"      element={<SignOutGuard><AdsLanding /></SignOutGuard>} />
-                  <Route path="/features"     element={<SignOutGuard><FeaturesPage /></SignOutGuard>} />
-                  <Route path="/pricing"      element={<SignOutGuard><PricingPage /></SignOutGuard>} />
-                  <Route path="/how-it-works" element={<SignOutGuard><HowItWorks /></SignOutGuard>} />
-                  <Route path="/faq"          element={<SignOutGuard><FAQPage /></SignOutGuard>} />
-                  <Route path="/privacy"      element={<SignOutGuard><PrivacyPage /></SignOutGuard>} />
-                  <Route path="/terms"        element={<SignOutGuard><TermsPage /></SignOutGuard>} />
-                  <Route path="/start"        element={<SignOutGuard><TrialSignup /></SignOutGuard>} />
-                  <Route path="*"             element={<NotFound />} />
-                </>
-              )}
+              {/* ── 404 ───────────────────────────────────── */}
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </MarathiProvider>
         </ToastProvider>

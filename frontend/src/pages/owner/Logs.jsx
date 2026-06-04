@@ -613,7 +613,14 @@ const Logs = () => {
                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', cursor: 'pointer' }}
                         >
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '2px' }}>{log.customerId?.name}</div>
+                            <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '2px' }}>
+                              {log.customerId?.name}
+                              {log.isEdited && (
+                                <span style={{ fontSize: '10px', color: '#8A3FFC', marginLeft: '6px', fontWeight: 500, backgroundColor: '#F3E8FF', padding: '1px 4px', borderRadius: '2px' }}>
+                                  ✍️ {isMarathi ? `${log.editedBy} द्वारे संपादित` : `Edited by ${log.editedBy}`}
+                                </span>
+                              )}
+                            </div>
                             <div style={{ fontSize: '12px', color: '#525252', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                               <span className={`badge ${log.slot === 'morning' ? 'badge-yellow' : 'badge-blue'}`} style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                 {log.slot === 'morning' ? <Sun size={11} /> : <Moon size={11} />}
@@ -689,7 +696,14 @@ const Logs = () => {
                             </td>
                           )}
                           <td>
-                            <div style={{ fontWeight: 600 }}>{log.customerId?.name}</div>
+                            <div style={{ fontWeight: 600 }}>
+                              {log.customerId?.name}
+                              {log.isEdited && (
+                                <span style={{ fontSize: '10px', color: '#8A3FFC', marginLeft: '6px', fontWeight: 500, backgroundColor: '#F3E8FF', padding: '2px 6px', borderRadius: '2px', display: 'inline-block' }}>
+                                  ✍️ {isMarathi ? `${log.editedBy} द्वारे संपादित` : `Edited by ${log.editedBy}`}
+                                </span>
+                              )}
+                            </div>
                             <div style={{ fontSize: '12px', color: '#8D8D8D' }}>{log.customerId?.phone}</div>
                           </td>
                           <td>
@@ -750,6 +764,7 @@ const Logs = () => {
 const EditLogModal = ({ log, onClose, onSaved }) => {
   const mouseDownOnOverlay = React.useRef(false);
   const [extraQty, setExtraQty] = useState(String(log.extra_qty ?? 0));
+  const [pricePerLiter, setPricePerLiter] = useState(String(log.price_per_liter ?? 0));
   const [notes, setNotes] = useState(log.notes || '');
   const [loading, setLoading] = useState(false);
   const toast = useToast();
@@ -758,16 +773,18 @@ const EditLogModal = ({ log, onClose, onSaved }) => {
 
   const preview = {
     delivered: log.base_qty + (parseFloat(extraQty) || 0),
-    amount: (log.base_qty + (parseFloat(extraQty) || 0)) * log.price_per_liter
+    amount: (log.base_qty + (parseFloat(extraQty) || 0)) * (parseFloat(pricePerLiter) || 0)
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const extra = parseFloat(extraQty);
+    const price = parseFloat(pricePerLiter);
     if (isNaN(extra) || extra < 0) { toast.error(isMarathi ? 'वैध अतिरिक्त प्रमाण टाका.' : 'Enter a valid extra quantity.'); return; }
+    if (isNaN(price) || price < 0) { toast.error(isMarathi ? 'वैध दर टाका.' : 'Enter a valid rate per liter.'); return; }
     setLoading(true);
     try {
-      const { data } = await api.patch(`/owner/logs/${log._id}`, { extra_qty: extra, notes });
+      const { data } = await api.patch(`/owner/logs/${log._id}`, { extra_qty: extra, price_per_liter: price, notes });
       toast.success(isMarathi ? 'नोंद अपडेट केली.' : 'Log updated.');
       onSaved(data.log);
     } catch (err) {
@@ -827,7 +844,7 @@ const EditLogModal = ({ log, onClose, onSaved }) => {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                 <span style={{ color: '#525252' }}>{isMarathi ? 'दर' : 'Rate'}</span>
-                <span style={{ fontWeight: 600 }}>₹{log.price_per_liter}/{L}</span>
+                <span style={{ fontWeight: 600 }}>₹{(parseFloat(pricePerLiter) || 0).toFixed(2)}/{L}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E0E0E0', paddingTop: '8px', marginTop: '4px' }}>
                 <span style={{ color: '#525252' }}>{isMarathi ? 'एकूण पूर्वावलोकन' : 'Preview total'}</span>
@@ -844,6 +861,11 @@ const EditLogModal = ({ log, onClose, onSaved }) => {
               <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
                 {isMarathi ? 'मूळ प्रमाण बदलता येत नाही. फक्त अतिरिक्त लिटर बदलता येतात.' : 'Base qty is locked. Only extra liters can be adjusted.'}
               </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'दर प्रति लिटर (संपादन करता येते)' : 'Rate Per Liter (editable)'}</label>
+              <input type="text" inputMode="decimal" className="input" placeholder="0"
+                value={pricePerLiter} onChange={e => setPricePerLiter(e.target.value)} />
             </div>
             <div className="input-group">
               <label className="input-label">{isMarathi ? 'नोंदी' : 'Notes'}</label>

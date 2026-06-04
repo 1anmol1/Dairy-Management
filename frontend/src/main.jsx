@@ -9,6 +9,60 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
+// ── Dynamic circular favicon utility ──────────────────────────────────────
+const makeFaviconCircular = () => {
+  try {
+    const links = document.querySelectorAll("link[rel*='icon'], link[rel*='apple-touch-icon']");
+    links.forEach(link => {
+      const originalHref = link.href;
+      if (!originalHref || originalHref.startsWith('data:image/')) return;
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const size = 128;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          
+          ctx.beginPath();
+          ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          
+          ctx.drawImage(img, 0, 0, size, size);
+          
+          link.href = canvas.toDataURL('image/png');
+        } catch (err) {
+          // Silent fallback since we physically circularized the PNGs anyway
+        }
+      };
+      img.src = originalHref;
+    });
+  } catch (e) {
+    // Silent catch
+  }
+};
+
+// Run favicon processing immediately and on load
+makeFaviconCircular();
+window.addEventListener('load', makeFaviconCircular);
+
+// ── Prevent PWA prompt on public landing pages ────────────────────────────
+window.addEventListener('beforeinstallprompt', (e) => {
+  const h = window.location.hostname;
+  const isAppSubdomain = h === 'amritmanage-app.eurekai.in' || h.startsWith('app.') || h === 'localhost';
+  const isAppPath = window.location.pathname.startsWith('/app');
+  
+  if (!(isAppSubdomain && isAppPath)) {
+    e.preventDefault();
+    console.log('[PWA] Prevented install prompt on public page.');
+  }
+});
+
 // ── Register Service Worker & Inject Manifest dynamically for offline delivery queuing ──────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -54,3 +108,4 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+

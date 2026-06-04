@@ -39,8 +39,11 @@ const PromotePage = () => {
   const currentPrice = billingCycle === 'yearly' ? plans[selectedPlan].yearly : plans[selectedPlan].monthly;
   const totalSubValue = currentPrice * userCount;
   const rewardRate = 0.40; // 40% reward rate
+  const recurringRate = 0.10; // 10% recurring rate
   const calculatedRewards = totalSubValue * rewardRate;
   const perUserReward = Math.round(currentPrice * rewardRate);
+  const calculatedRecurring = totalSubValue * recurringRate;
+  const perUserRecurring = Math.round(currentPrice * recurringRate);
 
   const font = isMarathi ? '"Noto Sans Devanagari", sans-serif' : 'Inter, sans-serif';
 
@@ -125,8 +128,8 @@ const PromotePage = () => {
             fontWeight: 400
           }}>
             {isMarathi 
-              ? 'इतर दुग्ध व्यवसाय मालकांना जोडण्यासाठी मदत करा आणि पहिल्या सबस्क्रिप्शन मूल्यावर मिळवा थेट ४०% बक्षीस.'
-              : 'Help us reach more dairy business owners and vendors. Refer them and earn a one-time 40% reward on their initial subscription.'}
+              ? 'इतर दुग्ध व्यवसाय मालकांना जोडण्यासाठी मदत करा आणि पहिल्या सबस्क्रिप्शन मूल्यावर थेट ४०% बक्षीस आणि पुढील प्रत्येक नूतनीकरणावर १०% आवर्ती बक्षीस मिळवा.'
+              : 'Help us reach more dairy business owners and vendors. Earn 40% reward on their first subscription, followed by 10% recurring reward on all subsequent renewals.'}
           </p>
         </div>
       </section>
@@ -193,12 +196,12 @@ const PromotePage = () => {
                 }}>2</div>
                 <div>
                   <h4 style={{ fontWeight: 700, fontSize: '16px', color: '#161616', marginBottom: '6px' }}>
-                    {isMarathi ? 'थेट बँक खात्यात पैसे मिळवा' : 'Direct Bank Payout'}
+                    {isMarathi ? 'मासिक/वार्षिक आवर्ती पेमेंट' : 'Recurring Payouts'}
                   </h4>
                   <p style={{ fontSize: '14px', color: '#525252', lineHeight: 1.55 }}>
                     {isMarathi 
-                      ? 'त्यांच्या पहिल्या सबस्क्रिप्शन मूल्याच्या ४०% रक्कम थेट तुमच्या बँक खात्यात पाठवली जाईल (एकवेळ पेमेंट).'
-                      : 'Earn a massive 40% of their initial subscription value transferred directly into your bank account.'}
+                      ? 'त्यांच्या पहिल्या पेमेंटवर थेट ४०% बक्षीस मिळवा. त्यानंतर, ते जोपर्यंत सबस्क्रिप्शन चालू ठेवतील, तोपर्यंत प्रत्येक नूतनीकरणावर (renewals) १०% आवर्ती बक्षीस तुमच्या खात्यात जमा होत राहील.'
+                      : 'Earn a massive 40% reward on their first payment, followed by 10% recurring reward for every renewal they make.'}
                   </p>
                 </div>
               </div>
@@ -394,64 +397,48 @@ const PromotePage = () => {
             {/* Result display with stable layout (no shaking) */}
             <div style={{
               background: 'linear-gradient(135deg, #F8FAFC 0%, #EDF5FF 100%)',
-              padding: '28px 24px',
+              padding: '24px 20px',
               border: '1px dashed #B2CFFF',
               borderRadius: '6px',
-              textAlign: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
               boxSizing: 'border-box'
             }}>
-              <div style={{ fontSize: '12px', color: '#525252', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
-                {isMarathi ? 'तुमचे अंदाजे उत्पन्न' : 'Your Estimated Reward'}
-              </div>
-              
-              <div style={{ 
-                fontSize: '44px', 
-                fontWeight: 900, 
-                color: '#24A148', 
-                marginBottom: '10px', 
-                lineHeight: 1,
-                letterSpacing: '-1px'
-              }}>
-                ₹{calculatedRewards.toFixed(0)}
-              </div>
-              
-              {/* Stable height container to prevent layout shifting during drag */}
-              <div style={{ 
-                minHeight: '42px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                overflow: 'hidden'
-              }}>
-                <div style={{ 
-                  fontSize: '12px', 
-                  fontWeight: 600, 
-                  color: '#4B5563', 
-                  whiteSpace: 'nowrap', 
-                  textOverflow: 'ellipsis', 
-                  width: '100%', 
-                  textAlign: 'center' 
-                }}>
-                  {isMarathi 
-                    ? `प्रति युझर ₹${perUserReward} बक्षीस वर आधारित`
-                    : `Based on ₹${perUserReward} reward per user`}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', textAlign: 'center' }}>
+                <div style={{ borderRight: '1px solid #E2E8F0', paddingRight: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#525252', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                    {isMarathi ? 'पहिले बक्षीस (४०%)' : 'Initial Reward (40%)'}
+                  </div>
+                  <div style={{ 
+                    fontSize: '28px', 
+                    fontWeight: 900, 
+                    color: '#24A148', 
+                    marginBottom: '4px', 
+                    lineHeight: 1
+                  }}>
+                    ₹{calculatedRewards.toFixed(0)}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#6B7280' }}>
+                    {isMarathi ? `₹${perUserReward}/युझर` : `₹${perUserReward}/user`}
+                  </div>
                 </div>
-                <div style={{ 
-                  fontSize: '11px', 
-                  color: '#6B7280', 
-                  marginTop: '2px', 
-                  whiteSpace: 'nowrap', 
-                  textOverflow: 'ellipsis', 
-                  width: '100%', 
-                  textAlign: 'center' 
-                }}>
-                  {isMarathi 
-                    ? `(${userCount} युजर्स × ₹${perUserReward})`
-                    : `(${userCount} users × ₹${perUserReward})`}
+
+                <div>
+                  <div style={{ fontSize: '11px', color: '#525252', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                    {isMarathi ? 'आवर्ती बक्षीस (१०%)' : 'Recurring (10%)'}
+                  </div>
+                  <div style={{ 
+                    fontSize: '28px', 
+                    fontWeight: 900, 
+                    color: '#0F62FE', 
+                    marginBottom: '4px', 
+                    lineHeight: 1
+                  }}>
+                    ₹{calculatedRecurring.toFixed(0)}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#6B7280' }}>
+                    {billingCycle === 'yearly'
+                      ? (isMarathi ? 'प्रति वर्ष' : '/ year')
+                      : (isMarathi ? 'प्रति महिना' : '/ month')}
+                  </div>
                 </div>
               </div>
             </div>
@@ -460,8 +447,8 @@ const PromotePage = () => {
               <CheckCircle2 size={12} color="#24A148" style={{ flexShrink: 0 }} />
               <span>
                 {isMarathi 
-                  ? 'बक्षीस फक्त पहिल्या सबस्क्रिप्शन मूल्यावर लागू होते, नूतनीकरणावर नाही.' 
-                  : 'Reward is paid one-time on the initial subscription payment only.'}
+                  ? 'पहिल्या सबस्क्रिप्शन पेमेंटवर ४०% बक्षीस आणि त्यानंतर पुढील प्रत्येक नूतनीकरणावर १०% आवर्ती बक्षीस दिले जाईल.' 
+                  : 'Get 40% reward on the first subscription payment, and 10% recurring reward on all renewals.'}
               </span>
             </div>
           </div>
@@ -497,12 +484,12 @@ const PromotePage = () => {
             </div>
             <div style={{ borderBottom: '1px solid #F4F4F4', paddingBottom: '20px' }}>
               <h5 style={{ fontWeight: 700, fontSize: '16px', marginBottom: '8px', color: '#161616' }}>
-                {isMarathi ? 'बक्षीस वारंवार (recurring) मिळते की एकवेळच?' : 'Is the reward recurring on subsequent renewals?'}
+                {isMarathi ? 'बक्षीस आवर्ती (recurring) आहे का?' : 'Is the reward recurring?'}
               </h5>
               <p style={{ fontSize: '14px', color: '#525252', lineHeight: 1.6 }}>
                 {isMarathi 
-                  ? 'नाही. बक्षीस हे नवीन युझरच्या पहिल्या सबस्क्रिप्शन पेमेंटवर एकवेळ (one-time) ४०% मोजून दिले जाते. ते पुढील महिन्यांच्या किंवा वर्षांच्या नूतनीकरणाच्या वेळी पुन्हा दिले जात नाही.'
-                  : 'No. The 40% reward is a one-time payment calculated and paid on the user\'s initial subscription payment. It does not repeat on renewals.'}
+                  ? 'होय! पहिल्या सबस्क्रिप्शन पेमेंटवर तुम्हाला थेट ४०% बक्षीस मिळेल. त्यानंतर, ग्राहक जोपर्यंत सबस्क्रिप्शन चालू ठेवून नूतनीकरण करेल, तोपर्यंत प्रत्येक पेमेंटवर १०% आवर्ती (recurring) बक्षीस तुमच्या बँक खात्यात जमा होत राहील.'
+                  : 'Yes! You earn 40% reward on the initial subscription payment, and then 10% recurring reward on all subsequent renewals for as long as the user remains active.'}
               </p>
             </div>
             <div style={{ borderBottom: '1px solid #F4F4F4', paddingBottom: '20px' }}>

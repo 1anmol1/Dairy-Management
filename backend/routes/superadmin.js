@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
 const DailyLog = require('../models/DailyLog');
@@ -7,6 +8,13 @@ const AuthLog = require('../models/AuthLog');
 const PlanConfig = require('../models/PlanConfig');
 const SystemConfig = require('../models/SystemConfig');
 const SubscriptionRequest = require('../models/SubscriptionRequest');
+const RecycleBin = require('../models/RecycleBin');
+const DailyCollection = require('../models/DailyCollection');
+const Bill = require('../models/Bill');
+const Farmer = require('../models/Farmer');
+const FarmerCollection = require('../models/FarmerCollection');
+const WhatsappConnection = require('../models/WhatsappConnection');
+const MessageTemplate = require('../models/MessageTemplate');
 const { protect, authorize, checkPermission } = require('../middleware/auth');
 const { sendStartTrialEvent, sendSubscribeEvent } = require('../services/metaCapiService');
 
@@ -1148,6 +1156,313 @@ router.patch('/admins/:id/password', requireMainSuperadmin, async (req, res, nex
     });
 
     res.json({ message: 'Admin password reset successfully.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── RECYCLE BIN & CASCADE SOFT DELETION ENDPOINTS ───────────────────
+
+// Helper: Move single doc to recycle bin
+const moveToRecycleBin = async (doc, modelType, ownerId, deletedBy, cascadedFrom = null) => {
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days from now
+  
+  // Save to RecycleBin
+  await RecycleBin.create({
+    modelType,
+    originalId: doc._id,
+    data: doc.toObject ? doc.toObject() : doc,
+    ownerId,
+    expiresAt,
+    cascadedFrom,
+    deletedBy
+  });
+  
+  // Delete from original collection
+  const Model = mongoose.model(modelType);
+  await Model.deleteOne({ _id: doc._id });
+};
+
+// Helper: Soft-delete Owner and cascade all their data
+const softDeleteOwner = async (ownerId, deletedBy) => {
+  const owner = await User.findById(ownerId);
+  if (!owner) return;
+
+  // Move Owner User doc
+  await moveToRecycleBin(owner, 'User', ownerId, deletedBy);
+
+  // Cascade Customers
+  const customers = await Customer.find({ ownerId });
+  for (const cust of customers) {
+    await moveToRecycleBin(cust, 'Customer', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+    // Cascade Bills of that customer
+    const bills = await Bill.find({ customerId: cust._id });
+    for (const bill of bills) {
+      await moveToRecycleBin(bill, 'Bill', ownerId, deletedBy, { modelType: 'Customer', originalId: cust._id });
+    }
+    // Cascade DailyLogs of that customer
+    const logs = await DailyLog.find({ customerId: cust._id });
+    for (const log of logs) {
+      await moveToRecycleBin(log, 'DailyLog', ownerId, deletedBy, { modelType: 'Customer', originalId: cust._id });
+    }
+  }
+
+  // Cascade Staff (User where role === 'staff')
+  const staff = await User.find({ ownerId, role: 'staff' });
+  for (const s of staff) {
+    await moveToRecycleBin(s, 'User', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+
+  // Cascade remaining Bills (if any)
+  const remainingBills = await Bill.find({ ownerId });
+  for (const bill of remainingBills) {
+    await moveToRecycleBin(bill, 'Bill', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+
+  // Cascade remaining DailyLogs (if any)
+  const remainingLogs = await DailyLog.find({ ownerId });
+  for (const log of remainingLogs) {
+    await moveToRecycleBin(log, 'DailyLog', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+
+  // Cascade DailyCollections
+  const collections = await DailyCollection.find({ ownerId });
+  for (const col of collections) {
+    await moveToRecycleBin(col, 'DailyCollection', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+
+  // Cascade Farmers
+  const farmers = await Farmer.find({ ownerId });
+  for (const f of farmers) {
+    await moveToRecycleBin(f, 'Farmer', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+
+  // Cascade Farmer Collections
+  const fCollections = await FarmerCollection.find({ ownerId });
+  for (const fc of fCollections) {
+    await moveToRecycleBin(fc, 'FarmerCollection', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+
+  // Cascade WhatsApp Connections
+  const waConns = await WhatsappConnection.find({ ownerId });
+  for (const w of waConns) {
+    await moveToRecycleBin(w, 'WhatsappConnection', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+
+  // Cascade Message Templates
+  const templates = await MessageTemplate.find({ ownerId });
+  for (const t of templates) {
+    await moveToRecycleBin(t, 'MessageTemplate', ownerId, deletedBy, { modelType: 'User', originalId: ownerId });
+  }
+};
+
+// Helper: Soft-delete Customer and cascade their data
+const softDeleteCustomer = async (customerId, deletedBy) => {
+  const customer = await Customer.findById(customerId);
+  if (!customer) return;
+
+  await moveToRecycleBin(customer, 'Customer', customer.ownerId, deletedBy);
+
+  // Cascade Bills of that customer
+  const bills = await Bill.find({ customerId });
+  for (const bill of bills) {
+    await moveToRecycleBin(bill, 'Bill', customer.ownerId, deletedBy, { modelType: 'Customer', originalId: customerId });
+  }
+
+  // Cascade DailyLogs of that customer
+  const logs = await DailyLog.find({ customerId });
+  for (const log of logs) {
+    await moveToRecycleBin(log, 'DailyLog', customer.ownerId, deletedBy, { modelType: 'Customer', originalId: customerId });
+  }
+};
+
+// Helper: Soft-delete Staff and cascade their data
+const softDeleteStaff = async (staffId, deletedBy) => {
+  const staff = await User.findOne({ _id: staffId, role: 'staff' });
+  if (!staff) return;
+
+  await moveToRecycleBin(staff, 'User', staff.ownerId, deletedBy);
+};
+
+// Helper: Soft-delete DailyCollection
+const softDeleteDailyCollection = async (colId, deletedBy) => {
+  const col = await DailyCollection.findById(colId);
+  if (!col) return;
+  await moveToRecycleBin(col, 'DailyCollection', col.ownerId, deletedBy);
+};
+
+// Helper: Soft-delete Bill
+const softDeleteBill = async (billId, deletedBy) => {
+  const bill = await Bill.findById(billId);
+  if (!bill) return;
+  await moveToRecycleBin(bill, 'Bill', bill.ownerId, deletedBy);
+};
+
+// Helper: Soft-delete DailyLog
+const softDeleteDailyLog = async (logId, deletedBy) => {
+  const log = await DailyLog.findById(logId);
+  if (!log) return;
+  await moveToRecycleBin(log, 'DailyLog', log.ownerId, deletedBy);
+};
+
+// 1. GET /api/superadmin/recycle-bin
+router.get('/recycle-bin', checkPermission('owners'), async (req, res, next) => {
+  try {
+    const items = await RecycleBin.find({})
+      .populate('ownerId', 'name businessName phone')
+      .sort({ deletedAt: -1 })
+      .lean();
+    res.json({ items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2. POST /api/superadmin/recycle-bin/delete
+router.post('/recycle-bin/delete', checkPermission('owners'), async (req, res, next) => {
+  try {
+    const { targets, password } = req.body; // targets: Array of { modelType, id }
+    if (!targets || !Array.isArray(targets) || targets.length === 0) {
+      return res.status(400).json({ error: 'Targets array is required.' });
+    }
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password is required for confirmation.' });
+    }
+
+    // Verify password
+    const superadmin = await User.findById(req.user._id).select('+password');
+    const isMatch = await superadmin.comparePassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
+    for (const target of targets) {
+      const { modelType, id } = target;
+      if (modelType === 'User') {
+        const u = await User.findById(id);
+        if (!u) continue;
+        if (u.role === 'owner') {
+          await softDeleteOwner(id, req.user._id);
+        } else if (u.role === 'staff') {
+          await softDeleteStaff(id, req.user._id);
+        }
+      } else if (modelType === 'Customer') {
+        await softDeleteCustomer(id, req.user._id);
+      } else if (modelType === 'DailyCollection') {
+        await softDeleteDailyCollection(id, req.user._id);
+      } else if (modelType === 'Bill') {
+        await softDeleteBill(id, req.user._id);
+      } else if (modelType === 'DailyLog') {
+        await softDeleteDailyLog(id, req.user._id);
+      }
+    }
+
+    res.json({ message: 'Items successfully moved to the Recycle Bin.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Helper: Restore single item
+const restoreRecycleBinItem = async (recycleItem) => {
+  const Model = mongoose.model(recycleItem.modelType);
+  
+  // Make sure not to duplicate if it somehow exists
+  const exists = await Model.findById(recycleItem.originalId);
+  if (!exists) {
+    await Model.create(recycleItem.data);
+  }
+  
+  // Delete from recycle bin
+  await RecycleBin.deleteOne({ _id: recycleItem._id });
+};
+
+// 3. POST /api/superadmin/recycle-bin/restore
+router.post('/recycle-bin/restore', checkPermission('owners'), async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Recycle bin item IDs are required.' });
+    }
+
+    for (const rId of ids) {
+      const recycleItem = await RecycleBin.findById(rId);
+      if (!recycleItem) continue;
+
+      // Restore the main item
+      await restoreRecycleBinItem(recycleItem);
+
+      // Restore any cascaded items
+      const cascadedItems = await RecycleBin.find({
+        'cascadedFrom.modelType': recycleItem.modelType,
+        'cascadedFrom.originalId': recycleItem.originalId
+      });
+
+      for (const cascItem of cascadedItems) {
+        await restoreRecycleBinItem(cascItem);
+        
+        // Handle double nesting, e.g., Owner -> Customer -> Bill/DailyLog
+        if (cascItem.modelType === 'Customer') {
+          const subCascaded = await RecycleBin.find({
+            'cascadedFrom.modelType': 'Customer',
+            'cascadedFrom.originalId': cascItem.originalId
+          });
+          for (const subItem of subCascaded) {
+            await restoreRecycleBinItem(subItem);
+          }
+        }
+      }
+    }
+
+    res.json({ message: 'Selected items and their associated records have been restored.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 4. POST /api/superadmin/recycle-bin/hard-delete
+router.post('/recycle-bin/hard-delete', checkPermission('owners'), async (req, res, next) => {
+  try {
+    const { ids, password } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Recycle bin item IDs are required.' });
+    }
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password is required for confirmation.' });
+    }
+
+    // Verify password
+    const superadmin = await User.findById(req.user._id).select('+password');
+    const isMatch = await superadmin.comparePassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
+    for (const rId of ids) {
+      const recycleItem = await RecycleBin.findById(rId);
+      if (!recycleItem) continue;
+
+      // Delete main RecycleBin entry
+      await RecycleBin.deleteOne({ _id: rId });
+
+      // Delete cascaded RecycleBin entries
+      const cascadedItems = await RecycleBin.find({
+        'cascadedFrom.modelType': recycleItem.modelType,
+        'cascadedFrom.originalId': recycleItem.originalId
+      });
+
+      for (const cascItem of cascadedItems) {
+        await RecycleBin.deleteOne({ _id: cascItem._id });
+        if (cascItem.modelType === 'Customer') {
+          await RecycleBin.deleteMany({
+            'cascadedFrom.modelType': 'Customer',
+            'cascadedFrom.originalId': cascItem.originalId
+          });
+        }
+      }
+    }
+
+    res.json({ message: 'Selected items have been permanently deleted.' });
   } catch (err) {
     next(err);
   }

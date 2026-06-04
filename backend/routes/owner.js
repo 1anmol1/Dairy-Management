@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
 const Farmer = require('../models/Farmer');
@@ -10,7 +11,70 @@ const DailyCollection = require('../models/DailyCollection');
 const MessageTemplate = require('../models/MessageTemplate');
 const SystemConfig = require('../models/SystemConfig');
 const AuthLog = require('../models/AuthLog');
+const RecycleBin = require('../models/RecycleBin');
 const { protect, authorize, requireActiveSubscription } = require('../middleware/auth');
+
+const verifySuperadminPassword = async (password) => {
+  if (!password) return false;
+  const superadmin = await User.findOne({ role: 'superadmin', parentAdminId: null }).select('+password');
+  if (!superadmin) return false;
+  return await superadmin.comparePassword(password);
+};
+
+async function recalculateCustomerBill(ownerId, customerId, dateString) {
+  try {
+    const parts = dateString.split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    
+    const pad = String(month).padStart(2, '0');
+    const datePrefix = `${year}-${pad}`;
+
+    const bill = await Bill.findOne({ ownerId, customerId, month, year });
+    if (!bill) return;
+
+    const logs = await DailyLog.find({
+      ownerId,
+      customerId,
+      date: { $regex: `^${datePrefix}` }
+    }).lean();
+
+    const totalLiters = logs.reduce((sum, l) => sum + (l.delivered_qty || 0), 0);
+    const totalAmount = logs.reduce((sum, l) => sum + (l.amount_calculated || 0), 0);
+
+    bill.totalLiters = totalLiters;
+    bill.totalAmount = totalAmount;
+    bill.grandTotal = totalAmount + (bill.previousBalance || 0);
+    bill.balance = bill.grandTotal - (bill.amountPaid || 0);
+    bill.status = bill.balance <= 0 ? 'paid' : (bill.amountPaid > 0 ? 'partial' : 'pending');
+    bill.logSnapshot = logs.map(l => ({
+      date: l.date,
+      slot: l.slot,
+      delivered_qty: l.delivered_qty,
+      extra_qty: l.extra_qty || 0,
+      amount_calculated: l.amount_calculated
+    }));
+
+    await bill.save();
+  } catch (err) {
+    console.error('Error recalculating customer bill:', err);
+  }
+}
+
+const moveToRecycleBin = async (doc, modelType, ownerId, deletedBy, cascadedFrom = null) => {
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  await RecycleBin.create({
+    modelType,
+    originalId: doc._id,
+    data: doc.toObject ? doc.toObject() : doc,
+    ownerId,
+    expiresAt,
+    cascadedFrom,
+    deletedBy
+  });
+  const Model = mongoose.model(modelType);
+  await Model.deleteOne({ _id: doc._id });
+};
 
 router.use(protect, authorize('owner'), requireActiveSubscription);
 
@@ -183,12 +247,42 @@ router.put('/customers/:id', async (req, res, next) => {
 // DELETE /api/owner/customers/:id (soft delete)
 router.delete('/customers/:id', async (req, res, next) => {
   try {
+    const isSuperadmin = req.user.role === 'superadmin' || req.user.impersonatedBy === 'superadmin';
+    if (!isSuperadmin) {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can delete data.' });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password confirmation is required.' });
+    }
+
+    const isMatch = await verifySuperadminPassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
     const customer = await Customer.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!customer) return res.status(404).json({ error: 'Customer not found.' });
 
-    customer.isActive = false;
-    await customer.save();
-    res.json({ message: 'Customer deactivated.' });
+    const superadminUser = await User.findOne({ role: 'superadmin', parentAdminId: null });
+    const deletedBy = superadminUser ? superadminUser._id : req.user._id;
+
+    await moveToRecycleBin(customer, 'Customer', customer.ownerId, deletedBy);
+
+    // Cascade Bills
+    const bills = await Bill.find({ customerId: customer._id });
+    for (const bill of bills) {
+      await moveToRecycleBin(bill, 'Bill', customer.ownerId, deletedBy, { modelType: 'Customer', originalId: customer._id });
+    }
+
+    // Cascade DailyLogs
+    const logs = await DailyLog.find({ customerId: customer._id });
+    for (const log of logs) {
+      await moveToRecycleBin(log, 'DailyLog', customer.ownerId, deletedBy, { modelType: 'Customer', originalId: customer._id });
+    }
+
+    res.json({ message: 'Customer moved to Recycle Bin.' });
   } catch (err) {
     next(err);
   }
@@ -363,12 +457,30 @@ router.put('/staff/:id', async (req, res, next) => {
 // DELETE /api/owner/staff/:id
 router.delete('/staff/:id', async (req, res, next) => {
   try {
+    const isSuperadmin = req.user.role === 'superadmin' || req.user.impersonatedBy === 'superadmin';
+    if (!isSuperadmin) {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can delete data.' });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password confirmation is required.' });
+    }
+
+    const isMatch = await verifySuperadminPassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
     const staff = await User.findOne({ _id: req.params.id, ownerId: req.user._id, role: 'staff' });
     if (!staff) return res.status(404).json({ error: 'Staff not found.' });
 
-    staff.isActive = false;
-    await staff.save();
-    res.json({ message: 'Staff account disabled.' });
+    const superadminUser = await User.findOne({ role: 'superadmin', parentAdminId: null });
+    const deletedBy = superadminUser ? superadminUser._id : req.user._id;
+
+    await moveToRecycleBin(staff, 'User', staff.ownerId, deletedBy);
+
+    res.json({ message: 'Staff member moved to Recycle Bin.' });
   } catch (err) {
     next(err);
   }
@@ -506,22 +618,37 @@ router.get('/logs', async (req, res, next) => {
 // PATCH /api/owner/logs/:id — owner can edit a log entry (correct errors)
 router.patch('/logs/:id', async (req, res, next) => {
   try {
-    const { extra_qty, notes } = req.body;
+    const { extra_qty, delivered_qty, price_per_liter, notes } = req.body;
     const log = await DailyLog.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!log) return res.status(404).json({ error: 'Log entry not found.' });
 
-    // Recalculate quantities if extra_qty changed
-    if (extra_qty !== undefined) {
+    if (price_per_liter !== undefined) {
+      log.price_per_liter = Math.max(0, parseFloat(price_per_liter) || 0);
+    }
+
+    if (delivered_qty !== undefined) {
+      const newDelivered = Math.max(0, parseFloat(delivered_qty) || 0);
+      log.delivered_qty = newDelivered;
+      log.extra_qty = Math.max(0, newDelivered - log.base_qty);
+    } else if (extra_qty !== undefined) {
       const newExtra = Math.max(0, parseFloat(extra_qty) || 0);
       log.extra_qty = newExtra;
       log.delivered_qty = log.base_qty + newExtra;
-      log.amount_calculated = log.delivered_qty * log.price_per_liter;
     }
+
+    log.amount_calculated = log.delivered_qty * log.price_per_liter;
+
     if (notes !== undefined) log.notes = notes;
     if (req.body.whatsappSent !== undefined) log.whatsappSent = req.body.whatsappSent;
     if (req.body.whatsappError !== undefined) log.whatsappError = req.body.whatsappError;
 
+    log.isEdited = true;
+    log.editedBy = req.user.name;
+
     await log.save();
+
+    // Recalculate customer bill for this month/year
+    await recalculateCustomerBill(req.user._id, log.customerId, log.date);
 
     // Re-populate for response
     const populated = await DailyLog.findById(log._id)
@@ -529,7 +656,7 @@ router.patch('/logs/:id', async (req, res, next) => {
       .populate('staffId', 'name')
       .lean();
 
-    res.json({ log: populated });
+    res.json({ log: populated, message: 'Log entry updated.' });
   } catch (err) {
     next(err);
   }
@@ -538,9 +665,30 @@ router.patch('/logs/:id', async (req, res, next) => {
 // DELETE /api/owner/logs/:id — owner can delete a log entry
 router.delete('/logs/:id', async (req, res, next) => {
   try {
-    const log = await DailyLog.findOneAndDelete({ _id: req.params.id, ownerId: req.user._id });
+    const isSuperadmin = req.user.role === 'superadmin' || req.user.impersonatedBy === 'superadmin';
+    if (!isSuperadmin) {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can delete data.' });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password confirmation is required.' });
+    }
+
+    const isMatch = await verifySuperadminPassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
+    const log = await DailyLog.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!log) return res.status(404).json({ error: 'Log entry not found.' });
-    res.json({ message: 'Log entry deleted.' });
+
+    const superadminUser = await User.findOne({ role: 'superadmin', parentAdminId: null });
+    const deletedBy = superadminUser ? superadminUser._id : req.user._id;
+
+    await moveToRecycleBin(log, 'DailyLog', log.ownerId, deletedBy);
+
+    res.json({ message: 'Log entry moved to Recycle Bin.' });
   } catch (err) {
     next(err);
   }
@@ -687,21 +835,136 @@ router.post('/bills/:id/send-pdf-whatsapp', async (req, res, next) => {
     if (!req.user.features?.custom_message_templates) {
       return res.status(403).json({ error: 'Platinum plan required.' });
     }
-    const { html, filename } = req.body;
-    if (!html || !filename) {
-      return res.status(400).json({ error: 'html and filename are required.' });
+    const { filename } = req.body;
+    if (!filename) {
+      return res.status(400).json({ error: 'filename is required.' });
     }
     const bill = await Bill.findOne({ _id: req.params.id, ownerId: req.user._id })
       .populate('customerId', 'name phone language').lean();
     if (!bill) return res.status(404).json({ error: 'Bill not found.' });
 
-    let puppeteer;
-    try { puppeteer = require('puppeteer'); } catch { puppeteer = require('puppeteer-core'); }
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
-    await browser.close();
+    // Generate PDF using PDFKit
+    const PDFDocument = require('pdfkit');
+    const generateBillPDF = (bill, monthName, year, businessName) => {
+      return new Promise((resolve, reject) => {
+        try {
+          const doc = new PDFDocument({ margin: 50, size: 'A4' });
+          const chunks = [];
+          doc.on('data', chunk => chunks.push(chunk));
+          doc.on('end', () => resolve(Buffer.concat(chunks)));
+          doc.on('error', err => reject(err));
+
+          // Header
+          doc.fontSize(20).text(businessName || 'Dairy', { align: 'center' });
+          doc.fontSize(12).text(`Milk Bill — ${monthName} ${year}`, { align: 'center' });
+          doc.moveDown(1.5);
+
+          // Customer info
+          doc.fontSize(12).text(`Customer: ${bill.customerId?.name || 'N/A'}`);
+          doc.text(`Phone: ${bill.customerId?.phone || 'N/A'}`);
+          doc.moveDown(1.5);
+
+          // Table Headers
+          const tableTop = doc.y;
+          doc.fontSize(10).font('Helvetica-Bold');
+          doc.text('Date', 50, tableTop);
+          doc.text('Morning (L)', 150, tableTop);
+          doc.text('Evening (L)', 250, tableTop);
+          doc.text('Extra (L)', 350, tableTop);
+          doc.text('Amount (INR)', 450, tableTop);
+
+          doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+
+          // Table rows
+          let currentY = tableTop + 25;
+          doc.font('Helvetica');
+
+          const logs = bill.logSnapshot || [];
+          const byDate = {};
+          logs.forEach(l => {
+            if (!byDate[l.date]) byDate[l.date] = { morning: 0, evening: 0, extra: 0, amount: 0 };
+            if (l.slot === 'morning') byDate[l.date].morning += l.delivered_qty;
+            else byDate[l.date].evening += l.delivered_qty;
+            byDate[l.date].extra += (l.extra_qty || 0);
+            byDate[l.date].amount += l.amount_calculated;
+          });
+          const dates = Object.keys(byDate).sort();
+
+          dates.forEach(d => {
+            if (currentY > 750) {
+              doc.addPage();
+              currentY = 50;
+            }
+            const r = byDate[d];
+            let dateStr = d;
+            try {
+              const dateObj = new Date(d);
+              const day = dateObj.getDate();
+              const monthStr = dateObj.toLocaleString('en-US', { month: 'short' });
+              dateStr = `${day} ${monthStr}`;
+            } catch (e) {}
+
+            doc.text(dateStr, 50, currentY);
+            doc.text(r.morning > 0 ? r.morning.toFixed(1) : '—', 150, currentY);
+            doc.text(r.evening > 0 ? r.evening.toFixed(1) : '—', 250, currentY);
+            doc.text(r.extra > 0 ? r.extra.toFixed(1) : '—', 350, currentY);
+            doc.text(`Rs. ${r.amount.toFixed(0)}`, 450, currentY);
+            currentY += 20;
+          });
+
+          doc.moveTo(50, currentY).lineTo(550, currentY).stroke();
+          currentY += 15;
+
+          // Summary
+          if (currentY > 700) {
+            doc.addPage();
+            currentY = 50;
+          }
+
+          doc.font('Helvetica-Bold');
+          doc.text('Total Liters:', 50, currentY);
+          doc.font('Helvetica').text(`${bill.totalLiters?.toFixed(1)} L`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Milk Amount:', 50, currentY);
+          doc.font('Helvetica').text(`Rs. ${bill.totalAmount?.toFixed(0)}`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Previous Balance:', 50, currentY);
+          doc.font('Helvetica').text(`Rs. ${(bill.previousBalance || 0).toFixed(0)}`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Grand Total:', 50, currentY);
+          doc.font('Helvetica').text(`Rs. ${(bill.grandTotal ?? bill.totalAmount)?.toFixed(0)}`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Amount Paid:', 50, currentY);
+          doc.font('Helvetica').fillColor('#24A148').text(`Rs. ${bill.amountPaid?.toFixed(0)}`, 180, currentY);
+          currentY += 20;
+
+          doc.fillColor('#000000');
+          doc.moveTo(50, currentY).lineTo(550, currentY).stroke();
+          currentY += 10;
+
+          doc.font('Helvetica-Bold').fontSize(12).fillColor('#DA1E28');
+          doc.text('BALANCE DUE:', 50, currentY);
+          doc.text(`Rs. ${Math.max(0, bill.balance)?.toFixed(0)}`, 180, currentY);
+
+          doc.end();
+        } catch (err) {
+          reject(err);
+        }
+      });
+    };
+
+    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = MONTHS[bill.month - 1] || 'Billing';
+    const businessName = req.user.businessName || 'Dairy';
+    const pdfBuffer = await generateBillPDF(bill, monthName, bill.year, businessName);
 
     const base64 = pdfBuffer.toString('base64');
     const { sendDocument } = require('../services/whatsappService');

@@ -25,6 +25,7 @@ const Delivery = () => {
   const [extraQty, setExtraQty] = useState({});
   const [whatsappStatus, setWhatsappStatus] = useState('disconnected');
   const [expandedAddress, setExpandedAddress] = useState({}); // track which customer's address is expanded
+  const [editingLog, setEditingLog] = useState(null);
   const toast = useToast();
   const showSkeleton = useDelayedLoading(loading);
   const { isOnline, pendingCount, syncStatus, lastSyncResult, requestSync } = useOfflineSync();
@@ -336,12 +337,28 @@ const Delivery = () => {
                 </div>
 
                 {activeDelivered ? (
-                  <div style={{ backgroundColor: '#DEFBE6', padding: '10px 14px', fontSize: '14px', color: '#0E6027', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle size={16} />
-                    {isMarathi
-                      ? `${activeSlot === 'morning' ? 'सकाळ' : 'संध्याकाळ'} वितरित: ${activeLog?.delivered_qty}${isMarathi ? 'ली.' : 'L'}`
-                      : `${activeSlot === 'morning' ? 'Morning' : 'Evening'} delivered: ${activeLog?.delivered_qty}L`}
-                    {activeLog?.extra_qty > 0 && <span style={{ fontWeight: 400 }}>({activeLog?.base_qty}{isMarathi ? 'ली.' : 'L'} + {activeLog?.extra_qty}{isMarathi ? 'ली.' : 'L'} {isMarathi ? 'अतिरिक्त' : 'extra'})</span>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ backgroundColor: '#DEFBE6', padding: '10px 14px', fontSize: '14px', color: '#0E6027', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CheckCircle size={16} />
+                        <div>
+                          {isMarathi
+                            ? `${activeSlot === 'morning' ? 'सकाळ' : 'संध्याकाळ'} वितरित: ${activeLog?.delivered_qty}${isMarathi ? 'ली.' : 'L'}`
+                            : `${activeSlot === 'morning' ? 'Morning' : 'Evening'} delivered: ${activeLog?.delivered_qty}L`}
+                          {activeLog?.extra_qty > 0 && <span style={{ fontWeight: 400 }}> ({activeLog?.base_qty}{isMarathi ? 'ली.' : 'L'} + {activeLog?.extra_qty}{isMarathi ? 'ली.' : 'L'} {isMarathi ? 'अतिरिक्त' : 'extra'})</span>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '4px 10px', fontSize: '12px', height: '32px', border: '1px solid #24A148', color: '#0E6027', cursor: 'pointer', flexShrink: 0 }}
+                        onClick={() => {
+                          setEditingLog({ customerId: customer._id, slot: activeSlot, log: activeLog });
+                        }}
+                      >
+                        {isMarathi ? 'संपादित करा' : 'Edit'}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div>
@@ -388,7 +405,154 @@ const Delivery = () => {
           })}
         </div>
       )}
+      {editingLog && (
+        <EditDeliveryModal
+          log={editingLog.log}
+          customerName={customers.find(c => c._id === editingLog.customerId)?.name || ''}
+          slot={editingLog.slot}
+          onClose={() => setEditingLog(null)}
+          onSaved={(updatedLog) => {
+            setCustomers(prev => prev.map(c => {
+              if (c._id !== editingLog.customerId) return c;
+              return { ...c, [editingLog.slot]: updatedLog };
+            }));
+            setEditingLog(null);
+            fetchToday(); // refresh quota and other info
+          }}
+        />
+      )}
       <div style={{ height: '32px' }} />
+    </div>
+  );
+};
+
+// ── Edit Delivery Modal Component (Same Day Only) ──────────────
+const EditDeliveryModal = ({ log, customerName, slot, onClose, onSaved }) => {
+  const [extraQty, setExtraQty] = useState(String(log.extra_qty ?? 0));
+  const [notes, setNotes] = useState(log.notes || '');
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+  const { isMarathi } = useMarathi();
+  const L = isMarathi ? 'ली.' : 'L';
+  const mouseDownOnOverlay = React.useRef(false);
+
+  const preview = {
+    delivered: log.base_qty + (parseFloat(extraQty) || 0)
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const extra = parseFloat(extraQty);
+    if (isNaN(extra) || extra < 0) {
+      toast.error(isMarathi ? 'वैध अतिरिक्त प्रमाण टाका.' : 'Enter a valid extra quantity.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data } = await api.patch(`/staff/logs/${log._id}`, { extra_qty: extra, notes });
+      toast.success(isMarathi ? 'वितरण अपडेट केले.' : 'Delivery updated.');
+      onSaved(data.log);
+    } catch (err) {
+      toast.error(err.response?.data?.error || (isMarathi ? 'वितरण अपडेट करण्यात अयशस्वी.' : 'Failed to update delivery.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ maxWidth: '420px', position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 10,
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={18} />
+        </button>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{ margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingRight: '24px' }}>
+              <div>
+                <h2 style={{ fontWeight: 700, fontSize: '18px' }}>
+                  {isMarathi ? 'वितरण नोंद संपादित करा' : 'Edit Delivery Entry'}
+                </h2>
+                <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
+                  {customerName} · {isMarathi ? (slot === 'morning' ? 'सकाळ' : 'संध्याकाळ') : slot} · {isMarathi ? 'आज' : 'Today'}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: '#F4F4F4', padding: '12px 16px', marginBottom: '20px', fontSize: '13px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'मूळ प्रमाण' : 'Base quantity'}</span>
+                <span style={{ fontWeight: 600 }}>{log.base_qty}{L}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E0E0E0', paddingTop: '8px', marginTop: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'एकूण पूर्वावलोकन' : 'Preview total'}</span>
+                <span style={{ fontWeight: 700, color: '#0F62FE' }}>
+                  {preview.delivered.toFixed(1)}{L}
+                </span>
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'अतिरिक्त लिटर (संपादन करता येते)' : 'Extra Liters (editable)'}</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input"
+                placeholder="0"
+                value={extraQty}
+                onChange={e => setExtraQty(e.target.value)}
+                autoFocus
+              />
+              <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
+                {isMarathi ? 'मूळ प्रमाण बदलता येत नाही. फक्त अतिरिक्त लिटर बदलता येतात.' : 'Base qty is locked. Only extra liters can be adjusted.'}
+              </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'नोंदी' : 'Notes'}</label>
+              <input
+                type="text"
+                className="input"
+                placeholder={isMarathi ? 'पर्यायी नोंद...' : 'Optional note...'}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="modal-footer" style={{ marginTop: '20px' }}>
+            <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>
+              {isMarathi ? 'रद्द करा' : 'Cancel'}
+            </button>
+            <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+              {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : (isMarathi ? 'बदल जतन करा' : 'Save Changes')}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

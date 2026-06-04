@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, ToggleLeft, ToggleRight, Settings,
   ChevronDown, ChevronUp, KeyRound, Users, User, FileText, Check, X, RefreshCw, Calculator,
-  ChevronLeft, LogIn
+  ChevronLeft, LogIn, Trash2
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
@@ -52,10 +52,69 @@ const Owners = () => {
   const [expandedId, setExpandedId] = useState(null);
   const [pwModal, setPwModal] = useState(null);       // { type: 'owner'|'staff', id, name }
   const [viewingStaffOwner, setViewingStaffOwner] = useState(null);
+  const [viewingCustomersOwner, setViewingCustomersOwner] = useState(null);
+  const [selectedOwnerIds, setSelectedOwnerIds] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { title, message, onConfirm }
   const [roleConfirm, setRoleConfirm] = useState(null);
   const [impersonateConfirm, setImpersonateConfirm] = useState(null); // { phone, name }
   const [statusConfirm, setStatusConfirm] = useState(null);           // { ownerId, newStatus }
   const toast = useToast();
+
+  const handleSelectAllOwners = (e) => {
+    if (e.target.checked) {
+      setSelectedOwnerIds(owners.map(o => o._id));
+    } else {
+      setSelectedOwnerIds([]);
+    }
+  };
+
+  const handleSelectOneOwner = (id) => {
+    setSelectedOwnerIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const promptDeleteOwner = (owner) => {
+    setDeleteConfirm({
+      title: 'Delete Owner Account',
+      message: `Are you sure you want to delete owner "${owner.name}" (${owner.phone})? This will move the owner, their staff, customers, bills, and logs to the Recycle Bin for 90 days.`,
+      onConfirm: async (password) => {
+        try {
+          const { data } = await api.post('/superadmin/recycle-bin/delete', {
+            targets: [{ modelType: 'User', id: owner._id }],
+            password
+          });
+          toast.success(data.message || 'Owner account moved to Recycle Bin.');
+          setDeleteConfirm(null);
+          setSelectedOwnerIds([]);
+          fetchOwners();
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Failed to delete owner account.');
+        }
+      }
+    });
+  };
+
+  const promptBulkDeleteOwners = () => {
+    setDeleteConfirm({
+      title: 'Bulk Delete Owner Accounts',
+      message: `Are you sure you want to delete the ${selectedOwnerIds.length} selected owner accounts? This will move all selected owners and their associated data (staff, customers, bills, logs) to the Recycle Bin for 90 days.`,
+      onConfirm: async (password) => {
+        try {
+          const { data } = await api.post('/superadmin/recycle-bin/delete', {
+            targets: selectedOwnerIds.map(id => ({ modelType: 'User', id })),
+            password
+          });
+          toast.success(data.message || 'Selected owner accounts moved to Recycle Bin.');
+          setDeleteConfirm(null);
+          setSelectedOwnerIds([]);
+          fetchOwners();
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Failed to delete owner accounts.');
+        }
+      }
+    });
+  };
   const showSkeleton = useDelayedLoading(loading, 2000);
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
@@ -175,6 +234,11 @@ const Owners = () => {
           handleImpersonate={handleImpersonate}
           setPwModal={setPwModal}
         />
+      ) : viewingCustomersOwner ? (
+        <CustomerList
+          owner={viewingCustomersOwner}
+          onBack={() => setViewingCustomersOwner(null)}
+        />
       ) : (
         <>
           <div className="page-header">
@@ -237,6 +301,23 @@ const Owners = () => {
           })}
         </div>
 
+        {selectedOwnerIds.length > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+            backgroundColor: '#FFF1F1', border: '1px solid rgba(218,30,40,0.2)', marginBottom: '16px',
+            justifyContent: 'space-between', borderRadius: '4px'
+          }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#DA1E28' }}>
+              {selectedOwnerIds.length} Owner account{selectedOwnerIds.length > 1 ? 's' : ''} selected
+            </span>
+            <button className="btn btn-danger btn-sm"
+              style={{ height: '32px' }}
+              onClick={promptBulkDeleteOwners}>
+              <Trash2 size={13} /> Delete Selected Accounts
+            </button>
+          </div>
+        )}
+
         {/* Table */}
         <div className="card" style={{ padding: 0 }}>
           {showSkeleton ? (
@@ -263,6 +344,10 @@ const Owners = () => {
           ) : isMobile ? (
             /* Mobile card list */
             <div style={{ padding: '8px' }}>
+              <div style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #E0E0E0', marginBottom: '8px' }}>
+                <input type="checkbox" checked={selectedOwnerIds.length === owners.length && owners.length > 0} onChange={handleSelectAllOwners} />
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>Select All</span>
+              </div>
               {owners.map(owner => {
                 const isExpanded = mobileExpandedId === owner._id;
                 const planKey = owner.subscription?.plan || 'silver';
@@ -270,14 +355,16 @@ const Owners = () => {
                 return (
                   <div key={owner._id} style={{ border: '1px solid #E0E0E0', marginBottom: '8px', backgroundColor: '#FFFFFF' }}>
                     <div
-                      onClick={() => setMobileExpandedId(isExpanded ? null : owner._id)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', cursor: 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px' }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: '14px' }}>{owner.name}</div>
-                        <div style={{ fontSize: '12px', color: '#525252', marginTop: '2px' }}>{owner.businessName || owner.phone}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                        <input type="checkbox" checked={selectedOwnerIds.includes(owner._id)} onChange={() => handleSelectOneOwner(owner._id)} />
+                        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setMobileExpandedId(isExpanded ? null : owner._id)}>
+                          <div style={{ fontWeight: 700, fontSize: '14px' }}>{owner.name}</div>
+                          <div style={{ fontSize: '12px', color: '#525252', marginTop: '2px' }}>{owner.businessName || owner.phone}</div>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, cursor: 'pointer' }} onClick={() => setMobileExpandedId(isExpanded ? null : owner._id)}>
                         {statusBadge(owner.subscription?.status)}
                         {planBadge(owner.subscription?.plan)}
                         {isExpanded ? <ChevronUp size={16} color="#8D8D8D" /> : <ChevronDown size={16} color="#8D8D8D" />}
@@ -299,6 +386,10 @@ const Owners = () => {
                             onClick={() => setViewingStaffOwner(owner)}>
                             <Users size={13} /> Staff
                           </button>
+                          <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center' }}
+                            onClick={() => setViewingCustomersOwner(owner)}>
+                            <User size={13} /> Customers
+                          </button>
                           <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center', color: '#0F62FE' }}
                             onClick={() => handleImpersonate(owner.phone, owner.name)}>
                             <LogIn size={13} /> Login
@@ -306,6 +397,10 @@ const Owners = () => {
                           <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center' }}
                             onClick={() => setPwModal({ type: 'owner', id: owner._id, name: owner.name })}>
                             <KeyRound size={13} /> Reset PW
+                          </button>
+                          <button className="btn btn-ghost btn-sm" style={{ flex: '1 1 45%', justifyContent: 'center', color: '#DA1E28', borderColor: 'rgba(218,30,40,0.2)' }}
+                            onClick={() => promptDeleteOwner(owner)}>
+                            <Trash2 size={13} /> Delete Account
                           </button>
                           <button className={`btn btn-sm ${owner.isActive ? 'btn-danger' : 'btn-success'}`} style={{ flex: '1 1 100%' }}
                             onClick={() => toggleAccount(owner)}>
@@ -409,6 +504,9 @@ const Owners = () => {
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input type="checkbox" checked={selectedOwnerIds.length === owners.length && owners.length > 0} onChange={handleSelectAllOwners} />
+                    </th>
                     <th>Owner</th>
                     <th>Business</th>
                     <th>Status</th>
@@ -421,6 +519,9 @@ const Owners = () => {
                   {owners.map(owner => (
                     <React.Fragment key={owner._id}>
                       <tr>
+                        <td style={{ textAlign: 'center' }}>
+                          <input type="checkbox" checked={selectedOwnerIds.includes(owner._id)} onChange={() => handleSelectOneOwner(owner._id)} />
+                        </td>
                         <td>
                           <div style={{ fontWeight: 600 }}>{owner.name}</div>
                           <div style={{ fontSize: '12px', color: '#8D8D8D' }}>{owner.phone}</div>
@@ -454,6 +555,17 @@ const Owners = () => {
                               title="View Staff">
                               <Users size={13} />
                             </button>
+                            <button className="btn btn-ghost btn-sm"
+                              onClick={() => setViewingCustomersOwner(owner)}
+                              title="View Customers">
+                              <User size={13} />
+                            </button>
+                            <button className="btn btn-ghost btn-sm"
+                              onClick={() => promptDeleteOwner(owner)}
+                              title="Delete Owner Account"
+                              style={{ color: '#DA1E28' }}>
+                              <Trash2 size={13} />
+                            </button>
                             <button
                               className={`btn btn-sm ${owner.isActive ? 'btn-danger' : 'btn-success'}`}
                               onClick={() => toggleAccount(owner)}>
@@ -462,11 +574,11 @@ const Owners = () => {
                           </div>
                         </td>
                       </tr>
-
+ 
                       {/* Expanded plan + feature panel */}
                       {expandedId === owner._id && (
                         <tr>
-                          <td colSpan={6} style={{ backgroundColor: '#F9F9F9', padding: '20px 24px' }}>
+                          <td colSpan={7} style={{ backgroundColor: '#F9F9F9', padding: '20px 24px' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
 
                               {/* Plan selector */}
@@ -684,6 +796,14 @@ const Owners = () => {
             updateSubscription(ownerId, { status: newStatus });
           }}
           onCancel={() => setStatusConfirm(null)}
+        />
+      )}
+      {deleteConfirm && (
+        <DeletePasswordModal
+          title={deleteConfirm.title}
+          message={deleteConfirm.message}
+          onConfirm={deleteConfirm.onConfirm}
+          onCancel={() => setDeleteConfirm(null)}
         />
       )}
     </div>
@@ -1280,6 +1400,8 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
   const isMobile = windowWidth < 768;
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const toast = useToast();
 
   const fetchStaff = useCallback(async () => {
@@ -1287,6 +1409,7 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
     try {
       const { data } = await api.get(`/superadmin/owners/${owner._id}/staff`);
       setStaff(data.staff);
+      setSelectedIds([]);
     } catch {
       toast.error('Failed to load staff list.');
     } finally {
@@ -1297,6 +1420,60 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
   useEffect(() => {
     fetchStaff();
   }, [fetchStaff]);
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(staff.map(s => s._id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const promptDeleteStaff = (s) => {
+    setDeleteConfirm({
+      title: 'Delete Staff Member',
+      message: `Are you sure you want to delete staff member "${s.name}"? This will move the staff member to the Recycle Bin for 90 days.`,
+      onConfirm: async (password) => {
+        try {
+          const { data } = await api.post('/superadmin/recycle-bin/delete', {
+            targets: [{ modelType: 'User', id: s._id }],
+            password
+          });
+          toast.success(data.message || 'Staff member moved to Recycle Bin.');
+          setDeleteConfirm(null);
+          fetchStaff();
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Failed to delete staff member.');
+        }
+      }
+    });
+  };
+
+  const promptBulkDelete = () => {
+    setDeleteConfirm({
+      title: 'Bulk Delete Staff Accounts',
+      message: `Are you sure you want to delete the ${selectedIds.length} selected staff members? This will move them to the Recycle Bin for 90 days.`,
+      onConfirm: async (password) => {
+        try {
+          const { data } = await api.post('/superadmin/recycle-bin/delete', {
+            targets: selectedIds.map(id => ({ modelType: 'User', id })),
+            password
+          });
+          toast.success(data.message || 'Selected staff members moved to Recycle Bin.');
+          setDeleteConfirm(null);
+          fetchStaff();
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Failed to delete staff members.');
+        }
+      }
+    });
+  };
 
   return (
     <div style={{ maxWidth: '100%', overflowX: 'hidden' }}>
@@ -1323,11 +1500,29 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
       </div>
 
       <div className="page-body">
+        {selectedIds.length > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+            backgroundColor: '#FFF1F1', border: '1px solid rgba(218,30,40,0.2)', marginBottom: '16px',
+            justifyContent: 'space-between', borderRadius: '4px'
+          }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#DA1E28' }}>
+              {selectedIds.length} staff member{selectedIds.length > 1 ? 's' : ''} selected
+            </span>
+            <button className="btn btn-danger btn-sm"
+              style={{ height: '32px' }}
+              onClick={promptBulkDelete}>
+              <Trash2 size={13} /> Delete Selected Staff
+            </button>
+          </div>
+        )}
+
         <div className="card" style={{ padding: 0 }}>
           {loading ? (
             <div style={{ padding: '24px' }}>
               {[0, 1, 2].map(i => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '12px', padding: '16px 0', borderBottom: i < 2 ? '1px solid #F4F4F4' : 'none' }}>
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '50px 2fr 1fr 1fr 1fr', gap: '12px', padding: '16px 0', borderBottom: i < 2 ? '1px solid #F4F4F4' : 'none' }}>
+                  <div className="skeleton skeleton-line" style={{ width: '40px' }} />
                   <div className="skeleton skeleton-line" style={{ width: '60%' }} />
                   <div className="skeleton skeleton-line" style={{ width: '40%' }} />
                   <div className="skeleton skeleton-line" style={{ width: '30%' }} />
@@ -1344,30 +1539,44 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
           ) : isMobile ? (
             /* Mobile card list */
             <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input type="checkbox" checked={selectedIds.length === staff.length} onChange={handleSelectAll} />
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>Select All</span>
+              </div>
               {staff.map(s => (
                 <div key={s._id} style={{ border: '1px solid #E0E0E0', padding: '14px', backgroundColor: '#FFFFFF', borderRadius: '4px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '15px', color: '#161616' }}>{s.name}</div>
-                      <div style={{ fontSize: '13px', color: '#525252', marginTop: '2px', fontWeight: 500 }}>{s.phone}</div>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <input type="checkbox" checked={selectedIds.includes(s._id)} onChange={() => handleSelectOne(s._id)} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: '#161616' }}>{s.name}</div>
+                          <div style={{ fontSize: '13px', color: '#525252', marginTop: '2px', fontWeight: 500 }}>{s.phone}</div>
+                        </div>
+                        <span className={`badge ${s.isActive ? 'badge-green' : 'badge-red'}`}>
+                          {s.isActive ? 'Active' : 'Disabled'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#8D8D8D', marginTop: '6px' }}>
+                        Created on: {new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </div>
                     </div>
-                    <span className={`badge ${s.isActive ? 'badge-green' : 'badge-red'}`}>
-                      {s.isActive ? 'Active' : 'Disabled'}
-                    </span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#8D8D8D', marginBottom: '12px' }}>
-                    Created on: {new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                     <button className="btn btn-ghost btn-sm"
                       onClick={() => handleImpersonate(s.phone, s.name)}
-                      style={{ flex: 1, color: '#0F62FE', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: '1px solid #0F62FE', borderRadius: '4px', height: '36px' }}>
-                      <LogIn size={14} /> Login
+                      style={{ flex: 1, color: '#0F62FE', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', border: '1px solid #0F62FE', borderRadius: '4px', height: '36px' }}>
+                      <LogIn size={13} /> Login
                     </button>
                     <button className="btn btn-ghost btn-sm"
                       onClick={() => setPwModal({ type: 'staff', id: s._id, name: s.name })}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: '1px solid #E0E0E0', borderRadius: '4px', height: '36px' }}>
-                      <KeyRound size={14} /> Reset PW
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', border: '1px solid #E0E0E0', borderRadius: '4px', height: '36px' }}>
+                      <KeyRound size={13} /> Reset PW
+                    </button>
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => promptDeleteStaff(s)}
+                      style={{ color: '#DA1E28', borderColor: 'rgba(218,30,40,0.2)', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -1378,16 +1587,22 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input type="checkbox" checked={selectedIds.length === staff.length && staff.length > 0} onChange={handleSelectAll} />
+                    </th>
                     <th>Staff Member</th>
                     <th>Phone Number</th>
                     <th>Status</th>
                     <th>Created On</th>
-                    <th>Actions</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {staff.map(s => (
                     <tr key={s._id}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input type="checkbox" checked={selectedIds.includes(s._id)} onChange={() => handleSelectOne(s._id)} />
+                      </td>
                       <td>
                         <div style={{ fontWeight: 600, color: '#161616' }}>{s.name}</div>
                       </td>
@@ -1405,7 +1620,7 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
                         </div>
                       </td>
                       <td>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => handleImpersonate(s.phone, s.name)}
                             style={{ color: '#0F62FE', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1415,6 +1630,12 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
                             onClick={() => setPwModal({ type: 'staff', id: s._id, name: s.name })}
                             style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <KeyRound size={13} /> Reset PW
+                          </button>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => promptDeleteStaff(s)}
+                            style={{ color: '#DA1E28' }}
+                            title="Delete Staff">
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
@@ -1426,6 +1647,15 @@ const StaffList = ({ owner, onBack, handleImpersonate, setPwModal }) => {
           )}
         </div>
       </div>
+
+      {deleteConfirm && (
+        <DeletePasswordModal
+          title={deleteConfirm.title}
+          message={deleteConfirm.message}
+          onConfirm={deleteConfirm.onConfirm}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
     </div>
   );
 };
@@ -1757,6 +1987,317 @@ const RoleConfirmModal = ({ target, onClose, onConfirm }) => {
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ── Delete Password confirmation Modal ─────────────────────────
+const DeletePasswordModal = ({ title, message, onConfirm, onCancel }) => {
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!password.trim()) {
+      toast.error('Password is required.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await onConfirm(password.trim());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: '400px', position: 'relative' }}>
+        <button type="button" className="modal-close" onClick={onCancel} disabled={loading}>
+          <X size={20} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', color: '#DA1E28' }}>
+          <Trash2 size={24} />
+          <h2 style={{ fontWeight: 700, fontSize: '18px' }}>{title || 'Confirm Deletion'}</h2>
+        </div>
+        <p style={{ color: '#525252', fontSize: '14px', marginBottom: '20px', lineHeight: 1.4 }}>
+          {message}
+        </p>
+        <form onSubmit={handleSubmit}>
+          <div className="input-group" style={{ marginBottom: '20px' }}>
+            <label className="input-label">Superadmin Password *</label>
+            <input
+              type="password"
+              className="input"
+              required
+              placeholder="Enter your superadmin password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="modal-footer" style={{ gap: '10px' }}>
+            <button type="button" className="btn btn-ghost btn-full" onClick={onCancel} disabled={loading}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-danger btn-full" disabled={loading}>
+              {loading ? 'Processing...' : 'Confirm Delete'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ── Customer List Sub-view Page ──────────────────────────────────
+const CustomerList = ({ owner, onBack }) => {
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 768;
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const toast = useToast();
+
+  const fetchCustomers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get(`/superadmin/owners/${owner._id}/customers`);
+      setCustomers(data.customers || []);
+      setSelectedIds([]);
+    } catch {
+      toast.error('Failed to load customer list.');
+    } finally {
+      setLoading(false);
+    }
+  }, [owner._id, toast]);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(customers.map(c => c._id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const promptDeleteCustomer = (cust) => {
+    setDeleteConfirm({
+      title: 'Delete Customer',
+      message: `Are you sure you want to delete customer "${cust.name}"? This will move the customer and all their associated bills and daily logs to the Recycle Bin for 90 days.`,
+      onConfirm: async (password) => {
+        try {
+          const { data } = await api.post('/superadmin/recycle-bin/delete', {
+            targets: [{ modelType: 'Customer', id: cust._id }],
+            password
+          });
+          toast.success(data.message || 'Customer moved to Recycle Bin.');
+          setDeleteConfirm(null);
+          fetchCustomers();
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Failed to delete customer.');
+        }
+      }
+    });
+  };
+
+  const promptBulkDelete = () => {
+    setDeleteConfirm({
+      title: 'Bulk Delete Customers',
+      message: `Are you sure you want to delete the ${selectedIds.length} selected customers? This will move the customers and all their bills and logs to the Recycle Bin for 90 days.`,
+      onConfirm: async (password) => {
+        try {
+          const { data } = await api.post('/superadmin/recycle-bin/delete', {
+            targets: selectedIds.map(id => ({ modelType: 'Customer', id })),
+            password
+          });
+          toast.success(data.message || 'Selected customers moved to Recycle Bin.');
+          setDeleteConfirm(null);
+          fetchCustomers();
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Failed to delete customers.');
+        }
+      }
+    });
+  };
+
+  return (
+    <div style={{ maxWidth: '100%', overflowX: 'hidden' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ padding: '8px' }}>
+            <ChevronLeft size={18} />
+          </button>
+          <div>
+            <h1 className="page-title" style={{ margin: 0 }}>Customer Directory</h1>
+            <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
+              Owner: <strong>{owner.name}</strong> {owner.businessName ? `(${owner.businessName})` : ''} • {owner.phone}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ fontSize: '14px', color: '#525252' }}>
+            Total Customers: <strong>{customers.length}</strong>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={fetchCustomers} disabled={loading} title="Refresh">
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div className="page-body">
+        {selectedIds.length > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+            backgroundColor: '#FFF1F1', border: '1px solid rgba(218,30,40,0.2)', marginBottom: '16px',
+            justifyContent: 'space-between', borderRadius: '4px'
+          }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#DA1E28' }}>
+              {selectedIds.length} customer{selectedIds.length > 1 ? 's' : ''} selected
+            </span>
+            <button className="btn btn-danger btn-sm"
+              style={{ height: '32px' }}
+              onClick={promptBulkDelete}>
+              <Trash2 size={13} /> Delete Selected Customers
+            </button>
+          </div>
+        )}
+
+        <div className="card" style={{ padding: 0 }}>
+          {loading ? (
+            <div style={{ padding: '24px' }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '50px 2fr 1fr 1fr 1fr', gap: '12px', padding: '16px 0', borderBottom: i < 2 ? '1px solid #F4F4F4' : 'none' }}>
+                  <div className="skeleton skeleton-line" style={{ width: '40px' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '60%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '40%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '30%' }} />
+                  <div className="skeleton skeleton-line" style={{ width: '50%' }} />
+                </div>
+              ))}
+            </div>
+          ) : customers.length === 0 ? (
+            <div className="empty-state" style={{ padding: '48px 24px' }}>
+              <div className="empty-state-icon"><User size={40} /></div>
+              <h3>No customers found</h3>
+              <p>This owner has not registered any customers yet.</p>
+            </div>
+          ) : isMobile ? (
+            /* Mobile card list */
+            <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ padding: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input type="checkbox" checked={selectedIds.length === customers.length} onChange={handleSelectAll} />
+                <span style={{ fontSize: '13px', fontWeight: 600 }}>Select All</span>
+              </div>
+              {customers.map(c => (
+                <div key={c._id} style={{ border: '1px solid #E0E0E0', padding: '14px', backgroundColor: '#FFFFFF', borderRadius: '4px' }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <input type="checkbox" checked={selectedIds.includes(c._id)} onChange={() => handleSelectOne(c._id)} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: '#161616' }}>{c.name}</div>
+                          <div style={{ fontSize: '13px', color: '#525252', marginTop: '2px', fontWeight: 500 }}>{c.phone}</div>
+                        </div>
+                        <span className={`badge ${c.isActive ? 'badge-green' : 'badge-red'}`}>
+                          {c.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#8D8D8D', marginTop: '4px' }}>
+                        Address: {c.address || 'N/A'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#8D8D8D', marginTop: '2px' }}>
+                        Balance: <strong>₹{c.balance || 0}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => promptDeleteCustomer(c)}
+                      style={{ flex: 1, color: '#DA1E28', borderColor: 'rgba(218,30,40,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '4px', height: '36px' }}>
+                      <Trash2 size={14} /> Delete Customer
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input type="checkbox" checked={selectedIds.length === customers.length && customers.length > 0} onChange={handleSelectAll} />
+                    </th>
+                    <th>Customer Name</th>
+                    <th>Phone Number</th>
+                    <th>Address</th>
+                    <th>Current Balance</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customers.map(c => (
+                    <tr key={c._id}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input type="checkbox" checked={selectedIds.includes(c._id)} onChange={() => handleSelectOne(c._id)} />
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#161616' }}>{c.name}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 500, color: '#525252' }}>{c.phone}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '13px', color: '#525252' }}>{c.address || 'N/A'}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#161616' }}>₹{c.balance || 0}</div>
+                      </td>
+                      <td>
+                        <span className={`badge ${c.isActive ? 'badge-green' : 'badge-red'}`}>
+                          {c.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => promptDeleteCustomer(c)}
+                            style={{ color: '#DA1E28' }}
+                            title="Delete Customer">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {deleteConfirm && (
+        <DeletePasswordModal
+          title={deleteConfirm.title}
+          message={deleteConfirm.message}
+          onConfirm={deleteConfirm.onConfirm}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
     </div>
   );
 };

@@ -28,7 +28,17 @@ const sanitizeUserForStorage = (user) => ({
 });
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const impersonateUser = sessionStorage.getItem('amrit_impersonate_user');
+      const stored = impersonateUser || localStorage.getItem('amrit_user');
+      const token = sessionStorage.getItem('amrit_impersonate_token') || localStorage.getItem('amrit_token');
+      if (stored && token) {
+        return JSON.parse(stored);
+      }
+    } catch (_) {}
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,8 +47,6 @@ export const AuthProvider = ({ children }) => {
     const token = sessionStorage.getItem('amrit_impersonate_token') || localStorage.getItem('amrit_token');
 
     if (stored && token) {
-      setUser(JSON.parse(stored));
-      
       // Async refresh profile to ensure stale local values (e.g., ownerRole, subscription) are corrected
       api.get('/auth/me')
         .then(({ data }) => {
@@ -52,16 +60,18 @@ export const AuthProvider = ({ children }) => {
             setUser(safeUser);
           }
         })
-        .catch(() => {
-          // If token expired/invalid, clear appropriate session
-          if (sessionStorage.getItem('amrit_impersonate_token')) {
-            sessionStorage.removeItem('amrit_impersonate_token');
-            sessionStorage.removeItem('amrit_impersonate_user');
-          } else {
-            localStorage.removeItem('amrit_token');
-            localStorage.removeItem('amrit_user');
+        .catch((err) => {
+          // If token expired/invalid (401/403), clear appropriate session
+          if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+            if (sessionStorage.getItem('amrit_impersonate_token')) {
+              sessionStorage.removeItem('amrit_impersonate_token');
+              sessionStorage.removeItem('amrit_impersonate_user');
+            } else {
+              localStorage.removeItem('amrit_token');
+              localStorage.removeItem('amrit_user');
+            }
+            setUser(null);
           }
-          setUser(null);
         });
     }
     setLoading(false);

@@ -20,7 +20,8 @@ import {
   ChevronUp,
   CheckCircle,
   AlertCircle,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
 import api from '../../api/axios';
 import { useToast } from '../../context/ToastContext';
@@ -95,6 +96,7 @@ const DailyCollectionDailyOwner = () => {
   // Save State
   const [saving, setSaving] = useState(false);
   const [savedRecord, setSavedRecord] = useState(null);
+  const [editingCollection, setEditingCollection] = useState(null);
 
   // Ref for focus
   const qtyInputRef = useRef(null);
@@ -743,26 +745,52 @@ const DailyCollectionDailyOwner = () => {
                           <th>{isMarathi ? 'SNF %' : 'SNF %'}</th>
                           <th>{isMarathi ? 'दर/L' : 'Rate/L'}</th>
                           <th>{isMarathi ? 'निव्वळ रक्कम' : 'Net Amount'}</th>
+                          <th>{isMarathi ? 'कृती' : 'Actions'}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {history.map(h => (
-                          <tr key={h._id}>
-                            <td style={{ fontWeight: 700, color: '#0F62FE' }}>{h.collectionNumber}</td>
-                            <td>{h.date}</td>
-                            <td>
-                              <span className={`badge ${h.shift === 'Morning' ? 'badge-blue' : 'badge-orange'}`} style={{ fontSize: '10px' }}>
-                                {h.shift === 'Morning' ? (isMarathi ? 'सकाळ' : 'Morning') : (isMarathi ? 'संध्याकाळ' : 'Evening')}
-                              </span>
-                            </td>
-                            <td>{h.milkType === 'Cow' ? (isMarathi ? 'गाय' : 'Cow') : h.milkType === 'Buffalo' ? (isMarathi ? 'म्हैस' : 'Buffalo') : (isMarathi ? 'मिश्रित' : 'Mixed')}</td>
-                            <td>{h.quantity.toFixed(2)} L</td>
-                            <td>{h.fat.toFixed(2)}%</td>
-                            <td>{h.snf.toFixed(2)}%</td>
-                            <td>₹{h.ratePerLiter.toFixed(2)}</td>
-                            <td style={{ fontWeight: 700 }}>{formattedAmount(h.netAmount)}</td>
-                          </tr>
-                        ))}
+                        {history.map(h => {
+                          const isSameDay = h.date === getLocalDateStr();
+                          const isOwnRecord = !h.staffId || h.staffId === user?._id || (h.staffId?._id || h.staffId) === user?._id;
+                          const canEdit = user?.role === 'owner' || (user?.role === 'staff' && isSameDay && isOwnRecord);
+
+                          return (
+                            <tr key={h._id}>
+                              <td style={{ fontWeight: 700, color: '#0F62FE' }}>
+                                <div>{h.collectionNumber}</div>
+                                {h.isEdited && (
+                                  <div style={{ fontSize: '10px', color: '#8A3FFC', fontWeight: 500, backgroundColor: '#F3E8FF', padding: '1px 4px', borderRadius: '2px', display: 'inline-block', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                    ✍️ {isMarathi ? `${h.editedBy} द्वारे संपादित` : `Edited by ${h.editedBy}`}
+                                  </div>
+                                )}
+                              </td>
+                              <td>{h.date}</td>
+                              <td>
+                                <span className={`badge ${h.shift === 'Morning' ? 'badge-blue' : 'badge-orange'}`} style={{ fontSize: '10px' }}>
+                                  {h.shift === 'Morning' ? (isMarathi ? 'सकाळ' : 'Morning') : (isMarathi ? 'संध्याकाळ' : 'Evening')}
+                                </span>
+                              </td>
+                              <td>{h.milkType === 'Cow' ? (isMarathi ? 'गाय' : 'Cow') : h.milkType === 'Buffalo' ? (isMarathi ? 'म्हैस' : 'Buffalo') : (isMarathi ? 'मिश्रित' : 'Mixed')}</td>
+                              <td>{h.quantity.toFixed(2)} L</td>
+                              <td>{h.fat.toFixed(2)}%</td>
+                              <td>{h.snf.toFixed(2)}%</td>
+                              <td>₹{h.ratePerLiter.toFixed(2)}</td>
+                              <td style={{ fontWeight: 700 }}>{formattedAmount(h.netAmount)}</td>
+                              <td>
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ padding: '2px 8px', fontSize: '12px', height: 'auto', border: '1px solid #E0E0E0', color: '#0F62FE', cursor: 'pointer' }}
+                                    onClick={() => setEditingCollection(h)}
+                                  >
+                                    {isMarathi ? 'संपादित करा' : 'Edit'}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -974,6 +1002,287 @@ const DailyCollectionDailyOwner = () => {
           </div>
         </div>
       )}
+
+      {editingCollection && (
+        <EditCollectionModal
+          collection={editingCollection}
+          dairyRates={dairyRates}
+          apiPrefix={apiPrefix}
+          onClose={() => setEditingCollection(null)}
+          onSaved={(updated) => {
+            setHistory(prev => prev.map(h => h._id === updated._id ? updated : h));
+            setEditingCollection(null);
+            if (selectedFarmer) {
+              fetchFarmerHistory(selectedFarmer._id);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ── Edit Farmer Collection Modal Component ──────────────────────
+const EditCollectionModal = ({ collection, dairyRates, apiPrefix, onClose, onSaved }) => {
+  const { isMarathi } = useMarathi();
+  const toast = useToast();
+  const L = isMarathi ? 'ली.' : 'L';
+  const mouseDownOnOverlay = useRef(false);
+
+  const [quantity, setQuantity] = useState(String(collection.quantity));
+  const [fat, setFat] = useState(String(collection.fat));
+  const [snf, setSnf] = useState(String(collection.snf));
+  const [clr, setClr] = useState(String(collection.clr || ''));
+  const [notes, setNotes] = useState(collection.notes || '');
+  const [loading, setLoading] = useState(false);
+
+  // pricing state variables
+  const [baseRate, setBaseRate] = useState(0);
+  const [finalRate, setFinalRate] = useState(0);
+  const [grossAmount, setGrossAmount] = useState(0);
+  const [bonusAmount, setBonusAmount] = useState(0);
+  const [deductionAmount, setDeductionAmount] = useState(0);
+  const [netAmount, setNetAmount] = useState(0);
+
+  // pricing calculations (same formula as create)
+  useEffect(() => {
+    const activeRateConfig = dairyRates.find(r => r.milkType === collection.milkType);
+    if (!activeRateConfig) return;
+
+    const bRate = activeRateConfig.baseRate;
+    const fMult = activeRateConfig.fatMultiplier;
+    const sMult = activeRateConfig.snfMultiplier;
+    const stdFat = activeRateConfig.standardFat ?? 4.0;
+    const stdSnf = activeRateConfig.standardSNF ?? 8.5;
+
+    const fVal = parseFloat(fat) || 0;
+    const sVal = parseFloat(snf) || 0;
+    const qVal = parseFloat(quantity) || 0;
+
+    const calculatedFatValue = (fVal - stdFat) * 10 * fMult;
+    const calculatedSnfValue = (sVal - stdSnf) * 10 * sMult;
+    const calculatedFinalRate = Math.max(0, bRate + calculatedFatValue + calculatedSnfValue);
+
+    const gross = qVal * calculatedFinalRate;
+    const bonus = qVal * (activeRateConfig.bonusPerLiter || 0);
+
+    const clrVal = parseFloat(clr) || 0;
+    let clrDeduction = 0;
+    const stdCLR = activeRateConfig.standardCLR ?? 28;
+    const clrDedPerUnit = activeRateConfig.clrDeductionPerUnit ?? 0;
+    if (clrVal > 0 && clrVal < stdCLR) {
+      clrDeduction = (stdCLR - clrVal) * clrDedPerUnit;
+    }
+
+    const deduction = qVal * ((activeRateConfig.deductionPerLiter || 0) + clrDeduction);
+    const net = gross + bonus - deduction;
+
+    setBaseRate(bRate);
+    setFinalRate(calculatedFinalRate);
+    setGrossAmount(gross);
+    setBonusAmount(bonus);
+    setDeductionAmount(deduction);
+    setNetAmount(net);
+  }, [quantity, fat, snf, clr, dairyRates, collection.milkType]);
+
+  // Richmond SNF calculation
+  useEffect(() => {
+    const fVal = parseFloat(fat);
+    const cVal = parseFloat(clr);
+    if (!isNaN(fVal) && !isNaN(cVal) && cVal > 0) {
+      const calculatedSnf = (cVal / 4) + (0.2 * fVal) + 0.36;
+      setSnf(String(parseFloat(calculatedSnf.toFixed(2))));
+    }
+  }, [fat, clr]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const qVal = parseFloat(quantity);
+    const fVal = parseFloat(fat);
+    const sVal = parseFloat(snf);
+    const cVal = parseFloat(clr) || 0;
+
+    if (isNaN(qVal) || qVal <= 0) {
+      toast.error(isMarathi ? 'कृपया वैध मात्रा प्रविष्ट करा.' : 'Please enter a valid quantity.');
+      return;
+    }
+    if (isNaN(fVal) || fVal < 0) {
+      toast.error(isMarathi ? 'कृपया वैध FAT प्रविष्ट करा.' : 'Please enter a valid FAT value.');
+      return;
+    }
+    if (isNaN(sVal) || sVal < 0) {
+      toast.error(isMarathi ? 'कृपया वैध SNF प्रविष्ट करा.' : 'Please enter a valid SNF value.');
+      return;
+    }
+
+    const activeRateConfig = dairyRates.find(r => r.milkType === collection.milkType);
+    const fMult = activeRateConfig?.fatMultiplier || 0;
+    const sMult = activeRateConfig?.snfMultiplier || 0;
+    const fatVal = (fVal - (activeRateConfig?.standardFat ?? 4.0)) * 10 * fMult;
+    const snfVal = (sVal - (activeRateConfig?.standardSNF ?? 8.5)) * 10 * sMult;
+
+    setLoading(true);
+    try {
+      const { data } = await api.patch(`${apiPrefix}/farmer-collections/${collection._id}`, {
+        quantity: qVal,
+        fat: fVal,
+        snf: sVal,
+        clr: cVal,
+        ratePerLiter: finalRate,
+        baseRate,
+        fatValue: fatVal,
+        snfValue: snfVal,
+        grossAmount,
+        bonusAmount,
+        deductionAmount,
+        netAmount,
+        notes
+      });
+      toast.success(isMarathi ? 'नोंद अपडेट केली.' : 'Milk collection entry updated.');
+      onSaved(data.collection);
+    } catch (err) {
+      toast.error(err.response?.data?.error || (isMarathi ? 'अपडेट करण्यात अक्षम.' : 'Failed to update collection.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={e => { mouseDownOnOverlay.current = e.target === e.currentTarget; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && mouseDownOnOverlay.current) onClose(); }}
+    >
+      <div className="modal" style={{ maxWidth: '420px', position: 'relative' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8D8D8D',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '4px',
+            transition: 'background-color 0.2s',
+            zIndex: 10,
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#F4F4F4'}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <X size={18} />
+        </button>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{ margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingRight: '24px' }}>
+              <div>
+                <h2 style={{ fontWeight: 700, fontSize: '18px' }}>
+                  {isMarathi ? 'संकलन नोंद संपादित करा' : 'Edit Collection Entry'}
+                </h2>
+                <div style={{ fontSize: '13px', color: '#8D8D8D', marginTop: '2px' }}>
+                  {isMarathi ? 'संकलन क्रमांक' : 'Receipt No'}: {collection.collectionNumber} · {collection.date} · {isMarathi ? (collection.shift === 'Morning' ? 'सकाळ' : 'संध्याकाळ') : collection.shift}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: '#F4F4F4', padding: '12px 16px', marginBottom: '20px', fontSize: '13px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'दूध प्रकार' : 'Milk Type'}</span>
+                <span style={{ fontWeight: 600 }}>
+                  {collection.milkType === 'Cow' ? (isMarathi ? 'गाय' : 'Cow') : collection.milkType === 'Buffalo' ? (isMarathi ? 'म्हैस' : 'Buffalo') : (isMarathi ? 'मिश्रित' : 'Mixed')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'दर प्रति लिटर' : 'Rate Per Liter'}</span>
+                <span style={{ fontWeight: 600 }}>₹{finalRate.toFixed(2)}/{L}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E0E0E0', paddingTop: '8px', marginTop: '4px' }}>
+                <span style={{ color: '#525252' }}>{isMarathi ? 'एकूण रक्कम' : 'Net Amount'}</span>
+                <span style={{ fontWeight: 700, color: '#0F62FE' }}>
+                  ₹{netAmount.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'मात्रा (लिटर)' : 'Quantity (Liters)'}</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input"
+                placeholder="0.00"
+                value={quantity}
+                onChange={e => setQuantity(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'FAT %' : 'FAT %'}</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="input"
+                  placeholder="0.0"
+                  value={fat}
+                  onChange={e => setFat(e.target.value)}
+                />
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'CLR (ऐच्छिक)' : 'CLR (Optional)'}</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="input"
+                  placeholder="0.0"
+                  value={clr}
+                  onChange={e => setClr(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'SNF %' : 'SNF %'}</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                className="input"
+                placeholder="0.0"
+                value={snf}
+                onChange={e => setSnf(e.target.value)}
+              />
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">{isMarathi ? 'नोंदी' : 'Notes'}</label>
+              <input
+                type="text"
+                className="input"
+                placeholder={isMarathi ? 'पर्यायी नोंद...' : 'Optional note...'}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="modal-footer" style={{ marginTop: '20px' }}>
+            <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>
+              {isMarathi ? 'रद्द करा' : 'Cancel'}
+            </button>
+            <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+              {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : (isMarathi ? 'बदल जतन करा' : 'Save Changes')}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

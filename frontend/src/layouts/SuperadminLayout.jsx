@@ -5,7 +5,7 @@ import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut,
   Menu, X, Shield, CreditCard, KeyRound,
-  Phone, Mail, ChevronDown, ChevronUp, Activity, MessageSquare
+  Phone, Mail, ChevronDown, ChevronUp, Activity, MessageSquare, Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -31,7 +31,8 @@ const SuperadminLayout = () => {
     { to: '/app/superadmin/activities', icon: Activity,  label: 'All Activities' },
     { to: '/app/superadmin/plans',      icon: CreditCard, label: 'Plans & Features' },
     { to: '/app/superadmin/requests',   icon: Phone,     label: 'Subscription Requests' },
-    { to: '/app/superadmin/feedback',   icon: MessageSquare, label: 'User Feedbacks' }
+    { to: '/app/superadmin/feedback',   icon: MessageSquare, label: 'User Feedbacks' },
+    { to: '/app/superadmin/recycle-bin',icon: Trash2,    label: 'Recycle Bin' }
   ];
 
   // Filter nav items based on sub-admin permissions
@@ -46,6 +47,7 @@ const SuperadminLayout = () => {
       if (item.to === '/app/superadmin/plans') return user.permissions?.includes('plans');
       if (item.to === '/app/superadmin/requests') return user.permissions?.includes('requests');
       if (item.to === '/app/superadmin/feedback') return user.permissions?.includes('feedback');
+      if (item.to === '/app/superadmin/recycle-bin') return user.permissions?.includes('owners');
     }
     return true;
   });

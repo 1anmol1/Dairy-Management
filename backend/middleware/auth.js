@@ -79,6 +79,8 @@ const protect = async (req, res, next) => {
       return res.status(403).json({ error: 'Your account has been disabled. Contact support.' });
     }
 
+    user.impersonated = !!decoded.impersonatedBy;
+    user.impersonatedBy = decoded.impersonatedBy;
     req.user = user;
     next();
   } catch (err) {

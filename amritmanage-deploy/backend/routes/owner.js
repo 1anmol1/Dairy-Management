@@ -687,21 +687,136 @@ router.post('/bills/:id/send-pdf-whatsapp', async (req, res, next) => {
     if (!req.user.features?.custom_message_templates) {
       return res.status(403).json({ error: 'Platinum plan required.' });
     }
-    const { html, filename } = req.body;
-    if (!html || !filename) {
-      return res.status(400).json({ error: 'html and filename are required.' });
+    const { filename } = req.body;
+    if (!filename) {
+      return res.status(400).json({ error: 'filename is required.' });
     }
     const bill = await Bill.findOne({ _id: req.params.id, ownerId: req.user._id })
       .populate('customerId', 'name phone language').lean();
     if (!bill) return res.status(404).json({ error: 'Bill not found.' });
 
-    let puppeteer;
-    try { puppeteer = require('puppeteer'); } catch { puppeteer = require('puppeteer-core'); }
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
-    await browser.close();
+    // Generate PDF using PDFKit
+    const PDFDocument = require('pdfkit');
+    const generateBillPDF = (bill, monthName, year, businessName) => {
+      return new Promise((resolve, reject) => {
+        try {
+          const doc = new PDFDocument({ margin: 50, size: 'A4' });
+          const chunks = [];
+          doc.on('data', chunk => chunks.push(chunk));
+          doc.on('end', () => resolve(Buffer.concat(chunks)));
+          doc.on('error', err => reject(err));
+
+          // Header
+          doc.fontSize(20).text(businessName || 'Dairy', { align: 'center' });
+          doc.fontSize(12).text(`Milk Bill — ${monthName} ${year}`, { align: 'center' });
+          doc.moveDown(1.5);
+
+          // Customer info
+          doc.fontSize(12).text(`Customer: ${bill.customerId?.name || 'N/A'}`);
+          doc.text(`Phone: ${bill.customerId?.phone || 'N/A'}`);
+          doc.moveDown(1.5);
+
+          // Table Headers
+          const tableTop = doc.y;
+          doc.fontSize(10).font('Helvetica-Bold');
+          doc.text('Date', 50, tableTop);
+          doc.text('Morning (L)', 150, tableTop);
+          doc.text('Evening (L)', 250, tableTop);
+          doc.text('Extra (L)', 350, tableTop);
+          doc.text('Amount (INR)', 450, tableTop);
+
+          doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+
+          // Table rows
+          let currentY = tableTop + 25;
+          doc.font('Helvetica');
+
+          const logs = bill.logSnapshot || [];
+          const byDate = {};
+          logs.forEach(l => {
+            if (!byDate[l.date]) byDate[l.date] = { morning: 0, evening: 0, extra: 0, amount: 0 };
+            if (l.slot === 'morning') byDate[l.date].morning += l.delivered_qty;
+            else byDate[l.date].evening += l.delivered_qty;
+            byDate[l.date].extra += (l.extra_qty || 0);
+            byDate[l.date].amount += l.amount_calculated;
+          });
+          const dates = Object.keys(byDate).sort();
+
+          dates.forEach(d => {
+            if (currentY > 750) {
+              doc.addPage();
+              currentY = 50;
+            }
+            const r = byDate[d];
+            let dateStr = d;
+            try {
+              const dateObj = new Date(d);
+              const day = dateObj.getDate();
+              const monthStr = dateObj.toLocaleString('en-US', { month: 'short' });
+              dateStr = `${day} ${monthStr}`;
+            } catch (e) {}
+
+            doc.text(dateStr, 50, currentY);
+            doc.text(r.morning > 0 ? r.morning.toFixed(1) : '—', 150, currentY);
+            doc.text(r.evening > 0 ? r.evening.toFixed(1) : '—', 250, currentY);
+            doc.text(r.extra > 0 ? r.extra.toFixed(1) : '—', 350, currentY);
+            doc.text(`Rs. ${r.amount.toFixed(0)}`, 450, currentY);
+            currentY += 20;
+          });
+
+          doc.moveTo(50, currentY).lineTo(550, currentY).stroke();
+          currentY += 15;
+
+          // Summary
+          if (currentY > 700) {
+            doc.addPage();
+            currentY = 50;
+          }
+
+          doc.font('Helvetica-Bold');
+          doc.text('Total Liters:', 50, currentY);
+          doc.font('Helvetica').text(`${bill.totalLiters?.toFixed(1)} L`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Milk Amount:', 50, currentY);
+          doc.font('Helvetica').text(`Rs. ${bill.totalAmount?.toFixed(0)}`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Previous Balance:', 50, currentY);
+          doc.font('Helvetica').text(`Rs. ${(bill.previousBalance || 0).toFixed(0)}`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Grand Total:', 50, currentY);
+          doc.font('Helvetica').text(`Rs. ${(bill.grandTotal ?? bill.totalAmount)?.toFixed(0)}`, 180, currentY);
+          currentY += 18;
+
+          doc.font('Helvetica-Bold');
+          doc.text('Amount Paid:', 50, currentY);
+          doc.font('Helvetica').fillColor('#24A148').text(`Rs. ${bill.amountPaid?.toFixed(0)}`, 180, currentY);
+          currentY += 20;
+
+          doc.fillColor('#000000');
+          doc.moveTo(50, currentY).lineTo(550, currentY).stroke();
+          currentY += 10;
+
+          doc.font('Helvetica-Bold').fontSize(12).fillColor('#DA1E28');
+          doc.text('BALANCE DUE:', 50, currentY);
+          doc.text(`Rs. ${Math.max(0, bill.balance)?.toFixed(0)}`, 180, currentY);
+
+          doc.end();
+        } catch (err) {
+          reject(err);
+        }
+      });
+    };
+
+    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = MONTHS[bill.month - 1] || 'Billing';
+    const businessName = req.user.businessName || 'Dairy';
+    const pdfBuffer = await generateBillPDF(bill, monthName, bill.year, businessName);
 
     const base64 = pdfBuffer.toString('base64');
     const { sendDocument } = require('../services/whatsappService');
