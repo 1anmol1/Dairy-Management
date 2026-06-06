@@ -82,6 +82,12 @@ const PricingPage = () => {
   const { isMarathi } = useMarathi();
 
   useEffect(() => {
+    document.title = isMarathi 
+      ? "किंमत - फक्त ₹९९/महिना | डेअरी सॉफ्टवेअर योजना | Amrit Manage" 
+      : "Pricing - Plans Starting ₹99/Month | Dairy Software | Amrit Manage";
+  }, [isMarathi]);
+
+  useEffect(() => {
     const baseURL = import.meta.env.VITE_API_URL || '/api';
     axios.get(`${baseURL}/payment/plans`)
       .then(r => setPlans(r.data.plans))

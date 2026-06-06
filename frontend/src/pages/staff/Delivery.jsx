@@ -26,9 +26,72 @@ const Delivery = () => {
   const [whatsappStatus, setWhatsappStatus] = useState('disconnected');
   const [expandedAddress, setExpandedAddress] = useState({}); // track which customer's address is expanded
   const [editingLog, setEditingLog] = useState(null);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const toast = useToast();
   const showSkeleton = useDelayedLoading(loading);
   const { isOnline, pendingCount, syncStatus, lastSyncResult, requestSync } = useOfflineSync();
+
+  // Reset focus when search changes
+  useEffect(() => {
+    setFocusedIndex(-1);
+  }, [search]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (document.activeElement.tagName === 'INPUT' && document.activeElement.id !== 'delivery-search') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const targetCardIndex = parseInt(document.activeElement.dataset.index, 10);
+          if (!isNaN(targetCardIndex) && targetCardIndex >= 0 && targetCardIndex < filtered.length) {
+            const targetCustomer = filtered[targetCardIndex];
+            const activeDelivered = activeSlot === 'morning' ? !!targetCustomer.morning : !!targetCustomer.evening;
+            if (!activeDelivered) {
+              handleDeliver(targetCustomer, activeSlot);
+            }
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedIndex(prev => (prev < filtered.length - 1 ? prev + 1 : prev));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedIndex(prev => (prev > 0 ? prev - 1 : 0));
+      } else if (e.key === '+' || e.key === 'Add' || e.key === '=') {
+        if (focusedIndex >= 0 && focusedIndex < filtered.length) {
+          e.preventDefault();
+          const targetCustomer = filtered[focusedIndex];
+          const activeDelivered = activeSlot === 'morning' ? !!targetCustomer.morning : !!targetCustomer.evening;
+          if (!activeDelivered) {
+            adjustExtra(targetCustomer._id, activeSlot, 0.5);
+          }
+        }
+      } else if (e.key === 'Enter') {
+        if (document.activeElement.id === 'delivery-search') {
+          if (filtered.length > 0) {
+            e.preventDefault();
+            setFocusedIndex(0);
+            document.activeElement.blur();
+          }
+          return;
+        }
+
+        if (focusedIndex >= 0 && focusedIndex < filtered.length) {
+          e.preventDefault();
+          const targetCustomer = filtered[focusedIndex];
+          const activeDelivered = activeSlot === 'morning' ? !!targetCustomer.morning : !!targetCustomer.evening;
+          if (!activeDelivered) {
+            handleDeliver(targetCustomer, activeSlot);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [focusedIndex, filtered, activeSlot, extraQty]);
 
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long'
@@ -252,7 +315,7 @@ const Delivery = () => {
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8D8D8D' }} />
-          <input className="input" style={{ paddingLeft: '40px', height: '44px' }}
+          <input id="delivery-search" className="input" style={{ paddingLeft: '40px', height: '44px' }}
             placeholder={isMarathi ? 'नाव, फोन किंवा कोडने शोधा...' : 'Search by name, phone or code...'} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <button className="btn btn-ghost btn-sm" onClick={fetchToday} disabled={loading}>
@@ -280,7 +343,7 @@ const Delivery = () => {
         </div>
       ) : (
         <div>
-          {filtered.map(customer => {
+          {filtered.map((customer, idx) => {
             const morningDelivered = !!customer.morning;
             const eveningDelivered = !!customer.evening;
             const activeDelivered = activeSlot === 'morning' ? morningDelivered : eveningDelivered;
@@ -290,9 +353,14 @@ const Delivery = () => {
             const totalQty = +(baseQty + extra).toFixed(1);
             const isLoading = delivering[activeKey];
             const activeLog = customer[activeSlot];
+            const isFocused = idx === focusedIndex;
 
             return (
-              <div key={customer._id} className={`delivery-card ${activeDelivered ? 'delivered' : ''}`}>
+              <div
+                key={customer._id}
+                className={`delivery-card ${activeDelivered ? 'delivered' : ''}`}
+                style={isFocused ? { outline: '3px solid #0F62FE', outlineOffset: '-1px', boxShadow: '0 4px 12px rgba(15, 98, 254, 0.2)' } : {}}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '16px' }}>{customer.name}</div>
@@ -370,13 +438,33 @@ const Delivery = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                       <span style={{ fontSize: '13px', color: '#525252', fontWeight: 600 }}>{isMarathi ? 'अतिरिक्त:' : 'Extra:'}</span>
                       <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #E0E0E0' }}>
-                        <button onClick={() => adjustExtra(customer._id, activeSlot, -0.5)} style={{ width: '36px', height: '36px', border: 'none', cursor: 'pointer', backgroundColor: '#F4F4F4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <button onClick={() => adjustExtra(customer._id, activeSlot, -0.5)} style={{ width: '36px', height: '44px', border: 'none', cursor: 'pointer', backgroundColor: '#F4F4F4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <Minus size={13} />
                         </button>
-                        <div style={{ width: '52px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '14px', borderLeft: '1px solid #E0E0E0', borderRight: '1px solid #E0E0E0' }}>
-                           {extra}{isMarathi ? 'ली.' : 'L'}
-                        </div>
-                        <button onClick={() => adjustExtra(customer._id, activeSlot, 0.5)} style={{ width: '36px', height: '36px', border: 'none', cursor: 'pointer', backgroundColor: '#F4F4F4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <input
+                          type="number"
+                          step="0.1"
+                          data-index={idx}
+                          style={{
+                            width: '60px',
+                            height: '44px',
+                            textAlign: 'center',
+                            fontWeight: 800,
+                            fontSize: '1.4rem',
+                            border: 'none',
+                            borderLeft: '1px solid #E0E0E0',
+                            borderRight: '1px solid #E0E0E0',
+                            outline: 'none',
+                            color: '#FF832B'
+                          }}
+                          value={extraQty[activeKey] ?? ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setExtraQty(prev => ({ ...prev, [activeKey]: val }));
+                          }}
+                          placeholder="0"
+                        />
+                        <button onClick={() => adjustExtra(customer._id, activeSlot, 0.5)} style={{ width: '36px', height: '44px', border: 'none', cursor: 'pointer', backgroundColor: '#F4F4F4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <Plus size={13} />
                         </button>
                       </div>

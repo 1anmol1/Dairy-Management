@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare, PhoneCall, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
@@ -60,6 +60,12 @@ const FAQSection = ({ title, items, openIndex, setOpenIndex, offset }) => (
 const FAQPage = () => {
   const [openIndex, setOpenIndex] = useState(null);
   const { t, isMarathi } = useMarathi();
+
+  useEffect(() => {
+    document.title = isMarathi 
+      ? "वारंवार विचारले जाणारे प्रश्न | डेअरी सॉफ्टवेअर FAQ | Amrit Manage" 
+      : "FAQ | Common Questions & Help | Amrit Manage";
+  }, [isMarathi]);
 
   // All Q&A content lives in faqData.js with full Marathi translations
   const rawSections = getFaqSections(isMarathi);

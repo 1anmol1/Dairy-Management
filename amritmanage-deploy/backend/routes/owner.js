@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
 const Farmer = require('../models/Farmer');
@@ -10,7 +11,70 @@ const DailyCollection = require('../models/DailyCollection');
 const MessageTemplate = require('../models/MessageTemplate');
 const SystemConfig = require('../models/SystemConfig');
 const AuthLog = require('../models/AuthLog');
+const RecycleBin = require('../models/RecycleBin');
 const { protect, authorize, requireActiveSubscription } = require('../middleware/auth');
+
+const verifySuperadminPassword = async (password) => {
+  if (!password) return false;
+  const superadmin = await User.findOne({ role: 'superadmin', parentAdminId: null }).select('+password');
+  if (!superadmin) return false;
+  return await superadmin.comparePassword(password);
+};
+
+async function recalculateCustomerBill(ownerId, customerId, dateString) {
+  try {
+    const parts = dateString.split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    
+    const pad = String(month).padStart(2, '0');
+    const datePrefix = `${year}-${pad}`;
+
+    const bill = await Bill.findOne({ ownerId, customerId, month, year });
+    if (!bill) return;
+
+    const logs = await DailyLog.find({
+      ownerId,
+      customerId,
+      date: { $regex: `^${datePrefix}` }
+    }).lean();
+
+    const totalLiters = logs.reduce((sum, l) => sum + (l.delivered_qty || 0), 0);
+    const totalAmount = logs.reduce((sum, l) => sum + (l.amount_calculated || 0), 0);
+
+    bill.totalLiters = totalLiters;
+    bill.totalAmount = totalAmount;
+    bill.grandTotal = totalAmount + (bill.previousBalance || 0);
+    bill.balance = bill.grandTotal - (bill.amountPaid || 0);
+    bill.status = bill.balance <= 0 ? 'paid' : (bill.amountPaid > 0 ? 'partial' : 'pending');
+    bill.logSnapshot = logs.map(l => ({
+      date: l.date,
+      slot: l.slot,
+      delivered_qty: l.delivered_qty,
+      extra_qty: l.extra_qty || 0,
+      amount_calculated: l.amount_calculated
+    }));
+
+    await bill.save();
+  } catch (err) {
+    console.error('Error recalculating customer bill:', err);
+  }
+}
+
+const moveToRecycleBin = async (doc, modelType, ownerId, deletedBy, cascadedFrom = null) => {
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  await RecycleBin.create({
+    modelType,
+    originalId: doc._id,
+    data: doc.toObject ? doc.toObject() : doc,
+    ownerId,
+    expiresAt,
+    cascadedFrom,
+    deletedBy
+  });
+  const Model = mongoose.model(modelType);
+  await Model.deleteOne({ _id: doc._id });
+};
 
 router.use(protect, authorize('owner'), requireActiveSubscription);
 
@@ -183,12 +247,42 @@ router.put('/customers/:id', async (req, res, next) => {
 // DELETE /api/owner/customers/:id (soft delete)
 router.delete('/customers/:id', async (req, res, next) => {
   try {
+    const isSuperadmin = req.user.role === 'superadmin' || req.user.impersonatedBy === 'superadmin';
+    if (!isSuperadmin) {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can delete data.' });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password confirmation is required.' });
+    }
+
+    const isMatch = await verifySuperadminPassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
     const customer = await Customer.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!customer) return res.status(404).json({ error: 'Customer not found.' });
 
-    customer.isActive = false;
-    await customer.save();
-    res.json({ message: 'Customer deactivated.' });
+    const superadminUser = await User.findOne({ role: 'superadmin', parentAdminId: null });
+    const deletedBy = superadminUser ? superadminUser._id : req.user._id;
+
+    await moveToRecycleBin(customer, 'Customer', customer.ownerId, deletedBy);
+
+    // Cascade Bills
+    const bills = await Bill.find({ customerId: customer._id });
+    for (const bill of bills) {
+      await moveToRecycleBin(bill, 'Bill', customer.ownerId, deletedBy, { modelType: 'Customer', originalId: customer._id });
+    }
+
+    // Cascade DailyLogs
+    const logs = await DailyLog.find({ customerId: customer._id });
+    for (const log of logs) {
+      await moveToRecycleBin(log, 'DailyLog', customer.ownerId, deletedBy, { modelType: 'Customer', originalId: customer._id });
+    }
+
+    res.json({ message: 'Customer moved to Recycle Bin.' });
   } catch (err) {
     next(err);
   }
@@ -363,12 +457,30 @@ router.put('/staff/:id', async (req, res, next) => {
 // DELETE /api/owner/staff/:id
 router.delete('/staff/:id', async (req, res, next) => {
   try {
+    const isSuperadmin = req.user.role === 'superadmin' || req.user.impersonatedBy === 'superadmin';
+    if (!isSuperadmin) {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can delete data.' });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password confirmation is required.' });
+    }
+
+    const isMatch = await verifySuperadminPassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
     const staff = await User.findOne({ _id: req.params.id, ownerId: req.user._id, role: 'staff' });
     if (!staff) return res.status(404).json({ error: 'Staff not found.' });
 
-    staff.isActive = false;
-    await staff.save();
-    res.json({ message: 'Staff account disabled.' });
+    const superadminUser = await User.findOne({ role: 'superadmin', parentAdminId: null });
+    const deletedBy = superadminUser ? superadminUser._id : req.user._id;
+
+    await moveToRecycleBin(staff, 'User', staff.ownerId, deletedBy);
+
+    res.json({ message: 'Staff member moved to Recycle Bin.' });
   } catch (err) {
     next(err);
   }
@@ -506,22 +618,37 @@ router.get('/logs', async (req, res, next) => {
 // PATCH /api/owner/logs/:id — owner can edit a log entry (correct errors)
 router.patch('/logs/:id', async (req, res, next) => {
   try {
-    const { extra_qty, notes } = req.body;
+    const { extra_qty, delivered_qty, price_per_liter, notes } = req.body;
     const log = await DailyLog.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!log) return res.status(404).json({ error: 'Log entry not found.' });
 
-    // Recalculate quantities if extra_qty changed
-    if (extra_qty !== undefined) {
+    if (price_per_liter !== undefined) {
+      log.price_per_liter = Math.max(0, parseFloat(price_per_liter) || 0);
+    }
+
+    if (delivered_qty !== undefined) {
+      const newDelivered = Math.max(0, parseFloat(delivered_qty) || 0);
+      log.delivered_qty = newDelivered;
+      log.extra_qty = Math.max(0, newDelivered - log.base_qty);
+    } else if (extra_qty !== undefined) {
       const newExtra = Math.max(0, parseFloat(extra_qty) || 0);
       log.extra_qty = newExtra;
       log.delivered_qty = log.base_qty + newExtra;
-      log.amount_calculated = log.delivered_qty * log.price_per_liter;
     }
+
+    log.amount_calculated = log.delivered_qty * log.price_per_liter;
+
     if (notes !== undefined) log.notes = notes;
     if (req.body.whatsappSent !== undefined) log.whatsappSent = req.body.whatsappSent;
     if (req.body.whatsappError !== undefined) log.whatsappError = req.body.whatsappError;
 
+    log.isEdited = true;
+    log.editedBy = req.user.name;
+
     await log.save();
+
+    // Recalculate customer bill for this month/year
+    await recalculateCustomerBill(req.user._id, log.customerId, log.date);
 
     // Re-populate for response
     const populated = await DailyLog.findById(log._id)
@@ -529,7 +656,7 @@ router.patch('/logs/:id', async (req, res, next) => {
       .populate('staffId', 'name')
       .lean();
 
-    res.json({ log: populated });
+    res.json({ log: populated, message: 'Log entry updated.' });
   } catch (err) {
     next(err);
   }
@@ -538,9 +665,30 @@ router.patch('/logs/:id', async (req, res, next) => {
 // DELETE /api/owner/logs/:id — owner can delete a log entry
 router.delete('/logs/:id', async (req, res, next) => {
   try {
-    const log = await DailyLog.findOneAndDelete({ _id: req.params.id, ownerId: req.user._id });
+    const isSuperadmin = req.user.role === 'superadmin' || req.user.impersonatedBy === 'superadmin';
+    if (!isSuperadmin) {
+      return res.status(403).json({ error: 'Access denied. Only Superadmin can delete data.' });
+    }
+
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Superadmin password confirmation is required.' });
+    }
+
+    const isMatch = await verifySuperadminPassword(password);
+    if (!isMatch) {
+      return res.status(403).json({ error: 'Incorrect superadmin password.' });
+    }
+
+    const log = await DailyLog.findOne({ _id: req.params.id, ownerId: req.user._id });
     if (!log) return res.status(404).json({ error: 'Log entry not found.' });
-    res.json({ message: 'Log entry deleted.' });
+
+    const superadminUser = await User.findOne({ role: 'superadmin', parentAdminId: null });
+    const deletedBy = superadminUser ? superadminUser._id : req.user._id;
+
+    await moveToRecycleBin(log, 'DailyLog', log.ownerId, deletedBy);
+
+    res.json({ message: 'Log entry moved to Recycle Bin.' });
   } catch (err) {
     next(err);
   }

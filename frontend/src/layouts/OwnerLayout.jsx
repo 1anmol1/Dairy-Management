@@ -5,9 +5,10 @@ import {
   ClipboardList, Receipt, LogOut,
   Menu, X, Milk, KeyRound, Phone, Mail, Building2,
   ChevronDown, ChevronUp, Droplets, BookOpen, CheckCircle, MessageSquare,
-  AlertCircle
+  AlertCircle, Keyboard
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useShortcuts } from '../context/ShortcutContext';
 import api from '../api/axios';
 import { useToast } from '../context/ToastContext';
 import amritLogo from '../assets/Amritmanagelogo.png';
@@ -23,6 +24,7 @@ const WhatsAppNavIcon = ({ size = 18 }) => (
 
 const OwnerLayout = () => {
   const { user, logout } = useAuth();
+  const { sidebarMinimized } = useShortcuts();
   const navigate = useNavigate();
   const { isMarathi, t } = useMarathi();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -132,7 +134,8 @@ const OwnerLayout = () => {
     ...(user?.features?.whatsapp_alerts
       ? [{ to: '/app/owner/whatsapp', icon: WhatsAppNavIcon, label: t('app.nav.whatsapp', 'WhatsApp') }]
       : []),
-    { to: '/app/owner/feedback', icon: MessageSquare, label: isMarathi ? 'अभिप्राय (फीडबॅक)' : 'Feedback & Support' }
+    { to: '/app/owner/feedback', icon: MessageSquare, label: isMarathi ? 'अभिप्राय (फीडबॅक)' : 'Feedback & Support' },
+    { to: '/app/owner/shortcuts', icon: Keyboard, label: isMarathi ? 'कीबोर्ड शॉर्टकट्स' : 'Keyboard Shortcuts' }
   ];
 
   const subBadgeClass =
@@ -140,7 +143,7 @@ const OwnerLayout = () => {
     subStatus === 'trial'  ? 'badge-blue'  : 'badge-red';
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout ${sidebarMinimized ? 'sidebar-minimized' : ''}`}>
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         {/* Logo */}
         <Link to="/app/owner" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>

@@ -71,6 +71,14 @@ const dailyLogSchema = new mongoose.Schema({
   notes: {
     type: String,
     maxlength: [200, 'Notes cannot exceed 200 characters']
+  },
+  isEdited: {
+    type: Boolean,
+    default: false
+  },
+  editedBy: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

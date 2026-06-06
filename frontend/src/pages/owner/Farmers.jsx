@@ -314,10 +314,10 @@ const Farmers = () => {
   );
 };
 
-// ── Farmer Modal Component ─────────────────────────────────────
 export const FarmerModal = ({ farmer, onClose, onSaved }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [currentPage, setCurrentPage] = useState(1);
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -332,6 +332,10 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
   const toast = useToast();
   const { isMarathi } = useMarathi();
 
+  const codeRef = useRef(null);
+  const nameRef = useRef(null);
+  const phoneRef = useRef(null);
+
   useEffect(() => {
     if (farmer) {
       setForm({
@@ -339,7 +343,7 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
         phone: farmer.phone || '',
         address: farmer.address || '',
         notes: farmer.notes || '',
-        customerCode: farmer.customerCode || '',
+        customerCode: farmer.customerCode ? farmer.customerCode.replace(/\D/g, '') : '',
         showCodeToStaff: farmer.showCodeToStaff || false,
         language: farmer.language || 'en'
       });
@@ -347,11 +351,15 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
   }, [farmer]);
 
   const handleChange = (name, val) => {
-    setForm(prev => ({ ...prev, [name]: val }));
+    let cleanVal = val;
+    if (name === 'customerCode') {
+      cleanVal = val.replace(/\D/g, ''); // numeric only
+    }
+    setForm(prev => ({ ...prev, [name]: cleanVal }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
   };
 
-  const validate = () => {
+  const validatePage1 = () => {
     const err = {};
     if (!form.name.trim()) err.name = isMarathi ? 'नाव आवश्यक आहे.' : 'Name is required.';
     const cleanPhone = form.phone.trim();
@@ -363,11 +371,39 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
     return err;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const err = validate();
+  const handleNextPage = () => {
+    const err = validatePage1();
     if (Object.keys(err).length > 0) {
       setErrors(err);
+      return;
+    }
+    setCurrentPage(2);
+  };
+
+  const handleKeyDownPage1 = (e, nextRef) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextRef && nextRef.current) {
+        nextRef.current.focus();
+      } else {
+        handleNextPage();
+      }
+    }
+  };
+
+  const handleKeyDownPage2 = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const err = validatePage1();
+    if (Object.keys(err).length > 0) {
+      setErrors(err);
+      setCurrentPage(1);
       return;
     }
     setSubmitting(true);
@@ -451,72 +487,105 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
           <X size={18} />
         </button>
 
-        <h2 style={{ fontWeight: 700, fontSize: '20px', marginBottom: '20px', paddingRight: '24px' }}>
+        <h2 style={{ fontWeight: 700, fontSize: '20px', marginBottom: '10px', paddingRight: '24px' }}>
           {farmer ? (isMarathi ? 'शेतकरी संपादित करा' : 'Edit Farmer') : (isMarathi ? 'नवीन शेतकरी जोडा' : 'Add New Farmer')}
         </h2>
+        
+        {/* Step indicator */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+          <div style={{ flex: 1, height: '4px', backgroundColor: '#0F62FE' }} />
+          <div style={{ flex: 1, height: '4px', backgroundColor: currentPage === 2 ? '#0F62FE' : '#E0E0E0' }} />
+        </div>
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div className="modal-body">
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'पूर्ण नाव *' : 'Full Name *'}</label>
-              <input
-                type="text" className="input" placeholder={isMarathi ? 'उदा. ज्ञानेश्वर पाटील' : 'e.g. Dnyaneshwar Patil'}
-                value={form.name} onChange={e => handleChange('name', e.target.value)}
-                style={errors.name ? { borderColor: '#DA1E28' } : {}}
-              />
-              {errors.name && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.name}</div>}
-            </div>
+            {currentPage === 1 ? (
+              /* PAGE 1: Code, Name, Phone */
+              <>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'शेतकरी कोड (फक्त अंक) *' : 'Farmer Code (digits only) *'}</label>
+                  <input
+                    type="text" className="input" placeholder="e.g. 101" ref={codeRef}
+                    value={form.customerCode} onChange={e => handleChange('customerCode', e.target.value)}
+                    onKeyDown={e => handleKeyDownPage1(e, nameRef)} autoFocus
+                  />
+                </div>
 
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'फोन नंबर *' : 'Phone Number *'}</label>
-              <input
-                type="tel" className="input" placeholder={isMarathi ? '१०-अंकी नंबर' : '10-digit number'}
-                value={form.phone} onChange={e => handleChange('phone', e.target.value)}
-                maxLength={10} style={errors.phone ? { borderColor: '#DA1E28' } : {}}
-              />
-              {errors.phone && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.phone}</div>}
-            </div>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'पूर्ण नाव *' : 'Full Name *'}</label>
+                  <input
+                    type="text" className="input" placeholder={isMarathi ? 'उदा. ज्ञानेश्वर पाटील' : 'e.g. Dnyaneshwar Patil'}
+                    ref={nameRef} value={form.name} onChange={e => handleChange('name', e.target.value)}
+                    style={errors.name ? { borderColor: '#DA1E28' } : {}}
+                    onKeyDown={e => handleKeyDownPage1(e, phoneRef)}
+                  />
+                  {errors.name && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.name}</div>}
+                </div>
 
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'शेतकरी कोड (पर्यायी)' : 'Farmer Code (optional)'}</label>
-              <input
-                type="text" className="input" placeholder={isMarathi ? 'उदा. F-101' : 'e.g. F-101'}
-                value={form.customerCode} onChange={e => handleChange('customerCode', e.target.value)}
-              />
-            </div>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'फोन नंबर *' : 'Phone Number *'}</label>
+                  <input
+                    type="tel" className="input" placeholder={isMarathi ? '१०-अंकी नंबर' : '10-digit number'}
+                    ref={phoneRef} value={form.phone} onChange={e => handleChange('phone', e.target.value)}
+                    maxLength={10} style={errors.phone ? { borderColor: '#DA1E28' } : {}}
+                    onKeyDown={e => handleKeyDownPage1(e, null)}
+                  />
+                  {errors.phone && <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.phone}</div>}
+                </div>
+              </>
+            ) : (
+              /* PAGE 2: Address, Language, Notes */
+              <>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'गाव / पत्ता (पर्यायी)' : 'Village / Address (optional)'}</label>
+                  <input
+                    type="text" className="input" placeholder={isMarathi ? 'उदा. मु. पो. वडगाव' : 'e.g. Vadgaon'}
+                    value={form.address} onChange={e => handleChange('address', e.target.value)}
+                    onKeyDown={handleKeyDownPage2} autoFocus
+                  />
+                </div>
 
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'गाव / पत्ता' : 'Village / Address'}</label>
-              <input
-                type="text" className="input" placeholder={isMarathi ? 'उदा. मु. पो. वडगाव' : 'e.g. Vadgaon'}
-                value={form.address} onChange={e => handleChange('address', e.target.value)}
-              />
-            </div>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'पसंतीची भाषा (WhatsApp)' : 'Preferred Language (WhatsApp)'}</label>
+                  <select className="input" value={form.language} onChange={e => handleChange('language', e.target.value)} onKeyDown={handleKeyDownPage2}>
+                    <option value="en">English</option>
+                    <option value="mr">मराठी (Marathi)</option>
+                  </select>
+                </div>
 
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'पसंतीची भाषा (WhatsApp)' : 'Preferred Language (WhatsApp)'}</label>
-              <select className="input" value={form.language} onChange={e => handleChange('language', e.target.value)}>
-                <option value="en">English</option>
-                <option value="mr">मराठी (Marathi)</option>
-              </select>
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'नोंदी / रिमार्क (पर्यायी)' : 'Notes / Remarks (optional)'}</label>
-              <textarea
-                className="input" placeholder={isMarathi ? 'शेतकऱ्याबद्दल अधिक माहिती...' : 'Extra notes about the farmer...'}
-                value={form.notes} onChange={e => handleChange('notes', e.target.value)}
-                rows={2} style={{ fontFamily: 'inherit', resize: 'vertical' }}
-              />
-            </div>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'नोंदी / रिमार्क (पर्यायी)' : 'Notes / Remarks (optional)'}</label>
+                  <textarea
+                    className="input" placeholder={isMarathi ? 'शेतकऱ्याबद्दल अधिक माहिती...' : 'Extra notes about the farmer...'}
+                    value={form.notes} onChange={e => handleChange('notes', e.target.value)}
+                    rows={2} style={{ fontFamily: 'inherit', resize: 'vertical' }}
+                    onKeyDown={handleKeyDownPage2}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-ghost btn-full" onClick={onClose} disabled={submitting}>
-              {isMarathi ? 'रद्द करा' : 'Cancel'}
-            </button>
-            <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
-              {submitting ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : (isMarathi ? 'जतन करा' : 'Save')}
-            </button>
+            {currentPage === 1 ? (
+              <>
+                <button type="button" className="btn btn-ghost btn-full" onClick={onClose} disabled={submitting}>
+                  {isMarathi ? 'रद्द करा' : 'Cancel'}
+                </button>
+                <button type="button" className="btn btn-primary btn-full" onClick={handleNextPage}>
+                  {isMarathi ? 'पुढे (Next)' : 'Next'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn btn-ghost btn-full" onClick={() => setCurrentPage(1)} disabled={submitting}>
+                  {isMarathi ? 'मागे' : 'Back'}
+                </button>
+                <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
+                  {submitting ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : (isMarathi ? 'जतन करा (Submit)' : 'Save & Submit')}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>

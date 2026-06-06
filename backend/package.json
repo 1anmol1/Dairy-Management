@@ -6,7 +6,6 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "seed:superadmin": "node scripts/seedSuperAdmin.js",
     "postinstall": "echo 'Skipping browser download for shared hosting configuration'",
     "build": "echo 'No build step required'"
   },

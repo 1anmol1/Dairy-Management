@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /pricing
+Disallow: /api/
+Disallow: /loginto/
+Disallow: /securelogin/
+Disallow: /lockedaccess/
+
+# Sitemap location (replace with your actual sitemap if generated later)
+# Sitemap: https://amritmanage-app.eurekai.in/sitemap.xml

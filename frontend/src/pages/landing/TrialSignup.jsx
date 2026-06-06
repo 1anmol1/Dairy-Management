@@ -1,8 +1,4 @@
-/**
- * Trial / Get Started Page — /start
- * Full Marathi support via useMarathi() toggle.
- */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ShieldCheck, CheckCircle, Clock, Users, Receipt, Phone } from 'lucide-react';
 import api from '../../api/axios';
@@ -24,6 +20,13 @@ const INDIAN_STATES = [
 
 const TrialSignup = () => {
   const { isMarathi } = useMarathi();
+
+  useEffect(() => {
+    document.title = isMarathi 
+      ? "सुरू करा - मोफत ट्रायल विनंती | डेअरी सॉफ्टवेअर | Amrit Manage" 
+      : "Get Started - Free Trial Signup | Dairy Software | Amrit Manage";
+  }, [isMarathi]);
+
   const [name,         setName]         = useState('');
   const [phone,        setPhone]        = useState('');
   const [email,        setEmail]        = useState('');

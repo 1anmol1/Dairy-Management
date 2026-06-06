@@ -124,6 +124,14 @@ const farmerCollectionSchema = new mongoose.Schema({
   isCancelled: {
     type: Boolean,
     default: false
+  },
+  isEdited: {
+    type: Boolean,
+    default: false
+  },
+  editedBy: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

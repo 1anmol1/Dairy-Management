@@ -1,5 +1,5 @@
-import React from 'react';
-import { UserPlus, Bike, Receipt, ArrowRight, Play } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Bike, Receipt, ArrowRight, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import SiteFooter from '../../components/SiteFooter';
@@ -8,25 +8,26 @@ import { useMarathi } from '../../i18n/marathi';
 const HowItWorksPage = () => {
   const { t, isMarathi } = useMarathi();
 
+  useEffect(() => {
+    document.title = isMarathi 
+      ? "कसे काम करते | ३-टप्प्यांची सोपी प्रक्रिया | Amrit Manage" 
+      : "How It Works | Simple 3-Step Process | Amrit Manage";
+  }, [isMarathi]);
+
   const steps = [
     {
-      icon: UserPlus,
-      title: t('howItWorks.step1.title', '1. Create your account'),
-      desc:  t('howItWorks.step1.desc',  'Sign up in 2 minutes with your phone number and business name. No technical skills required. Trial starts upon discussion with our team.')
-    },
-    {
       icon: Bike,
-      title: t('howItWorks.step2.title', '2. Set up your team'),
+      title: t('howItWorks.step2.title', '1. Set up your team'),
       desc:  t('howItWorks.step2.desc',  'Add your customers and delivery staff. Set their default milk quantity (Morning/Evening) and your custom milk rates.')
     },
     {
       icon: Play,
-      title: t('howItWorks.step3.title', '3. Start recording'),
+      title: t('howItWorks.step3.title', '2. Start recording'),
       desc:  t('howItWorks.step3.desc',  'You or your staff can log daily milk deliveries with one tap. The app remembers everything securely in the cloud.')
     },
     {
       icon: Receipt,
-      title: t('howItWorks.step4.title', '4. Get automatic bills'),
+      title: t('howItWorks.step4.title', '3. Get automatic bills'),
       desc:  t('howItWorks.step4.desc',  "At the end of the month, review your auto-generated bills and share them with customers via WhatsApp or SMS. It's that simple.")
     }
   ];
@@ -45,7 +46,7 @@ const HowItWorksPage = () => {
             {t('howItWorks.heading', 'How Amrit Manage Works')}
           </h1>
           <p style={{ color: '#525252', fontSize: '18px', maxWidth: '700px', margin: '0 auto' }}>
-            {t('howItWorks.subtext', 'A simple, 4-step process to transform your traditional milk business into a modern digital operation.')}
+            {t('howItWorks.subtext', 'A simple, 3-step process to transform your traditional milk business into a modern digital operation.')}
           </p>
         </div>
 

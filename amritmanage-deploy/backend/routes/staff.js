@@ -7,8 +7,49 @@ const DailyCollection = require('../models/DailyCollection');
 const MessageTemplate = require('../models/MessageTemplate');
 const Farmer = require('../models/Farmer');
 const FarmerCollection = require('../models/FarmerCollection');
+const Bill = require('../models/Bill');
 const { protect, authorize, requireActiveSubscription } = require('../middleware/auth');
 const { sendDeliveryNotification, getSessionStatusDb } = require('../services/whatsappService');
+
+async function recalculateCustomerBill(ownerId, customerId, dateString) {
+  try {
+    const parts = dateString.split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    
+    const pad = String(month).padStart(2, '0');
+    const datePrefix = `${year}-${pad}`;
+
+    const bill = await Bill.findOne({ ownerId, customerId, month, year });
+    if (!bill) return;
+
+    const logs = await DailyLog.find({
+      ownerId,
+      customerId,
+      date: { $regex: `^${datePrefix}` }
+    }).lean();
+
+    const totalLiters = logs.reduce((sum, l) => sum + (l.delivered_qty || 0), 0);
+    const totalAmount = logs.reduce((sum, l) => sum + (l.amount_calculated || 0), 0);
+
+    bill.totalLiters = totalLiters;
+    bill.totalAmount = totalAmount;
+    bill.grandTotal = totalAmount + (bill.previousBalance || 0);
+    bill.balance = bill.grandTotal - (bill.amountPaid || 0);
+    bill.status = bill.balance <= 0 ? 'paid' : (bill.amountPaid > 0 ? 'partial' : 'pending');
+    bill.logSnapshot = logs.map(l => ({
+      date: l.date,
+      slot: l.slot,
+      delivered_qty: l.delivered_qty,
+      extra_qty: l.extra_qty || 0,
+      amount_calculated: l.amount_calculated
+    }));
+
+    await bill.save();
+  } catch (err) {
+    console.error('Error recalculating customer bill:', err);
+  }
+}
 
 // Allow both staff and owner to access these delivery endpoints
 router.use(protect, authorize('staff', 'owner'), requireActiveSubscription);
@@ -172,7 +213,7 @@ router.post('/deliver', async (req, res, next) => {
 router.patch('/logs/:id', async (req, res, next) => {
   try {
     const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
-    const { extra_qty, notes } = req.body;
+    const { extra_qty, delivered_qty, price_per_liter, notes } = req.body;
     const log = await DailyLog.findOne({
       _id: req.params.id,
       ownerId,
@@ -180,19 +221,42 @@ router.patch('/logs/:id', async (req, res, next) => {
     });
     if (!log) return res.status(404).json({ error: 'Log entry not found.' });
 
-    if (extra_qty !== undefined) {
+    // Staff can edit same day only
+    const today = new Date().toISOString().split('T')[0];
+    if (req.user.role === 'staff' && log.date !== today) {
+      return res.status(403).json({ error: 'Staff can only edit log entries on the same day.' });
+    }
+
+    if (price_per_liter !== undefined) {
+      log.price_per_liter = Math.max(0, parseFloat(price_per_liter) || 0);
+    }
+
+    if (delivered_qty !== undefined) {
+      const newDelivered = Math.max(0, parseFloat(delivered_qty) || 0);
+      log.delivered_qty = newDelivered;
+      log.extra_qty = Math.max(0, newDelivered - log.base_qty);
+    } else if (extra_qty !== undefined) {
       const newExtra = Math.max(0, parseFloat(extra_qty) || 0);
       log.extra_qty = newExtra;
       log.delivered_qty = log.base_qty + newExtra;
-      log.amount_calculated = log.delivered_qty * log.price_per_liter;
     }
+
+    log.amount_calculated = log.delivered_qty * log.price_per_liter;
+
     if (notes !== undefined) log.notes = notes;
+
+    log.isEdited = true;
+    log.editedBy = req.user.name;
+
     await log.save();
+
+    // Recalculate customer bill for this month/year
+    await recalculateCustomerBill(ownerId, log.customerId, log.date);
 
     const populated = await DailyLog.findById(log._id)
       .populate('customerId', 'name phone language')
       .lean();
-    res.json({ log: populated });
+    res.json({ log: populated, message: 'Log entry updated.' });
   } catch (err) {
     next(err);
   }
@@ -524,6 +588,97 @@ router.post('/farmer-collections/send-whatsapp', async (req, res, next) => {
     await sendMessage(ownerId.toString(), farmer.phone, msg);
     res.json({ success: true, message: 'Receipt sent successfully via WhatsApp.' });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ── PATCH /api/staff/farmer-collections/:id ─────────────────────
+// Edit a farmer collection log entry
+router.patch('/farmer-collections/:id', async (req, res, next) => {
+  const mongoose = require('mongoose');
+  let session = null;
+  let useTransaction = false;
+
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+    useTransaction = true;
+  } catch (e) {
+    if (session) {
+      session.endSession();
+      session = null;
+    }
+  }
+
+  try {
+    const ownerId = req.user.role === 'owner' ? req.user._id : req.user.ownerId;
+    const today = new Date().toISOString().split('T')[0];
+
+    const coll = await FarmerCollection.findOne({ _id: req.params.id, ownerId })
+      .session(useTransaction ? session : null);
+
+    if (!coll) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(404).json({ error: 'Farmer collection record not found.' });
+    }
+
+    // Role checks: Staff can only edit logs on the same day (today)
+    if (req.user.role === 'staff' && coll.date !== today) {
+      if (useTransaction) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(403).json({ error: 'Staff can only edit collection entries on the same day.' });
+    }
+
+    const oldNetAmount = coll.netAmount;
+
+    // Fields that can be updated
+    const fields = [
+      'quantity', 'fat', 'snf', 'clr', 'ratePerLiter', 'baseRate', 
+      'fatValue', 'snfValue', 'grossAmount', 'bonusAmount', 'deductionAmount', 'netAmount', 'notes'
+    ];
+
+    fields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        if (field === 'notes') {
+          coll[field] = req.body[field];
+        } else {
+          coll[field] = parseFloat(req.body[field]);
+        }
+      }
+    });
+
+    coll.isEdited = true;
+    coll.editedBy = req.user.name;
+
+    const opt = useTransaction ? { session } : {};
+    await coll.save(opt);
+
+    // If netAmount has changed, adjust farmer balance
+    const diff = coll.netAmount - oldNetAmount;
+    if (diff !== 0) {
+      await Farmer.updateOne(
+        { _id: coll.farmerId, ownerId },
+        { $inc: { balance: diff } },
+        opt
+      );
+    }
+
+    if (useTransaction) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+
+    res.json({ success: true, collection: coll, message: 'Collection entry updated.' });
+  } catch (err) {
+    if (useTransaction && session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
     next(err);
   }
 });

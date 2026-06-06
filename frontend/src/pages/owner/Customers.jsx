@@ -385,6 +385,7 @@ const Customers = () => {
 const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [currentPage, setCurrentPage] = useState(1);
   const [form, setForm] = useState({
     name:            customer?.name || '',
     phone:           customer?.phone || '',
@@ -395,8 +396,9 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
     custom_price:    customer?.custom_price != null ? String(customer.custom_price) : '',
     notes:           customer?.notes || '',
     assignedStaffId: customer?.assignedStaffId || '',
-    customerCode:    customer?.customerCode || '',
-    showCodeToStaff: customer?.showCodeToStaff ?? false
+    customerCode:    customer?.customerCode ? customer.customerCode.replace(/\D/g, '') : '',
+    showCodeToStaff: customer?.showCodeToStaff ?? false,
+    onlyQuantityAdding: customer ? (customer?.base_requirement?.morning === 0 && customer?.base_requirement?.evening === 0) : false
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -405,6 +407,10 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
   const [loadingRate, setLoadingRate] = useState(false);
   const toast = useToast();
   const { isMarathi } = useMarathi();
+
+  const codeRef = useRef(null);
+  const nameRef = useRef(null);
+  const phoneRef = useRef(null);
 
   // Fetch default rate on mount (for new customers only)
   useEffect(() => {
@@ -442,34 +448,76 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
   };
 
   const handleChange = (name, value) => {
-    setForm(p => ({ ...p, [name]: value }));
+    let cleanVal = value;
+    if (name === 'customerCode') {
+      cleanVal = value.replace(/\D/g, ''); // numeric only
+    }
+    setForm(p => ({ ...p, [name]: cleanVal }));
     // Clear error as user types
     if (errors[name]) {
       setErrors(p => ({ ...p, [name]: '' }));
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // Validate all required fields — default_price comes from API, always valid
+  const validatePage1 = () => {
     const newErrors = {};
     ['name', 'phone'].forEach(f => {
       const err = validate(f, form[f]);
       if (err) newErrors[f] = err;
     });
-    // Validate custom_price only if custom rate is enabled
-    if (useCustomRate && form.custom_price !== '') {
-      const err = validate('custom_price', form.custom_price);
-      if (err) newErrors.custom_price = err;
+    return newErrors;
+  };
+
+  const handleNextPage = () => {
+    const newErrors = validatePage1();
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
     }
-    ['morning', 'evening'].forEach(f => {
-      const err = validate(f, form[f]);
-      if (err) newErrors[f] = err;
-    });
+    setCurrentPage(2);
+  };
+
+  const handleKeyDownPage1 = (e, nextRef) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextRef && nextRef.current) {
+        nextRef.current.focus();
+      } else {
+        handleNextPage();
+      }
+    }
+  };
+
+  const handleKeyDownPage2 = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+
+    // Validate all required fields
+    const newErrors = validatePage1();
+    if (currentPage === 2) {
+      if (useCustomRate && form.custom_price !== '') {
+        const err = validate('custom_price', form.custom_price);
+        if (err) newErrors.custom_price = err;
+      }
+      if (!form.onlyQuantityAdding) {
+        ['morning', 'evening'].forEach(f => {
+          const err = validate(f, form[f]);
+          if (err) newErrors[f] = err;
+        });
+      }
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      if (newErrors.name || newErrors.phone) {
+        setCurrentPage(1);
+      }
       return;
     }
 
@@ -480,8 +528,8 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
         phone:            form.phone.trim(),
         address:          form.address.trim(),
         base_requirement: {
-          morning: parseFloat(form.morning) || 0,
-          evening: parseFloat(form.evening) || 0
+          morning: form.onlyQuantityAdding ? 0 : (parseFloat(form.morning) || 0),
+          evening: form.onlyQuantityAdding ? 0 : (parseFloat(form.evening) || 0)
         },
         default_price: parseFloat(form.default_price) || 0,
         custom_price:  useCustomRate && form.custom_price !== '' ? parseFloat(form.custom_price) : null,
@@ -525,8 +573,8 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
     }
   };
 
-  // Reusable field component — uses text inputs for all fields to avoid browser number validation blocking
-  const Field = ({ label, name, placeholder, required: req }) => (
+  // Reusable field component
+  const Field = ({ label, name, placeholder, required: req, onKeyDown }) => (
     <div className="input-group">
       <label className="input-label">{label}{req && ' *'}</label>
       <input
@@ -538,6 +586,7 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
         onChange={e => handleChange(name, e.target.value)}
         style={errors[name] ? { borderColor: '#DA1E28' } : {}}
         autoComplete="off"
+        onKeyDown={onKeyDown}
       />
       {errors[name] && (
         <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors[name]}</div>
@@ -579,130 +628,208 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
           <X size={18} />
         </button>
 
-        <h2 style={{ fontWeight: 700, marginBottom: '20px', fontSize: '20px', paddingRight: '24px' }}>
+        <h2 style={{ fontWeight: 700, marginBottom: '10px', fontSize: '20px', paddingRight: '24px' }}>
           {customer ? (isMarathi ? 'ग्राहक संपादित करा' : 'Edit Customer') : (isMarathi ? 'ग्राहक जोडा' : 'Add Customer')}
         </h2>
+
+        {/* Step indicator */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+          <div style={{ flex: 1, height: '4px', backgroundColor: '#0F62FE' }} />
+          <div style={{ flex: 1, height: '4px', backgroundColor: currentPage === 2 ? '#0F62FE' : '#E0E0E0' }} />
+        </div>
+
         <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div className="modal-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Field label={isMarathi ? 'पूर्ण नाव' : 'Full Name'} name="name" placeholder="Ramesh Patel" required />
-              <div className="input-group">
-                <label className="input-label">{isMarathi ? 'ग्राहक कोड (पर्यायी)' : 'Customer Code (optional)'}</label>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="C001"
-                  value={form.customerCode}
-                  onChange={e => handleChange('customerCode', e.target.value)}
-                  autoComplete="off"
-                  maxLength={20}
-                />
-                {/* Show to staff checkbox — only visible when a code is entered */}
-                {form.customerCode.trim() && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', cursor: 'pointer', fontSize: '12px', color: '#525252' }}>
-                    <input
-                      type="checkbox"
-                      checked={form.showCodeToStaff}
-                      onChange={e => handleChange('showCodeToStaff', e.target.checked)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    {isMarathi ? 'कर्मचाऱ्यांना दाखवा' : 'Show to staff'}
-                  </label>
-                )}
-              </div>
-            </div>
-            <Field label={isMarathi ? 'फोन नंबर' : 'Phone Number'} name="phone" placeholder="9876543210" required />
-            <Field label={isMarathi ? 'पत्ता' : 'Address'} name="address" placeholder={isMarathi ? 'मुख्य रस्ता, पुणे' : '123 Main Street, Pune'} />
+            {currentPage === 1 ? (
+              /* PAGE 1: customerCode, name, phone */
+              <>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'ग्राहक कोड (फक्त अंक) *' : 'Customer Code (digits only) *'}</label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="e.g. 101"
+                    ref={codeRef}
+                    value={form.customerCode}
+                    onChange={e => handleChange('customerCode', e.target.value)}
+                    autoComplete="off"
+                    maxLength={20}
+                    onKeyDown={e => handleKeyDownPage1(e, nameRef)}
+                    autoFocus
+                  />
+                  {form.customerCode.trim() && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', cursor: 'pointer', fontSize: '12px', color: '#525252' }}>
+                      <input
+                        type="checkbox"
+                        checked={form.showCodeToStaff}
+                        onChange={e => handleChange('showCodeToStaff', e.target.checked)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      {isMarathi ? 'कर्मचाऱ्यांना दाखवा' : 'Show to staff'}
+                    </label>
+                  )}
+                </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Field label={isMarathi ? 'सकाळ (लिटर)' : 'Morning (Liters)'} name="morning" placeholder="0" />
-              <Field label={isMarathi ? 'संध्याकाळ (लिटर)' : 'Evening (Liters)'} name="evening" placeholder="0" />
-            </div>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'पूर्ण नाव *' : 'Full Name *'}</label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Ramesh Patel"
+                    ref={nameRef}
+                    value={form.name}
+                    onChange={e => handleChange('name', e.target.value)}
+                    style={errors.name ? { borderColor: '#DA1E28' } : {}}
+                    autoComplete="off"
+                    onKeyDown={e => handleKeyDownPage1(e, phoneRef)}
+                  />
+                  {errors.name && (
+                    <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.name}</div>
+                  )}
+                </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {/* Default rate — always read-only, fetched from system */}
-              <div className="input-group">
-                <label className="input-label">
-                  {isMarathi ? 'डिफॉल्ट दर (₹/ली.)' : 'Default Rate (₹/L)'}
-                  <span style={{ fontSize: '10px', color: '#8D8D8D', marginLeft: '6px', fontWeight: 400 }}>
-                    {isMarathi ? '(बदलता येत नाही)' : '(read-only)'}
-                  </span>
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'फोन नंबर *' : 'Phone Number *'}</label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="9876543210"
+                    ref={phoneRef}
+                    value={form.phone}
+                    onChange={e => handleChange('phone', e.target.value)}
+                    style={errors.phone ? { borderColor: '#DA1E28' } : {}}
+                    autoComplete="off"
+                    onKeyDown={e => handleKeyDownPage1(e, null)}
+                  />
+                  {errors.phone && (
+                    <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.phone}</div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* PAGE 2: address, requirements, rates, staff assignment, notes */
+              <>
+                <Field label={isMarathi ? 'पत्ता' : 'Address'} name="address" placeholder={isMarathi ? 'मुख्य रस्ता, पुणे' : '123 Main Street, Pune'} onKeyDown={handleKeyDownPage2} />
+
+                {/* Regular Quantity toggle (checked by default) */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#161616' }}>
+                  <input
+                    type="checkbox"
+                    checked={!form.onlyQuantityAdding}
+                    onChange={e => {
+                      const isRegular = e.target.checked;
+                      setForm(prev => ({
+                        ...prev,
+                        onlyQuantityAdding: !isRegular,
+                        morning: isRegular ? (prev.morning === '0' ? '1' : prev.morning) : '0',
+                        evening: isRegular ? (prev.evening === '0' ? '1' : prev.evening) : '0'
+                      }));
+                    }}
+                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                  />
+                  {isMarathi ? 'नियमित मात्रा (सकाळ / संध्याकाळ निश्चित मात्रा)' : 'Regular Quantity (Enable morning/evening base quantities)'}
                 </label>
-                <input
-                  type="text"
-                  className="input"
-                  value={loadingRate ? (isMarathi ? 'लोड होत आहे...' : 'Loading...') : form.default_price}
-                  readOnly
-                  disabled
-                  style={{ backgroundColor: '#F4F4F4', color: '#525252', cursor: 'not-allowed' }}
-                />
-                <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
-                  {isMarathi ? 'डिफॉल्ट दर सेटिंग्समधून घेतला जातो.' : 'Fetched from Default Rate settings.'}
-                </div>
-              </div>
 
-              {/* Custom rate — locked until toggle is enabled */}
-              <div className="input-group">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-                  <label className="input-label" style={{ margin: 0 }}>
-                    {isMarathi ? 'कस्टम दर (₹/ली.)' : 'Custom Rate (₹/L)'}
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: useCustomRate ? '#0F62FE' : '#8D8D8D', fontWeight: 600 }}>
-                    <input
-                      type="checkbox"
-                      checked={useCustomRate}
-                      onChange={e => {
-                        setUseCustomRate(e.target.checked);
-                        if (!e.target.checked) handleChange('custom_price', '');
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    {isMarathi ? 'कस्टम दर सेट करा' : 'Set custom rate'}
-                  </label>
-                </div>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className="input"
-                  placeholder={useCustomRate ? (isMarathi ? 'उदा. ६५' : 'e.g. 65') : (isMarathi ? 'डिफॉल्ट वापरला जाईल' : 'Default will be used')}
-                  value={form.custom_price}
-                  onChange={e => handleChange('custom_price', e.target.value)}
-                  disabled={!useCustomRate}
-                  style={!useCustomRate ? { backgroundColor: '#F4F4F4', color: '#8D8D8D', cursor: 'not-allowed' } : errors.custom_price ? { borderColor: '#DA1E28' } : {}}
-                  autoComplete="off"
-                />
-                {errors.custom_price && (
-                  <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.custom_price}</div>
+                {!form.onlyQuantityAdding && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    <Field label={isMarathi ? 'सकाळ (लिटर)' : 'Morning (Liters)'} name="morning" placeholder="0" onKeyDown={handleKeyDownPage2} />
+                    <Field label={isMarathi ? 'संध्याकाळ (लिटर)' : 'Evening (Liters)'} name="evening" placeholder="0" onKeyDown={handleKeyDownPage2} />
+                  </div>
                 )}
-              </div>
-            </div>
 
-            {/* Staff assignment */}
-            <div className="input-group">
-              <label className="input-label">{isMarathi ? 'नियुक्त कर्मचारी' : 'Assigned Staff'}</label>
-              <select
-                className="input"
-                value={form.assignedStaffId}
-                onChange={e => handleChange('assignedStaffId', e.target.value)}
-              >
-                <option value="">{isMarathi ? '— नियुक्त नाही (सर्व कर्मचारी वितरण करू शकतात) —' : '— Unassigned (all staff can deliver) —'}</option>
-                {staffList.map(s => (
-                  <option key={s._id} value={s._id}>{s.name} ({s.phone})</option>
-                ))}
-              </select>
-              <div style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '4px' }}>
-                {isMarathi ? 'नियुक्त कर्मचाऱ्याला त्यांच्या वितरण यादीत हा ग्राहक दिसेल.' : 'Assigned staff will see this customer in their delivery list.'}
-              </div>
-            </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {/* Default rate */}
+                  <div className="input-group">
+                    <label className="input-label">
+                      {isMarathi ? 'डिफॉल्ट दर (₹/ली.)' : 'Default Rate (₹/L)'}
+                      <span style={{ fontSize: '10px', color: '#8D8D8D', marginLeft: '6px', fontWeight: 400 }}>
+                        {isMarathi ? '(बदलता येत नाही)' : '(read-only)'}
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={loadingRate ? (isMarathi ? 'लोड होत आहे...' : 'Loading...') : form.default_price}
+                      readOnly
+                      disabled
+                      style={{ backgroundColor: '#F4F4F4', color: '#525252', cursor: 'not-allowed' }}
+                    />
+                  </div>
 
-            <Field label={isMarathi ? 'नोंदी' : 'Notes'} name="notes" placeholder={isMarathi ? 'कोणत्याही विशेष सूचना...' : 'Any special instructions...'} />
+                  {/* Custom rate */}
+                  <div className="input-group">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                      <label className="input-label" style={{ margin: 0 }}>
+                        {isMarathi ? 'कस्टम दर (₹/ली.)' : 'Custom Rate (₹/L)'}
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: useCustomRate ? '#0F62FE' : '#8D8D8D', fontWeight: 600 }}>
+                        <input
+                          type="checkbox"
+                          checked={useCustomRate}
+                          onChange={e => {
+                            setUseCustomRate(e.target.checked);
+                            if (!e.target.checked) handleChange('custom_price', '');
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        {isMarathi ? 'कस्टम दर सेट करा' : 'Set custom rate'}
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="input"
+                      placeholder={useCustomRate ? (isMarathi ? 'उदा. ६५' : 'e.g. 65') : (isMarathi ? 'डिफॉल्ट वापरला जाईल' : 'Default will be used')}
+                      value={form.custom_price}
+                      onChange={e => handleChange('custom_price', e.target.value)}
+                      disabled={!useCustomRate}
+                      style={!useCustomRate ? { backgroundColor: '#F4F4F4', color: '#8D8D8D', cursor: 'not-allowed' } : errors.custom_price ? { borderColor: '#DA1E28' } : {}}
+                      autoComplete="off"
+                      onKeyDown={handleKeyDownPage2}
+                    />
+                    {errors.custom_price && (
+                      <div style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px' }}>{errors.custom_price}</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Staff assignment */}
+                <div className="input-group">
+                  <label className="input-label">{isMarathi ? 'नियुक्त कर्मचारी' : 'Assigned Staff'}</label>
+                  <select
+                    className="input"
+                    value={form.assignedStaffId}
+                    onChange={e => handleChange('assignedStaffId', e.target.value)}
+                    onKeyDown={handleKeyDownPage2}
+                  >
+                    <option value="">{isMarathi ? '— नियुक्त नाही (सर्व कर्मचारी वितरण करू शकतात) —' : '— Unassigned (all staff can deliver) —'}</option>
+                    {staffList.map(s => (
+                      <option key={s._id} value={s._id}>{s.name} ({s.phone})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <Field label={isMarathi ? 'नोंदी' : 'Notes'} name="notes" placeholder={isMarathi ? 'कोणत्याही विशेष सूचना...' : 'Any special instructions...'} onKeyDown={handleKeyDownPage2} />
+              </>
+            )}
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
-            <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-              {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : customer ? (isMarathi ? 'अपडेट करा' : 'Update') : (isMarathi ? 'ग्राहक जोडा' : 'Add Customer')}
-            </button>
+            {currentPage === 1 ? (
+              <>
+                <button type="button" className="btn btn-ghost btn-full" onClick={onClose}>{isMarathi ? 'रद्द करा' : 'Cancel'}</button>
+                <button type="button" className="btn btn-primary btn-full" onClick={handleNextPage}>
+                  {isMarathi ? 'पुढे (Next)' : 'Next'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn btn-ghost btn-full" onClick={() => setCurrentPage(1)}>{isMarathi ? 'मागे' : 'Back'}</button>
+                <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+                  {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : customer ? (isMarathi ? 'अपडेट करा' : 'Update') : (isMarathi ? 'ग्राहक जोडा (Submit)' : 'Save & Submit')}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>

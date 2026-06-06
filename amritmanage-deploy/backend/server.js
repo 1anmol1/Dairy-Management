@@ -32,7 +32,6 @@ const connectDB = require('./config/db');
 
 // ── Route imports ─────────────────────────────────────────────
 const authRoutes = require('./routes/auth');
-const setupRoutes = require('./routes/setup');
 const superadminRoutes = require('./routes/superadmin');
 const ownerRoutes = require('./routes/owner');
 const staffRoutes = require('./routes/staff');
@@ -79,47 +78,39 @@ app.disable('x-powered-by');
 app.use(mongoSanitize());
 app.use(compression({ level: 6, threshold: 1024 }));
 
-// ── Setup UI — served at /setup ───────────────────────────────
-// Localhost-only. Disabled in production unless ENABLE_SETUP=true.
-// CSP is relaxed here to allow the inline <script> in setup-ui.html.
-app.get('/setup', (req, res) => {
-  if (isProd && process.env.ENABLE_SETUP !== 'true') {
-    return res.status(404).send('Not found.');
-  }
-  const ip = req.ip || '';
-  const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-  if (!isLocal) return res.status(404).send('Not found.');
-  res.setHeader(
-    'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none';"
-  );
-  res.sendFile(path.join(__dirname, 'setup-ui.html'));
-});
 
-// ── Setup API — registered BEFORE global CORS ─────────────────
-// Disabled in production unless ENABLE_SETUP=true is explicitly set.
-const setupCors = cors({
-  origin: (origin, cb) => {
-    const ok = !origin || origin === 'null' ||
-      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    cb(null, ok);
-  },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: false
-});
-// Use regex to avoid Express 5 wildcard parsing issues
-app.options(/^\/api\/setup\/.*/, setupCors);
-app.use('/api/setup', (req, res, next) => {
-  if (isProd && process.env.ENABLE_SETUP !== 'true') {
-    return res.status(404).json({ error: 'Not found.' });
-  }
-  next();
-}, setupCors, express.json({ limit: '4kb' }), setupRoutes);
 
 // ── CORS (all other routes) ───────────────────────────────────
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    
+    try {
+      const hostname = new URL(origin).hostname;
+      if (
+        hostname === 'amritmanage-app.eurekai.in' ||
+        hostname.endsWith('.eurekai.in') ||
+        hostname.endsWith('.hostingersite.com') ||
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1'
+      ) {
+        return callback(null, true);
+      }
+    } catch (_) {}
+    
+    callback(null, false); // fallback to deny if no match
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -214,9 +205,7 @@ app.use((err, _req, res, _next) => {
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, async () => {
   console.log(`🚀 Amrit Manage backend running on port ${PORT}`);
-  if (!isProd || process.env.ENABLE_SETUP === 'true') {
-    console.log(`🔧 Setup UI available at: http://localhost:${PORT}/setup`);
-  }
+  
   const PlanConfig = require('./models/PlanConfig');
   PlanConfig.countDocuments().then(count => {
     if (count < 3) {

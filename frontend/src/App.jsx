@@ -1,64 +1,67 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ShortcutProvider } from './context/ShortcutContext';
 import { ToastProvider } from './context/ToastContext';
 import ScrollToTop from './components/ScrollToTop';
 import SignOutGuard from './components/SignOutGuard';
 // ── Marathi i18n (self-contained — delete i18n/marathi/ to remove) ──
 import { MarathiProvider } from './i18n/marathi';
-import { Eye } from 'lucide-react';
 
-// ── Auth / Login ──────────────────────────────────────────────
-import OwnerLogin    from './pages/auth/OwnerLogin';
-import StaffLogin    from './pages/auth/StaffLogin';
-import AdminLogin    from './pages/auth/AdminLogin';
-
-// ── Landing pages (marketing site) ───────────────────────────
+// ── Static Imports for critical/initial pages ──────────────────
 import LandingPage   from './pages/landing/Landing';
-import AdsLanding    from './pages/landing/AdsLanding';
-import FeaturesPage  from './pages/landing/Features';
-import PricingPage   from './pages/landing/Pricing';
-import HowItWorks    from './pages/landing/HowItWorks';
-import FAQPage       from './pages/landing/FAQ';
-import PrivacyPage   from './pages/landing/Privacy';
-import TermsPage     from './pages/landing/Terms';
-import TrialSignup   from './pages/landing/TrialSignup';
-
-// ── Superadmin ────────────────────────────────────────────────
 import SuperadminLayout    from './layouts/SuperadminLayout';
-import SuperadminDashboard from './pages/superadmin/Dashboard';
-import SuperadminOwners    from './pages/superadmin/Owners';
-import SuperadminPlans     from './pages/superadmin/Plans';
-import SuperadminRequests  from './pages/superadmin/Requests';
-import SuperadminActivities from './pages/superadmin/Activities';
-import SuperadminImpersonation from './pages/superadmin/Impersonation';
-import SuperadminFeedbackList from './pages/superadmin/FeedbackList';
-import SuperadminAdmins from './pages/superadmin/Admins';
-import SuperadminRecycleBin from './pages/superadmin/RecycleBin';
-
-// ── Owner ─────────────────────────────────────────────────────
 import OwnerLayout          from './layouts/OwnerLayout';
-import OwnerDashboard       from './pages/owner/Dashboard';
-import OwnerCustomers       from './pages/owner/Customers';
-import OwnerFarmers         from './pages/owner/Farmers';
-import OwnerStaff           from './pages/owner/Staff';
-import OwnerLogs            from './pages/owner/Logs';
-import OwnerBilling         from './pages/owner/Billing';
-import OwnerWhatsApp        from './pages/owner/WhatsApp';
-import OwnerDefaultRate     from './pages/owner/DefaultRate';
-import OwnerUpgrade         from './pages/owner/Upgrade';
-import OwnerOnboarding      from './pages/owner/Onboarding';
-import OwnerDailyCollection from './pages/owner/DailyCollection';
-import OwnerMessageTemplates from './pages/owner/MessageTemplates';
-import PromotePage from './pages/landing/Promote';
-import FeedbackPage         from './pages/owner/Feedback';
-
-// ── Staff ─────────────────────────────────────────────────────
 import StaffLayout   from './layouts/StaffLayout';
-import StaffDelivery from './pages/staff/Delivery';
 
-// ── 404 ───────────────────────────────────────────────────────
-import NotFound from './pages/NotFound';
+// ── Lazy-loaded Auth / Login ─────────────────────────────────────
+const OwnerLogin = lazy(() => import('./pages/auth/OwnerLogin'));
+const StaffLogin = lazy(() => import('./pages/auth/StaffLogin'));
+const AdminLogin = lazy(() => import('./pages/auth/AdminLogin'));
+
+// ── Lazy-loaded Landing pages ────────────────────────────────────
+const AdsLanding = lazy(() => import('./pages/landing/AdsLanding'));
+const FeaturesPage = lazy(() => import('./pages/landing/Features'));
+const PricingPage = lazy(() => import('./pages/landing/Pricing'));
+const HowItWorks = lazy(() => import('./pages/landing/HowItWorks'));
+const FAQPage = lazy(() => import('./pages/landing/FAQ'));
+const PrivacyPage = lazy(() => import('./pages/landing/Privacy'));
+const TermsPage = lazy(() => import('./pages/landing/Terms'));
+const TrialSignup = lazy(() => import('./pages/landing/TrialSignup'));
+const PromotePage = lazy(() => import('./pages/landing/Promote'));
+
+// ── Lazy-loaded Superadmin ───────────────────────────────────────
+const SuperadminDashboard = lazy(() => import('./pages/superadmin/Dashboard'));
+const SuperadminOwners = lazy(() => import('./pages/superadmin/Owners'));
+const SuperadminPlans = lazy(() => import('./pages/superadmin/Plans'));
+const SuperadminRequests = lazy(() => import('./pages/superadmin/Requests'));
+const SuperadminActivities = lazy(() => import('./pages/superadmin/Activities'));
+const SuperadminImpersonation = lazy(() => import('./pages/superadmin/Impersonation'));
+const SuperadminFeedbackList = lazy(() => import('./pages/superadmin/FeedbackList'));
+const SuperadminAdmins = lazy(() => import('./pages/superadmin/Admins'));
+const SuperadminRecycleBin = lazy(() => import('./pages/superadmin/RecycleBin'));
+
+// ── Lazy-loaded Owner ────────────────────────────────────────────
+const OwnerDashboard = lazy(() => import('./pages/owner/Dashboard'));
+const OwnerCustomers = lazy(() => import('./pages/owner/Customers'));
+const OwnerFarmers = lazy(() => import('./pages/owner/Farmers'));
+const OwnerStaff = lazy(() => import('./pages/owner/Staff'));
+const OwnerLogs = lazy(() => import('./pages/owner/Logs'));
+const OwnerBilling = lazy(() => import('./pages/owner/Billing'));
+const OwnerWhatsApp = lazy(() => import('./pages/owner/WhatsApp'));
+const OwnerDefaultRate = lazy(() => import('./pages/owner/DefaultRate'));
+const OwnerUpgrade = lazy(() => import('./pages/owner/Upgrade'));
+const OwnerOnboarding = lazy(() => import('./pages/owner/Onboarding'));
+const OwnerDailyCollection = lazy(() => import('./pages/owner/DailyCollection'));
+const OwnerMessageTemplates = lazy(() => import('./pages/owner/MessageTemplates'));
+const FeedbackPage = lazy(() => import('./pages/owner/Feedback'));
+const OwnerShortcuts = lazy(() => import('./pages/owner/Shortcuts'));
+
+// ── Lazy-loaded Staff ────────────────────────────────────────────
+const StaffDelivery = lazy(() => import('./pages/staff/Delivery'));
+
+// ── Lazy-loaded 404 ──────────────────────────────────────────────
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // ── Role helpers ─────────────────────────────────────────────
 const getRoleHome = (role) => {
@@ -324,107 +327,141 @@ const RootRoute = () => {
   return <SignOutGuard><LandingPage /></SignOutGuard>;
 };
 
+const PageLoader = () => (
+  <div style={{
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    fontFamily: 'Inter, sans-serif'
+  }}>
+    <div style={{
+      width: '40px',
+      height: '40px',
+      border: '3px solid #F3F3F3',
+      borderTop: '3px solid #0F62FE',
+      borderRadius: '50%',
+      animation: 'spinLoader 0.8s linear infinite',
+      marginBottom: '16px'
+    }} />
+    <span style={{ fontSize: '14px', color: '#525252', fontWeight: 500 }}>Loading...</span>
+    <style>{`
+      @keyframes spinLoader {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `}</style>
+  </div>
+);
+
 const App = () => {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
-        <ToastProvider>
-          <MarathiProvider>
-            <ImpersonationBanner />
-            <ScrollToTop />
-            <Routes>
-              {/* ── Root URL conditional landing ── */}
-              <Route path="/" element={<RootRoute />} />
+        <ShortcutProvider>
+          <ToastProvider>
+            <MarathiProvider>
+              <ImpersonationBanner />
+              <ScrollToTop />
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* ── Root URL conditional landing ── */}
+                  <Route path="/" element={<RootRoute />} />
 
-              {/* ── Public Landing pages ─────────────────────── */}
-              <Route path="/promote"      element={<SignOutGuard><PromotePage /></SignOutGuard>} />
-              <Route path="/landing"      element={<SignOutGuard><AdsLanding /></SignOutGuard>} />
-              <Route path="/features"     element={<SignOutGuard><FeaturesPage /></SignOutGuard>} />
-              <Route path="/pricing"      element={<SignOutGuard><PricingPage /></SignOutGuard>} />
-              <Route path="/how-it-works" element={<SignOutGuard><HowItWorks /></SignOutGuard>} />
-              <Route path="/faq"          element={<SignOutGuard><FAQPage /></SignOutGuard>} />
-              <Route path="/privacy"      element={<SignOutGuard><PrivacyPage /></SignOutGuard>} />
-              <Route path="/terms"        element={<SignOutGuard><TermsPage /></SignOutGuard>} />
-              <Route path="/start"        element={<SignOutGuard><TrialSignup /></SignOutGuard>} />
+                {/* ── Public Landing pages ─────────────────────── */}
+                <Route path="/promote"      element={<SignOutGuard><PromotePage /></SignOutGuard>} />
+                <Route path="/landing"      element={<SignOutGuard><AdsLanding /></SignOutGuard>} />
+                <Route path="/features"     element={<SignOutGuard><FeaturesPage /></SignOutGuard>} />
+                <Route path="/pricing"      element={<SignOutGuard><PricingPage /></SignOutGuard>} />
+                <Route path="/how-it-works" element={<SignOutGuard><HowItWorks /></SignOutGuard>} />
+                <Route path="/faq"          element={<SignOutGuard><FAQPage /></SignOutGuard>} />
+                <Route path="/privacy"      element={<SignOutGuard><PrivacyPage /></SignOutGuard>} />
+                <Route path="/terms"        element={<SignOutGuard><TermsPage /></SignOutGuard>} />
+                <Route path="/start"        element={<SignOutGuard><TrialSignup /></SignOutGuard>} />
 
-              {/* ── Secure login URLs ─────────────────────── */}
-              <Route path="/securelogin/ownerlogin"  element={<SignOutGuard><OwnerLogin /></SignOutGuard>} />
-              <Route path="/loginto/staffaccess"     element={<SignOutGuard><StaffLogin /></SignOutGuard>} />
-              <Route path="/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login" element={<SignOutGuard><AdminLogin /></SignOutGuard>} />
+                {/* ── Secure login URLs ─────────────────────── */}
+                <Route path="/securelogin/ownerlogin"  element={<SignOutGuard><OwnerLogin /></SignOutGuard>} />
+                <Route path="/loginto/staffaccess"     element={<SignOutGuard><StaffLogin /></SignOutGuard>} />
+                <Route path="/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login" element={<SignOutGuard><AdminLogin /></SignOutGuard>} />
 
-              {/* ── Legacy → 404 ──────────────────────────── */}
-              <Route path="/ownerlogin"  element={<NotFound />} />
-              <Route path="/staffaccess" element={<NotFound />} />
-              <Route path="/app/login"   element={<NotFound />} />
-              <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
-              <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+                {/* ── Legacy → 404 ──────────────────────────── */}
+                <Route path="/ownerlogin"  element={<NotFound />} />
+                <Route path="/staffaccess" element={<NotFound />} />
+                <Route path="/app/login"   element={<NotFound />} />
+                <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+                <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
 
-              {/* ── Superadmin ────────────────────────────── */}
-              <Route path="/app/superadmin" element={
-                <ProtectedRoute allowedRoles={['superadmin']}>
-                  <SuperadminLayout />
-                </ProtectedRoute>
-              }>
-                <Route index element={<SuperadminDashboard />} />
-                <Route path="owners"      element={<SuperadminOwners />} />
-                <Route path="activities"  element={<SuperadminActivities />} />
-                <Route path="plans"       element={<SuperadminPlans />} />
-                <Route path="requests"    element={<SuperadminRequests />} />
-                <Route path="impersonate" element={<SuperadminImpersonation />} />
-                <Route path="feedback"    element={<SuperadminFeedbackList />} />
-                <Route path="admins"      element={<SuperadminAdmins />} />
-                <Route path="recycle-bin" element={<SuperadminRecycleBin />} />
-              </Route>
+                {/* ── Superadmin ────────────────────────────── */}
+                <Route path="/app/superadmin" element={
+                  <ProtectedRoute allowedRoles={['superadmin']}>
+                    <SuperadminLayout />
+                  </ProtectedRoute>
+                }>
+                  <Route index element={<SuperadminDashboard />} />
+                  <Route path="owners"      element={<SuperadminOwners />} />
+                  <Route path="activities"  element={<SuperadminActivities />} />
+                  <Route path="plans"       element={<SuperadminPlans />} />
+                  <Route path="requests"    element={<SuperadminRequests />} />
+                  <Route path="impersonate" element={<SuperadminImpersonation />} />
+                  <Route path="feedback"    element={<SuperadminFeedbackList />} />
+                  <Route path="admins"      element={<SuperadminAdmins />} />
+                  <Route path="recycle-bin" element={<SuperadminRecycleBin />} />
+                </Route>
 
-              {/* ── Owner ─────────────────────────────────── */}
-              <Route path="/app/owner" element={
-                <ProtectedRoute allowedRoles={['owner']}>
-                  <OwnerLayout />
-                </ProtectedRoute>
-              }>
-                <Route index element={<OwnerDashboard />} />
-                <Route path="customers"         element={<OwnerCustomers />} />
-                <Route path="farmers"           element={<OwnerFarmers />} />
-                <Route path="staff"             element={<OwnerStaff />} />
-                <Route path="collection"        element={<OwnerDailyCollection />} />
-                <Route path="logs"              element={<OwnerLogs />} />
-                <Route path="billing"           element={<OwnerBilling />} />
-                <Route path="whatsapp"          element={<OwnerWhatsApp />} />
-                <Route path="default-rate"      element={<OwnerDefaultRate />} />
-                <Route path="upgrade"           element={<OwnerUpgrade />} />
-                <Route path="message-templates" element={<OwnerMessageTemplates />} />
-                <Route path="delivery"          element={<StaffDelivery />} />
-                <Route path="feedback"          element={<FeedbackPage />} />
-              </Route>
+                {/* ── Owner ─────────────────────────────────── */}
+                <Route path="/app/owner" element={
+                  <ProtectedRoute allowedRoles={['owner']}>
+                    <OwnerLayout />
+                  </ProtectedRoute>
+                }>
+                  <Route index element={<OwnerDashboard />} />
+                  <Route path="customers"         element={<OwnerCustomers />} />
+                  <Route path="farmers"           element={<OwnerFarmers />} />
+                  <Route path="staff"             element={<OwnerStaff />} />
+                  <Route path="collection"        element={<OwnerDailyCollection />} />
+                  <Route path="logs"              element={<OwnerLogs />} />
+                  <Route path="billing"           element={<OwnerBilling />} />
+                  <Route path="whatsapp"          element={<OwnerWhatsApp />} />
+                  <Route path="default-rate"      element={<OwnerDefaultRate />} />
+                  <Route path="upgrade"           element={<OwnerUpgrade />} />
+                  <Route path="message-templates" element={<OwnerMessageTemplates />} />
+                  <Route path="delivery"          element={<StaffDelivery />} />
+                  <Route path="feedback"          element={<FeedbackPage />} />
+                  <Route path="shortcuts"         element={<OwnerShortcuts />} />
+                </Route>
 
-              {/* ── Onboarding ────────────────────────────── */}
-              <Route path="/app/owner/onboarding" element={
-                <ProtectedRoute allowedRoles={['owner']}>
-                  <OwnerOnboarding />
-                </ProtectedRoute>
-              } />
+                {/* ── Onboarding ────────────────────────────── */}
+                <Route path="/app/owner/onboarding" element={
+                  <ProtectedRoute allowedRoles={['owner']}>
+                    <OwnerOnboarding />
+                  </ProtectedRoute>
+                } />
 
-              {/* ── Staff ─────────────────────────────────── */}
-              <Route path="/app/staff" element={
-                <ProtectedRoute allowedRoles={['staff']}>
-                  <StaffLayout />
-                </ProtectedRoute>
-              }>
-                <Route index element={<StaffHomeRedirect />} />
-                <Route path="delivery" element={<StaffDelivery />} />
-                <Route path="collection" element={<OwnerDailyCollection />} />
-              </Route>
+                {/* ── Staff ─────────────────────────────────── */}
+                <Route path="/app/staff" element={
+                  <ProtectedRoute allowedRoles={['staff']}>
+                    <StaffLayout />
+                  </ProtectedRoute>
+                }>
+                  <Route index element={<StaffHomeRedirect />} />
+                  <Route path="delivery" element={<StaffDelivery />} />
+                  <Route path="collection" element={<OwnerDailyCollection />} />
+                </Route>
 
-              {/* ── /app root ─────────────────────────────── */}
-              <Route path="/app" element={<AppGate />} />
+                {/* ── /app root ─────────────────────────────── */}
+                <Route path="/app" element={<AppGate />} />
 
-              {/* ── 404 ───────────────────────────────────── */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                {/* ── 404 ───────────────────────────────────── */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </MarathiProvider>
         </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+      </ShortcutProvider>
+    </AuthProvider>
+  </BrowserRouter>
   );
 };
 

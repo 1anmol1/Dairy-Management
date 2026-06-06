@@ -396,6 +396,13 @@ tr:hover td {
   flex: 1;
   min-height: 100vh;
   background: #F4F4F4;
+  transition: margin-left 0.25s ease;
+}
+.app-layout.sidebar-minimized .sidebar {
+  transform: translateX(-240px);
+}
+.app-layout.sidebar-minimized .main-content {
+  margin-left: 0;
 }
 .page-header {
   background: #FFFFFF;

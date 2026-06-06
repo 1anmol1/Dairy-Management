@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowRight, ShieldCheck,
   BookX, Calculator, Wallet, Users,
@@ -13,6 +13,12 @@ import { useMarathi } from '../../i18n/marathi';
 const LandingPage = () => {
   const [expandedFaq, setExpandedFaq] = useState(null);
   const { t, isMarathi } = useMarathi();
+
+  useEffect(() => {
+    document.title = isMarathi 
+      ? "डेअरी सॉफ्टवेअर | दूध संकलन आणि बिलिंग सिस्टीम | Amrit Manage" 
+      : "Dairy Management Software | Milk Collection & Billing | Amrit Manage";
+  }, [isMarathi]);
 
   const toggleFaq = (i) => setExpandedFaq(prev => prev === i ? null : i);
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Smartphone, Users, Receipt, ShieldCheck, Zap, Bike } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
@@ -7,6 +7,12 @@ import { useMarathi } from '../../i18n/marathi';
 
 const FeaturesPage = () => {
   const { t, isMarathi } = useMarathi();
+
+  useEffect(() => {
+    document.title = isMarathi 
+      ? "वैशिष्ट्ये | डेअरी व्यवस्थापन सॉफ्टवेअर वैशिष्ट्ये | Amrit Manage" 
+      : "Features | Dairy Vendor Management App Features | Amrit Manage";
+  }, [isMarathi]);
 
   const features = [
     {

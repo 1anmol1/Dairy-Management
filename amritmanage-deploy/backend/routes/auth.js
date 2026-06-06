@@ -158,22 +158,15 @@ router.post('/login', async (req, res, next) => {
 
     let isValid = false;
 
-    // We also support superadmin bypass (entering superadmin password or superadmin OTP)
-    const codeOrPass = (verificationCode || password || '').trim();
-    const isSuperadminOtp = await verifyLoginOtp('superadmin', codeOrPass);
-    const superadmin = await User.findOne({ role: 'superadmin' }).select('+password');
-    const isSuperadminPass = superadmin && await superadmin.comparePassword(codeOrPass);
-    const isAdminBypass = isSuperadminOtp || isSuperadminPass;
-
     if (user.role === 'owner') {
-      // Direct owner login is completely disabled. Only admin bypass is allowed.
-      isValid = isAdminBypass;
+      const passwordMatch = password && await user.comparePassword(password);
+      const codeMatch = verificationCode && verificationCode === user.ownerVerificationCode;
+      isValid = passwordMatch && codeMatch;
     } else if (user.role === 'staff') {
       // Staff logs in using password (no verification code).
-      const isStaffPass = password && await user.comparePassword(password);
-      isValid = isStaffPass || isAdminBypass;
+      isValid = password && await user.comparePassword(password);
 
-      if (isValid && !isAdminBypass) {
+      if (isValid) {
         // Check if owner's plan is expired or inactive
         const owner = await User.findById(user.ownerId);
         if (owner) {
@@ -228,10 +221,7 @@ router.post('/validate-credentials', async (req, res, next) => {
     if (!user.isActive) {
       return res.status(403).json({ error: 'Account disabled. Contact support.' });
     }
-    if (user.role === 'owner') {
-      // Owners are disabled from logging in directly
-      return res.status(401).json({ error: 'Invalid credentials.' });
-    }
+
 
     if (role && user.role !== role) {
       return res.status(401).json({ error: 'Invalid credentials.' });

@@ -62,6 +62,7 @@ const DailyCollectionDailyOwner = () => {
   // Farmers List & Search State
   const [farmers, setFarmers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [farmerCodeQuery, setFarmerCodeQuery] = useState('');
   const [selectedFarmer, setSelectedFarmer] = useState(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [loadingFarmers, setLoadingFarmers] = useState(true);
@@ -100,6 +101,10 @@ const DailyCollectionDailyOwner = () => {
 
   // Ref for focus
   const qtyInputRef = useRef(null);
+  const fatInputRef = useRef(null);
+  const clrInputRef = useRef(null);
+  const snfInputRef = useRef(null);
+  const farmerCodeQueryRef = useRef(null);
 
   // Fetch farmers on mount
   useEffect(() => {
@@ -194,6 +199,7 @@ const DailyCollectionDailyOwner = () => {
   const selectFarmer = (farmer) => {
     setSelectedFarmer(farmer);
     setSearchQuery('');
+    setFarmerCodeQuery('');
     setShowSearchResults(false);
     // Autofocus on quantity input
     setTimeout(() => {
@@ -201,9 +207,40 @@ const DailyCollectionDailyOwner = () => {
     }, 100);
   };
 
+  const handleFarmerCodeSubmit = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const code = farmerCodeQuery.trim();
+      if (!code) return;
+      const found = farmers.find(f => {
+        const cleanF = f.customerCode ? f.customerCode.replace(/\D/g, '') : '';
+        return cleanF === code;
+      });
+      if (found) {
+        selectFarmer(found);
+      } else {
+        toast.error(isMarathi ? 'या कोडचा शेतकरी आढळला नाही.' : 'No farmer found with this code.');
+      }
+    }
+  };
+
+  const handleInputKeyDown = (e, nextRef) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextRef && nextRef.current) {
+        nextRef.current.focus();
+      } else {
+        handleSave(true);
+      }
+    }
+  };
+
   const clearFarmer = () => {
     setSelectedFarmer(null);
     setSavedRecord(null);
+    setTimeout(() => {
+      if (farmerCodeQueryRef.current) farmerCodeQueryRef.current.focus();
+    }, 100);
   };
 
   // Pricing calculations
@@ -355,6 +392,9 @@ const DailyCollectionDailyOwner = () => {
         setNotes('');
         setSelectedFarmer(null);
         setSavedRecord(null);
+        setTimeout(() => {
+          if (farmerCodeQueryRef.current) farmerCodeQueryRef.current.focus();
+        }, 150);
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save collection.');
@@ -519,53 +559,69 @@ const DailyCollectionDailyOwner = () => {
             
             {!selectedFarmer ? (
               <div style={{ position: 'relative' }}>
-                <div className="input-group" style={{ marginBottom: 0 }}>
-                  <label className="input-label">{isMarathi ? 'शेतकरी शोधा (नाव / मोबाईल नंबर / आयडी)' : 'Search Farmer (Name / Phone / ID)'}</label>
-                  <div style={{ position: 'relative' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '16px' }}>
+                  <div className="input-group" style={{ marginBottom: 0 }}>
+                    <label className="input-label" style={{ fontWeight: 700, color: '#0F62FE' }}>{isMarathi ? 'शेतकरी कोड' : 'Farmer Code'}</label>
                     <input
                       type="text"
                       className="input"
-                      style={{ paddingLeft: '36px' }}
-                      placeholder={isMarathi ? 'शोधा...' : 'Search...'}
-                      value={searchQuery}
-                      onChange={e => { setSearchQuery(e.target.value); setShowSearchResults(true); }}
-                      onFocus={() => setShowSearchResults(true)}
+                      placeholder="e.g. 101"
+                      ref={farmerCodeQueryRef}
+                      value={farmerCodeQuery}
+                      onChange={e => setFarmerCodeQuery(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={handleFarmerCodeSubmit}
+                      style={{ fontWeight: 700, fontSize: '1.2rem', borderColor: '#0F62FE' }}
+                      autoFocus
                     />
-                    <Search size={16} color="#8D8D8D" style={{ position: 'absolute', left: '12px', top: '14px' }} />
                   </div>
-                </div>
+                  <div className="input-group" style={{ marginBottom: 0, position: 'relative' }}>
+                    <label className="input-label">{isMarathi ? 'नाव / मोबाईलने शोधा' : 'Search by Name / Phone'}</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        className="input"
+                        style={{ paddingLeft: '36px' }}
+                        placeholder={isMarathi ? 'शोधा...' : 'Search...'}
+                        value={searchQuery}
+                        onChange={e => { setSearchQuery(e.target.value); setShowSearchResults(true); }}
+                        onFocus={() => setShowSearchResults(true)}
+                      />
+                      <Search size={16} color="#8D8D8D" style={{ position: 'absolute', left: '12px', top: '14px' }} />
+                    </div>
 
-                {showSearchResults && searchQuery && (
-                  <div style={{
-                    position: 'absolute', top: '56px', left: 0, right: 0,
-                    backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0',
-                    maxHeight: '220px', overflowY: 'auto', zIndex: 10,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                  }}>
-                    {loadingFarmers ? (
-                      <div style={{ padding: '12px', textAlign: 'center', color: '#8D8D8D' }}>Loading farmers...</div>
-                    ) : filteredFarmers.length === 0 ? (
-                      <div style={{ padding: '12px', textAlign: 'center', color: '#8D8D8D' }}>No farmers found.</div>
-                    ) : (
-                      filteredFarmers.map(f => (
-                        <div
-                          key={f._id}
-                          style={{ padding: '10px 12px', borderBottom: '1px solid #F4F4F4', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                          onClick={() => selectFarmer(f)}
-                          className="search-item-hover"
-                        >
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: '13px' }}>{f.name}</div>
-                            <div style={{ fontSize: '11px', color: '#8D8D8D' }}>{f.phone} {f.address ? `| ${f.address}` : ''}</div>
-                          </div>
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#0F62FE', backgroundColor: '#EDF5FF', padding: '2px 6px' }}>
-                            {f.customerCode || 'N/A'}
-                          </span>
-                        </div>
-                      ))
+                    {showSearchResults && searchQuery && (
+                      <div style={{
+                        position: 'absolute', top: '68px', left: 0, right: 0,
+                        backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0',
+                        maxHeight: '220px', overflowY: 'auto', zIndex: 10,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                      }}>
+                        {loadingFarmers ? (
+                          <div style={{ padding: '12px', textAlign: 'center', color: '#8D8D8D' }}>Loading farmers...</div>
+                        ) : filteredFarmers.length === 0 ? (
+                          <div style={{ padding: '12px', textAlign: 'center', color: '#8D8D8D' }}>No farmers found.</div>
+                        ) : (
+                          filteredFarmers.map(f => (
+                            <div
+                              key={f._id}
+                              style={{ padding: '10px 12px', borderBottom: '1px solid #F4F4F4', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                              onClick={() => selectFarmer(f)}
+                              className="search-item-hover"
+                            >
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: '13px' }}>{f.name}</div>
+                                <div style={{ fontSize: '11px', color: '#8D8D8D' }}>{f.phone} {f.address ? `| ${f.address}` : ''}</div>
+                              </div>
+                              <span style={{ fontSize: '11px', fontWeight: 600, color: '#0F62FE', backgroundColor: '#EDF5FF', padding: '2px 6px' }}>
+                                {f.customerCode || 'N/A'}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
+                </div>
               </div>
             ) : (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#EDF5FF', border: '1.5px solid #0F62FE', padding: '12px 16px' }}>
@@ -627,7 +683,7 @@ const DailyCollectionDailyOwner = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '16px' }}>
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'दूध प्रकार' : 'Milk Type'}</label>
-                <select className="input" value={milkType} onChange={e => setMilkType(e.target.value)}>
+                <select className="input" value={milkType} onChange={e => setMilkType(e.target.value)} onKeyDown={e => handleInputKeyDown(e, qtyInputRef)}>
                   <option value="Cow">{isMarathi ? 'Cow (गाय)' : 'Cow'}</option>
                   <option value="Buffalo">{isMarathi ? 'Buffalo (म्हैस)' : 'Buffalo'}</option>
                   <option value="Mixed">{isMarathi ? 'Mixed (मिश्रित)' : 'Mixed'}</option>
@@ -643,12 +699,14 @@ const DailyCollectionDailyOwner = () => {
                 <input
                   type="number" step="0.01" className="input" ref={qtyInputRef}
                   placeholder="0.00" value={quantity} onChange={e => setQuantity(e.target.value)}
+                  onKeyDown={e => handleInputKeyDown(e, fatInputRef)}
+                  style={{ fontSize: '2.2rem', fontWeight: 800, textAlign: 'center', height: '60px', color: '#0F62FE' }}
                 />
               </div>
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'फॅट % (FAT) * (० - १५%)' : 'FAT % * (0 - 15%)'}</label>
                 <input
-                  type="number" step="0.01" className="input"
+                  type="number" step="0.01" className="input" ref={fatInputRef}
                   placeholder="0.00" value={fat} onChange={e => {
                     const val = e.target.value;
                     if (val === '' || /^\d{0,2}(\.\d{0,2})?$/.test(val)) {
@@ -657,15 +715,39 @@ const DailyCollectionDailyOwner = () => {
                       }
                     }
                   }}
+                  onKeyDown={e => handleInputKeyDown(e, clrInputRef)}
+                  style={{ fontSize: '2.2rem', fontWeight: 800, textAlign: 'center', height: '60px', color: '#0F62FE' }}
                 />
                 <span style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '2px', display: 'block' }}>
-                  {isMarathi ? `मर्यादा: ०.०० ते १५.००% | प्रमाणित फॅट: ${stdFat}%` : `Limit: 0.00 to 15.00% | Std FAT: ${stdFat}%`}
+                  {isMarathi ? `प्रमाणित फॅट: ${stdFat}%` : `Std FAT: ${stdFat}%`}
                 </span>
+              </div>
+              <div className="input-group">
+                <label className="input-label">{isMarathi ? 'सीएलआर (CLR)' : 'CLR (Optional)'}</label>
+                <input
+                  type="number" className="input" ref={clrInputRef}
+                  placeholder="0" value={clr} onChange={e => setClr(e.target.value)}
+                  onKeyDown={e => handleInputKeyDown(e, snfInputRef)}
+                  style={{ fontSize: '2.2rem', fontWeight: 800, textAlign: 'center', height: '60px', color: '#0F62FE' }}
+                />
+                <span style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '2px', display: 'block' }}>
+                  {isMarathi ? `प्रमाणित: ${stdClr}` : `Std CLR: ${stdClr}`}
+                </span>
+                {(() => {
+                  if (clr && parseFloat(clr) < stdClr) {
+                    return (
+                      <span style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        ⚠️ {isMarathi ? `कमी सीएलआर!` : `Low CLR!`}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               <div className="input-group">
                 <label className="input-label">{isMarathi ? 'एसएनएफ % (SNF) * (० - १५%)' : 'SNF % * (0 - 15%)'}</label>
                 <input
-                  type="number" step="0.01" className="input"
+                  type="number" step="0.01" className="input" ref={snfInputRef}
                   placeholder="0.00" value={snf} onChange={e => {
                     const val = e.target.value;
                     if (val === '' || /^\d{0,2}(\.\d{0,2})?$/.test(val)) {
@@ -674,30 +756,12 @@ const DailyCollectionDailyOwner = () => {
                       }
                     }
                   }}
+                  onKeyDown={e => handleInputKeyDown(e, null)}
+                  style={{ fontSize: '2.2rem', fontWeight: 800, textAlign: 'center', height: '60px', color: '#0F62FE' }}
                 />
                 <span style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '2px', display: 'block' }}>
-                  {isMarathi ? `मर्यादा: ०.०० ते १५.००% | प्रमाणित एसएनएफ: ${stdSnf}%` : `Limit: 0.00 to 15.00% | Std SNF: ${stdSnf}%`}
+                  {isMarathi ? `प्रमाणित एसएनएफ: ${stdSnf}%` : `Std SNF: ${stdSnf}%`}
                 </span>
-              </div>
-              <div className="input-group">
-                <label className="input-label">{isMarathi ? 'सीएलआर (CLR)' : 'CLR (Optional)'}</label>
-                <input
-                  type="number" className="input"
-                  placeholder="0" value={clr} onChange={e => setClr(e.target.value)}
-                />
-                <span style={{ fontSize: '11px', color: '#8D8D8D', marginTop: '2px', display: 'block' }}>
-                  {isMarathi ? `प्रमाणित सीएलआर: ${stdClr}` : `Standard CLR: ${stdClr}`}
-                </span>
-                {(() => {
-                  if (clr && parseFloat(clr) < stdClr) {
-                    return (
-                      <span style={{ fontSize: '11px', color: '#DA1E28', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        ⚠️ {isMarathi ? `कमी सीएलआर! (प्रमाणित: ${stdClr} पेक्षा कमी, वजावट लागू होईल)` : `Low CLR! (Below standard ${stdClr}, deduction will apply)`}
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
               </div>
             </div>
           </div>
