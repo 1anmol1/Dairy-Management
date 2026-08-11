@@ -19,6 +19,10 @@ const SuperadminLayout = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [showPwModal, setShowPwModal] = useState(false);
 
+  React.useEffect(() => {
+    document.title = 'Amrit manage';
+  }, []);
+
   const handleLogout = () => {
     logout();
     navigate('/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login');

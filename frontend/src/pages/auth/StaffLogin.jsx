@@ -98,6 +98,7 @@ const StaffLoginForm = () => {
       navigate('/app/staff');
     } catch (err) {
       setError(err);
+      setPassword('');
     } finally {
       setLoading(false);
     }
@@ -125,7 +126,7 @@ const StaffLoginForm = () => {
             <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8D8D8D' }} />
             <input type={showPass ? 'text' : 'password'} className="input" style={{ paddingLeft: '38px', paddingRight: '44px' }} placeholder="" value={password} onChange={e => { setPassword(e.target.value); clearError(); }} autoComplete="off" />
             <button type="button" onClick={() => setShowPass(!showPass)} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#8D8D8D', padding: '4px' }}>
-              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPass ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
           </div>
         </div>

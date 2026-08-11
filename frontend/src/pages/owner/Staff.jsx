@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, UserX, UserCheck, KeyRound, RefreshCw, ChevronDown, ChevronUp, X, Pencil } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Plus, UserX, UserCheck, KeyRound, RefreshCw, ChevronDown, ChevronUp, X, Pencil, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
@@ -265,11 +265,16 @@ const AddStaffModal = ({ onClose, onCreated }) => {
   const [form, setForm] = useState({ name: '', phone: '', password: '' });
   const [permissions, setPermissions] = useState(['milk_delivery']);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const toast = useToast();
   const { isMarathi } = useMarathi();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (form.phone.length < 10) {
+      toast.error(isMarathi ? 'फोन नंबर १० अंकी असणे आवश्यक आहे.' : 'Phone number must be 10 digits.');
+      return;
+    }
     setLoading(true);
     try {
       await api.post('/owner/staff', { ...form, permissions });
@@ -339,15 +344,22 @@ const AddStaffModal = ({ onClose, onCreated }) => {
         </p>
         <form onSubmit={handleSubmit}>
           {[
-            { key: 'name', label: isMarathi ? 'पूर्ण नाव' : 'Full Name', type: 'text', placeholder: isMarathi ? 'सुरेश कुमार' : 'Suresh Kumar' },
-            { key: 'phone', label: isMarathi ? 'फोन नंबर' : 'Phone Number', type: 'tel', placeholder: '9876543210' },
+            { key: 'name', label: isMarathi ? 'पूर्ण नाव' : 'Full Name', type: 'text', placeholder: isMarathi ? 'तुमचे पूर्ण नाव प्रविष्ट करा' : 'Enter your full name' },
+            { key: 'phone', label: isMarathi ? 'फोन नंबर' : 'Phone Number', type: 'tel', placeholder: isMarathi ? 'तुमचा १० अंकी फोन नंबर प्रविष्ट करा' : 'Enter your 10-digit phone number' },
             { key: 'password', label: isMarathi ? 'पासवर्ड' : 'Password', type: 'password', placeholder: isMarathi ? 'किमान ६ अक्षरे' : 'Min 6 characters' }
           ].map(f => (
             <div key={f.key} className="input-group">
               <label className="input-label">{f.label}</label>
-              <input type={f.type} className="input" placeholder={f.placeholder}
-                value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
-                required {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
+              <div style={{ position: 'relative' }}>
+                <input type={f.key === 'password' && showPassword ? 'text' : f.type} className="input" placeholder={f.placeholder}
+                  value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
+                  required {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
+                {f.key === 'password' && (
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#8D8D8D' }}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
 
@@ -418,11 +430,16 @@ const EditStaffModal = ({ member, onClose, onUpdated }) => {
   });
   const [permissions, setPermissions] = useState(member.permissions || ['milk_delivery']);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const toast = useToast();
   const { isMarathi } = useMarathi();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (form.phone.length < 10) {
+      toast.error(isMarathi ? 'फोन नंबर १० अंकी असणे आवश्यक आहे.' : 'Phone number must be 10 digits.');
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -485,15 +502,22 @@ const EditStaffModal = ({ member, onClose, onUpdated }) => {
         </p>
         <form onSubmit={handleSubmit}>
           {[
-            { key: 'name', label: isMarathi ? 'पूर्ण नाव' : 'Full Name', type: 'text', placeholder: isMarathi ? 'सुरेश कुमार' : 'Suresh Kumar' },
-            { key: 'phone', label: isMarathi ? 'फोन नंबर' : 'Phone Number', type: 'tel', placeholder: '9876543210' },
+            { key: 'name', label: isMarathi ? 'पूर्ण नाव' : 'Full Name', type: 'text', placeholder: isMarathi ? 'तुमचे पूर्ण नाव प्रविष्ट करा' : 'Enter your full name' },
+            { key: 'phone', label: isMarathi ? 'फोन नंबर' : 'Phone Number', type: 'tel', placeholder: isMarathi ? 'तुमचा १० अंकी फोन नंबर प्रविष्ट करा' : 'Enter your 10-digit phone number' },
             { key: 'password', label: isMarathi ? 'नवीन पासवर्ड (बदलायचा असल्यास प्रविष्ट करा)' : 'New Password (leave blank to keep current)', type: 'password', placeholder: isMarathi ? 'किमान ६ अक्षरे' : 'Min 6 characters' }
           ].map(f => (
             <div key={f.key} className="input-group">
               <label className="input-label">{f.label}</label>
-              <input type={f.type} className="input" placeholder={f.placeholder}
-                value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
-                required={f.key !== 'password'} {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
+              <div style={{ position: 'relative' }}>
+                <input type={f.key === 'password' && showPassword ? 'text' : f.type} className="input" placeholder={f.placeholder}
+                  value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: f.key === 'phone' ? e.target.value.replace(/[^0-9]/g, '') : e.target.value }))}
+                  required={f.key !== 'password'} {...(f.key === 'phone' ? { inputMode: 'numeric', maxLength: 10 } : {})} />
+                {f.key === 'password' && (
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: '12px', top: '10px', background: 'none', border: 'none', cursor: 'pointer', color: '#8D8D8D' }}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
 

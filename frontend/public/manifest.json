@@ -1,6 +1,6 @@
 {
-  "name": "Amrit Manage",
-  "short_name": "Amrit",
+  "name": "Amritmanage",
+  "short_name": "Amritmanage",
   "description": "Dairy Business Management — Record deliveries, generate bills, track payments.",
   "start_url": "/app",
   "display": "standalone",

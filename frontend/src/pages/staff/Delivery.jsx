@@ -36,6 +36,17 @@ const Delivery = () => {
     setFocusedIndex(-1);
   }, [search]);
 
+  const filtered = customers.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.phone && c.phone.includes(search)) ||
+    (c.customerCode && c.customerCode.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const deliveredCount = filtered.filter(c => !!c[activeSlot]).length;
+  const slotPendingCount = filtered.length - deliveredCount;
+  const morningDone = filtered.filter(c => !!c.morning).length;
+  const eveningDone = filtered.filter(c => !!c.evening).length;
+
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       if (document.activeElement.tagName === 'INPUT' && document.activeElement.id !== 'delivery-search') {
@@ -158,16 +169,7 @@ const Delivery = () => {
     });
   };
 
-  const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search) ||
-    (c.customerCode && c.customerCode.toLowerCase().includes(search.toLowerCase()))
-  );
 
-  const deliveredCount = filtered.filter(c => !!c[activeSlot]).length;
-  const slotPendingCount = filtered.length - deliveredCount;
-  const morningDone = filtered.filter(c => !!c.morning).length;
-  const eveningDone = filtered.filter(c => !!c.evening).length;
 
   return (
     <div style={{ maxWidth: '640px', margin: '0 auto', padding: '16px' }}>

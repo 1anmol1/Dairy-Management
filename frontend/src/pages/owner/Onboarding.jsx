@@ -341,6 +341,10 @@ const Onboarding = () => {
   const [page, setPage] = useState(1); // 1 or 2
   const [finishing, setFinishing] = useState(false);
 
+  React.useEffect(() => {
+    document.title = 'Amrit manage';
+  }, []);
+
   const handleFinish = async () => {
     setFinishing(true);
     try {

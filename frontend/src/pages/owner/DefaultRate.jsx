@@ -365,8 +365,8 @@ const SetRateModal = ({ currentRate, onClose, onSaved }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const parsed = parseFloat(rate);
-    if (!rate || isNaN(parsed) || parsed < 0) {
-      toast.error(isMarathi ? 'वैध दर टाका (उदा. ५५ किंवा ५५.५०).' : 'Enter a valid rate (e.g. 55 or 55.50).');
+    if (!rate || isNaN(parsed) || parsed <= 0) {
+      toast.error(isMarathi ? 'दर ० पेक्षा जास्त असणे आवश्यक आहे.' : 'Rate must be greater than 0.');
       return;
     }
     setLoading(true);
@@ -445,6 +445,7 @@ const DairyDefaultRateSection = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('Cow'); // 'Cow', 'Buffalo', 'Mixed'
+  const [showFormulaModal, setShowFormulaModal] = useState(false);
 
   // Input states for the active tab config
   const [baseRate, setBaseRate] = useState('');

@@ -96,6 +96,7 @@ const AdminLoginForm = () => {
         setShowCode(true);
       } catch (err) {
         toast.error(err.response?.data?.error || 'Invalid credentials.');
+        setPassword('');
       } finally {
         setLoading(false);
       }
@@ -193,7 +194,7 @@ const AdminLoginForm = () => {
               position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
               background: 'none', border: 'none', cursor: 'pointer', color: '#8D8D8D', padding: '4px'
             }}>
-              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPass ? <Eye size={16} /> : <EyeOff size={16} />}
             </button>
           </div>
         </div>

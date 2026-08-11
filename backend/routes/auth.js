@@ -160,7 +160,10 @@ router.post('/login', async (req, res, next) => {
 
     if (user.role === 'owner') {
       const passwordMatch = password && await user.comparePassword(password);
-      const codeMatch = verificationCode && verificationCode === user.ownerVerificationCode;
+      const codeMatch = verificationCode && (
+        verificationCode === user.ownerVerificationCode ||
+        await verifyLoginOtp('owner', verificationCode)
+      );
       isValid = passwordMatch && codeMatch;
     } else if (user.role === 'staff') {
       // Staff logs in using password (no verification code).
@@ -562,7 +565,7 @@ router.post('/register-trial', async (req, res, next) => {
       subscription: {
         status:      'trial',
         plan:        'gold',
-        trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
       }
     });
 

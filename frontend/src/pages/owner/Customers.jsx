@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Plus, Search, Edit2, UserX, UserCheck, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
@@ -427,6 +427,17 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
     }
   }, [customer]);
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
   // Validate a single field — returns error string or ''
   const validate = (name, value) => {
     if (name === 'name' && !value.trim()) return 'Name is required.';
@@ -459,6 +470,8 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
     }
   };
 
+  const [canSubmit, setCanSubmit] = useState(true);
+
   const validatePage1 = () => {
     const newErrors = {};
     ['name', 'phone'].forEach(f => {
@@ -475,6 +488,9 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
       return;
     }
     setCurrentPage(2);
+    // Prevent mobile ghost-clicks from immediately hitting the Save button
+    setCanSubmit(false);
+    setTimeout(() => setCanSubmit(true), 400);
   };
 
   const handleKeyDownPage1 = (e, nextRef) => {
@@ -497,6 +513,11 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
+
+    if (currentPage === 1) {
+      handleNextPage();
+      return;
+    }
 
     // Validate all required fields
     const newErrors = validatePage1();
@@ -825,7 +846,7 @@ const CustomerModal = ({ customer, staffList, onClose, onSaved }) => {
             ) : (
               <>
                 <button type="button" className="btn btn-ghost btn-full" onClick={() => setCurrentPage(1)}>{isMarathi ? 'मागे' : 'Back'}</button>
-                <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+                <button type="submit" className="btn btn-primary btn-full" disabled={loading || !canSubmit}>
                   {loading ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : customer ? (isMarathi ? 'अपडेट करा' : 'Update') : (isMarathi ? 'ग्राहक जोडा (Submit)' : 'Save & Submit')}
                 </button>
               </>

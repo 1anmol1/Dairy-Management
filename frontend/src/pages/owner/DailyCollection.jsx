@@ -1443,6 +1443,10 @@ const DailyCollectionMilkSupplier = () => {
         : `Staff quotas (${totalAssigned}L) exceed total collection (${totalL}L).`);
       return;
     }
+    if (procurementRate && (isNaN(parseFloat(procurementRate)) || parseFloat(procurementRate) <= 0)) {
+      toast.error(isMarathi ? 'कृपया वैध खरेदी दर टाका.' : 'Please enter a valid procurement rate.');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -1711,8 +1715,8 @@ const DailyCollectionMilkSupplier = () => {
                   </div>
                   <div className="input-group">
                     <label className="input-label">{isMarathi ? `खरेदी दर (₹/${L})` : 'Procurement Rate (₹/L)'}</label>
-                    <input type="number" className="input" min="0" step="0.5" placeholder={isMarathi ? 'उदा. ३५' : 'e.g. 35'}
-                      value={procurementRate} onChange={e => setProcurementRate(e.target.value)} />
+                    <input type="text" className="input" placeholder={isMarathi ? 'उदा. ३५' : 'e.g. 35'}
+                      value={procurementRate} onChange={e => setProcurementRate(e.target.value.replace(/[^0-9.]/g, ''))} />
                   </div>
                 </div>
 

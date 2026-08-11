@@ -855,7 +855,7 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
     if (sub.useCustomEnd && sub.customEndDate) return sub.customEndDate;
     const start = new Date(sub.startDate);
     if (sub.status === 'trial') {
-      start.setDate(start.getDate() + 7);
+      start.setDate(start.getDate() + 14);
       return start.toISOString().split('T')[0];
     }
     if (sub.billingCycle === 'yearly') {
@@ -1096,7 +1096,7 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
                 <label className="input-label">Subscription Status</label>
                 <select className="input" value={sub.status}
                   onChange={e => setSub(s => ({ ...s, status: e.target.value }))}>
-                  <option value="trial">Trial (7 days free)</option>
+                  <option value="trial">Trial (14 days free)</option>
                   <option value="active">Active (paid)</option>
                   <option value="inactive">Inactive</option>
                 </select>
@@ -1195,7 +1195,7 @@ export const AddOwnerModal = ({ onClose, onCreated, prefillData }) => {
                     fontSize: '14px', color: '#525252'
                   }}>
                     {endDate} <span style={{ marginLeft: '8px', fontSize: '11px', color: '#8D8D8D' }}>
-                      (auto-computed from {sub.status === 'trial' ? '7-day trial' : sub.billingCycle === 'yearly' ? '1 year' : `${sub.months} month${sub.months > 1 ? 's' : ''}`})
+                      (auto-computed from {sub.status === 'trial' ? '14-day trial' : sub.billingCycle === 'yearly' ? '1 year' : `${sub.months} month${sub.months > 1 ? 's' : ''}`})
                     </span>
                   </div>
                 )}

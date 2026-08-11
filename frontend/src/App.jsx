@@ -107,6 +107,11 @@ const PrivateAccessPortal = () => (
 const AppGate = () => {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    document.title = 'Amrit manage';
+  }, []);
+
   if (loading) return null;
 
   if (user) {

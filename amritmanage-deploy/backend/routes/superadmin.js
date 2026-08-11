@@ -144,7 +144,7 @@ router.post('/owners', checkPermission('owners'), async (req, res, next) => {
       end = new Date(endDate);
     } else if (subscriptionStatus === 'trial') {
       end = new Date(start);
-      end.setDate(end.getDate() + 7);
+      end.setDate(end.getDate() + 14);
     } else if (billingCycle === 'yearly') {
       end = new Date(start);
       end.setFullYear(end.getFullYear() + 1);

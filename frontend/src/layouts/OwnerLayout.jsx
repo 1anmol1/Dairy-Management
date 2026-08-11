@@ -33,6 +33,10 @@ const OwnerLayout = () => {
   const [showRenewalModal, setShowRenewalModal] = useState(false);
   const toast = useToast();
 
+  useEffect(() => {
+    document.title = 'Amrit manage';
+  }, []);
+
   const handleLogout = () => {
     logout();
     navigate('/securelogin/ownerlogin');

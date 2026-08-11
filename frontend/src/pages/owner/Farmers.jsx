@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Search, Edit2, UserX, UserCheck, RefreshCw, ChevronDown, ChevronUp, AlertCircle, Eye, EyeOff, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
@@ -350,6 +350,19 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
     }
   }, [farmer]);
 
+  const [canSubmit, setCanSubmit] = useState(true);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
   const handleChange = (name, val) => {
     let cleanVal = val;
     if (name === 'customerCode') {
@@ -378,6 +391,9 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
       return;
     }
     setCurrentPage(2);
+    // Prevent mobile ghost-clicks from immediately hitting the Save button
+    setCanSubmit(false);
+    setTimeout(() => setCanSubmit(true), 400);
   };
 
   const handleKeyDownPage1 = (e, nextRef) => {
@@ -400,6 +416,12 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
+
+    if (currentPage === 1) {
+      handleNextPage();
+      return;
+    }
+
     const err = validatePage1();
     if (Object.keys(err).length > 0) {
       setErrors(err);
@@ -581,7 +603,7 @@ export const FarmerModal = ({ farmer, onClose, onSaved }) => {
                 <button type="button" className="btn btn-ghost btn-full" onClick={() => setCurrentPage(1)} disabled={submitting}>
                   {isMarathi ? 'मागे' : 'Back'}
                 </button>
-                <button type="submit" className="btn btn-primary btn-full" disabled={submitting}>
+                <button type="submit" className="btn btn-primary btn-full" disabled={submitting || !canSubmit}>
                   {submitting ? (isMarathi ? 'जतन होत आहे...' : 'Saving...') : (isMarathi ? 'जतन करा (Submit)' : 'Save & Submit')}
                 </button>
               </>

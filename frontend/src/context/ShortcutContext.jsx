@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext';
 const ShortcutContext = createContext(null);
 
 const DEFAULT_SHORTCUTS = {
-  closeModal: { key: 'c', label: 'Close Modal', labelMr: 'मोडल बंद करा' },
+  closeModal: { key: 'Escape', label: 'Close Modal', labelMr: 'मोडल बंद करा' },
   addRecord: { key: '+', label: 'Add Farmer / Customer', labelMr: 'शेतकरी / ग्राहक जोडा' },
   nextPage: { key: 'ArrowDown', label: 'Next Page (Sidebar)', labelMr: 'पुढील पान (साइडबार)' },
   prevPage: { key: 'ArrowUp', label: 'Previous Page (Sidebar)', labelMr: 'मागील पान (साइडबार)' },
@@ -24,6 +24,10 @@ export const ShortcutProvider = ({ children }) => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        // Migrate old default 'c' to 'Escape'
+        if (parsed.closeModal && parsed.closeModal.key === 'c') {
+          parsed.closeModal.key = 'Escape';
+        }
         // Merge in case we added new defaults later
         return { ...DEFAULT_SHORTCUTS, ...parsed };
       } catch (e) {

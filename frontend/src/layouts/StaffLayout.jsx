@@ -13,6 +13,10 @@ const StaffLayout = () => {
   const { t, isMarathi } = useMarathi();
   const [profileOpen, setProfileOpen] = useState(false);
 
+  React.useEffect(() => {
+    document.title = 'Amrit manage';
+  }, []);
+
   const handleLogout = () => {
     logout();
     navigate('/loginto/staffaccess');

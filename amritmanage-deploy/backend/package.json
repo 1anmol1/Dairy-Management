@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:prod": "pm2 start ecosystem.config.js",
     "dev": "nodemon server.js",
     "postinstall": "echo 'Skipping browser download for shared hosting configuration'",
     "build": "echo 'No build step required'"

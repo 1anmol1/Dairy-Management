@@ -104,7 +104,7 @@ const authorize = (...roles) => {
 const requireActiveSubscription = async (req, res, next) => {
   try {
     const user = req.user;
-    if (user.role === 'superadmin') return next();
+    if (user.role === 'superadmin' || user.impersonatedBy === 'superadmin') return next();
 
     // For staff, use cached owner lookup to avoid DB hit on every request
     let owner = user;

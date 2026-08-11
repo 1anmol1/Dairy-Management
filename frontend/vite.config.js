@@ -13,6 +13,8 @@ export default defineConfig({
         manualChunks: {
           // React core dependencies (separated for long-term browser caching)
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-lucide': ['lucide-react'],
+          'vendor-axios': ['axios'],
         }
       }
     }

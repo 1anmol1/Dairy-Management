@@ -11,7 +11,7 @@
  *   {{slot}}          — morning / evening
  *   {{date}}          — today's date
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Plus, Edit2, Trash2, CheckCircle, Copy, BookOpen, Lock, Search, X, AlertCircle, FileText, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
@@ -500,7 +500,7 @@ const SmartMessageBuilder = ({ onSave, ownerPhone }) => {
         <div style={{ fontSize: '11px', fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
           {isMr ? 'संदेश प्रकार' : 'Message Type'}
         </div>
-        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingBottom: '4px' }}>
           {MESSAGE_TYPES.map(t => {
             const meta = TYPE_LABELS[t.type] || TYPE_LABELS.custom;
             const isSelected = selectedType === t.type;
@@ -673,7 +673,7 @@ const TemplateForm = ({ initial, onSave, onCancel, ownerPhone }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
         <div className="input-group" style={{ marginBottom: 0 }}>
           <label className="input-label">{isMr ? 'टेम्पलेटचे नाव *' : 'Template Name *'}</label>
           <input type="text" className="input" placeholder={isMr ? 'उदा. सकाळचे वितरण' : 'e.g. Morning Delivery'}
@@ -929,7 +929,7 @@ const MessageTemplates = () => {
 
             {/* Gold default template — read-only */}
             <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0', padding: '16px 20px', borderLeft: '4px solid #24A148', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontWeight: 700, fontSize: '15px' }}>{GOLD_DEFAULT_TEMPLATE.name}</span>
                   <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', backgroundColor: '#DEFBE6', color: '#0E6027', textTransform: 'uppercase' }}>{isMarathi ? 'डिफॉल्ट' : 'DEFAULT'}</span>
@@ -990,7 +990,7 @@ const MessageTemplates = () => {
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0043CE', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <BookOpen size={14} /> {isMarathi ? 'उपलब्ध व्हेरिएबल्स' : 'Available Variables'}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
                 {Object.keys(VAR_MAP).map(key => {
                   const getVarDesc = (k, isMr) => {
                     switch (k) {
@@ -1102,7 +1102,7 @@ const MessageTemplates = () => {
                             padding: '16px 20px',
                             borderLeft: `4px solid ${typeMeta.color}`
                           }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span style={{ fontWeight: 700, fontSize: '15px' }}>{tmpl.name}</span>
                                 {tmpl.isDefault && (
