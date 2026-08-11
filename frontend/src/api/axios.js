@@ -50,10 +50,10 @@ api.interceptors.response.use(
       localStorage.removeItem('amrit_token');
       localStorage.removeItem('amrit_user');
 
-      // Prevent redirect loops if already on login
-      const isAuthPage = window.location.pathname.includes('/login');
+      // Prevent redirect loops if already on root (login)
+      const isAuthPage = window.location.pathname === '/';
       if (hadToken && !isAuthPage) {
-        window.location.href = '/login';
+        window.location.href = '/';
       }
     }
     return Promise.reject(err);

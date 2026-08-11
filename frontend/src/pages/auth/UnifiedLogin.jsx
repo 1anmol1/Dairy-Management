@@ -67,15 +67,22 @@ const UnifiedLogin = () => {
   const [showPass,  setShowPass]    = useState(false);
   
   const [devAccounts, setDevAccounts] = useState({ owners: [], staff: [] });
-  const [serverStatus, setServerStatus] = useState('waking');
-  const [wakeTimer, setWakeTimer] = useState(60);
+  const [serverStatus, setServerStatus] = useState('checking'); // checking, waking, online, hidden, error
+  const [wakeTimer, setWakeTimer] = useState(0);
 
   React.useEffect(() => {
     let isMounted = true;
+    let timerInterval;
     
-    const timerInterval = setInterval(() => {
-      setWakeTimer(t => t > 0 ? t - 1 : 0);
-    }, 1000);
+    // Only show "waking" UI if the server takes longer than 1.5 seconds to respond
+    const slowBootTimeout = setTimeout(() => {
+      if (isMounted) {
+        setServerStatus(prev => prev === 'checking' ? 'waking' : prev);
+        timerInterval = setInterval(() => {
+          setWakeTimer(t => t + 1);
+        }, 1000);
+      }
+    }, 1500);
 
     const checkServer = async () => {
       try {
@@ -83,10 +90,16 @@ const UnifiedLogin = () => {
         if (isMounted) {
           setDevAccounts(res.data);
           setServerStatus('online');
+          clearTimeout(slowBootTimeout);
           clearInterval(timerInterval);
+          
+          setTimeout(() => {
+            if (isMounted) setServerStatus('hidden');
+          }, 3000);
         }
       } catch (err) {
         if (isMounted) {
+          setServerStatus(prev => prev === 'checking' ? 'waking' : prev);
           setTimeout(checkServer, 5000); // Keep polling every 5s until awake
         }
       }
@@ -96,6 +109,7 @@ const UnifiedLogin = () => {
 
     return () => {
       isMounted = false;
+      clearTimeout(slowBootTimeout);
       clearInterval(timerInterval);
     };
   }, []);

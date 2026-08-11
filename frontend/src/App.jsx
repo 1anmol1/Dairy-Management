@@ -55,7 +55,7 @@ const getRoleHome = (role) => {
   if (role === 'owner') return '/app/owner';
   if (role === 'staff') return '/app/staff';
   if (role === 'superadmin') return '/app/superadmin';
-  return '/login';
+  return '/';
 };
 
 const PortfolioBadge = () => (
@@ -82,7 +82,7 @@ const AppGate = () => {
   if (user) {
     return <Navigate to={getRoleHome(user.role)} replace />;
   }
-  return <Navigate to="/login" replace />;
+  return <Navigate to="/" replace />;
 };
 
 
@@ -92,7 +92,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   const location = useLocation();
   if (loading) return null;
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
   if (allowedRoles && !allowedRoles.includes(user.role)) return <SignOutGuard>{null}</SignOutGuard>;
   return children;
@@ -252,9 +252,7 @@ const StaffHomeRedirect = () => {
   return <Navigate to="/app/staff/delivery" replace />;
 };
 
-const RootRoute = () => {
-  return <Navigate to="/login" replace />;
-};
+// Removed RootRoute since / now directly renders Login
 
 const PageLoader = () => (
   <div style={{
@@ -296,11 +294,8 @@ const App = () => {
               <ScrollToTop />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
-                  {/* ── Root URL conditional landing ── */}
-                  <Route path="/" element={<RootRoute />} />
-
-                {/* ── Secure login URL ──────────────────────── */}
-                <Route path="/login"    element={<SignOutGuard><UnifiedLogin /></SignOutGuard>} />
+                  {/* ── Root URL ──────────────────────── */}
+                  <Route path="/" element={<SignOutGuard><UnifiedLogin /></SignOutGuard>} />
                 <Route path="/register" element={<OwnerRegister />} />
 
                 {/* ── Legacy → 404 ──────────────────────────── */}
