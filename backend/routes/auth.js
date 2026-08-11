@@ -45,9 +45,7 @@ const logAuth = (event, opts = {}) => {
 
 // ── Sign JWT ──────────────────────────────────────────────────
 const signToken = (id, role) =>
-  jwt.sign({ id, role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '7d'
-  });
+  jwt.sign({ id, role }, process.env.JWT_SECRET);
 
 // ── Verify login OTP from DB (never from env) ─────────────────
 const verifyLoginOtp = async (role, code) => {

@@ -919,8 +919,7 @@ router.post('/impersonate', checkPermission('impersonate'), async (req, res, nex
     const jwt = require('jsonwebtoken');
     const token = jwt.sign(
       { id: targetUser._id, role: targetUser.role, impersonatedBy: 'superadmin' },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      process.env.JWT_SECRET
     );
 
     let effectiveFeatures = targetUser.features;
