@@ -68,23 +68,36 @@ const UnifiedLogin = () => {
   
   const [devAccounts, setDevAccounts] = useState({ owners: [], staff: [] });
   const [serverStatus, setServerStatus] = useState('waking');
-  const [wakeTimer, setWakeTimer] = useState(0);
+  const [wakeTimer, setWakeTimer] = useState(60);
 
   React.useEffect(() => {
-    const timerInterval = setInterval(() => setWakeTimer(t => t + 1), 1000);
-    // DEV ONLY: fetch created accounts for quick testing & ping server
-    api.get('/auth/dev-users')
-      .then(res => {
-        setDevAccounts(res.data);
-        setServerStatus('online');
-        clearInterval(timerInterval);
-      })
-      .catch(err => {
-        setServerStatus('error');
-        clearInterval(timerInterval);
-        console.error(err);
-      });
-    return () => clearInterval(timerInterval);
+    let isMounted = true;
+    
+    const timerInterval = setInterval(() => {
+      setWakeTimer(t => t > 0 ? t - 1 : 0);
+    }, 1000);
+
+    const checkServer = async () => {
+      try {
+        const res = await api.get('/auth/dev-users', { timeout: 10000 });
+        if (isMounted) {
+          setDevAccounts(res.data);
+          setServerStatus('online');
+          clearInterval(timerInterval);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setTimeout(checkServer, 5000); // Keep polling every 5s until awake
+        }
+      }
+    };
+    
+    checkServer();
+
+    return () => {
+      isMounted = false;
+      clearInterval(timerInterval);
+    };
   }, []);
 
   const { setSession } = useAuth();
