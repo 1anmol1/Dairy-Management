@@ -401,7 +401,7 @@ const previewMessage = (body, ownerPhone, language) => {
     .replace(/₹?{{balance}}/g, formatAmount('400'))
     .replace(/₹?{{grandTotal}}/g, formatAmount('1200'))
     .replace(/{{monthName}}/g, isMr ? 'मे' : 'May')
-    .replace(/{{businessName}}/g, isMr ? 'अमृत डेअरी' : 'Amrit Dairy')
+    .replace(/{{businessName}}/g, isMr ? 'डेअरी मॅनेजमेंट' : 'Dairy Management')
     .replace(/{{customerPhone}}/g, '9876543210');
 };
 
@@ -922,8 +922,8 @@ const MessageTemplates = () => {
               <div>
                 <strong>{isMarathi ? 'WhatsApp अलर्ट सक्षम:' : 'WhatsApp Alerts enabled:'}</strong>{' '}
                 {isMarathi
-                  ? 'तुमचे कर्मचारी खालील मानक संदेश वापरतात. कस्टम टेम्पलेट तयार करण्यासाठी Amrit Platinum वर अपग्रेड करा.'
-                  : <>Your staff uses the standard delivery message below. Upgrade to <strong>Amrit Platinum</strong> to create fully customised templates.</>}
+                  ? 'तुमचे कर्मचारी खालील मानक संदेश वापरतात. कस्टम टेम्पलेट तयार करण्यासाठी Platinum वर अपग्रेड करा.'
+                  : <>Your staff uses the standard delivery message below. Upgrade to <strong>Platinum</strong> to create fully customised templates.</>}
               </div>
             </div>
 

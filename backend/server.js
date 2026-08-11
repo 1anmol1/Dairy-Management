@@ -25,10 +25,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
-const mongoSanitize = require('express-mongo-sanitize');
+
 const rateLimit = require('express-rate-limit');
 
-const connectDB = require('./config/db');
+
 
 // ── Route imports ─────────────────────────────────────────────
 const authRoutes = require('./routes/auth');
@@ -44,8 +44,7 @@ const isProd = process.env.NODE_ENV === 'production';
 // ── Trust proxy ───────────────────────────────────────────────
 app.set('trust proxy', 1);
 
-// ── Connect DB ────────────────────────────────────────────────
-connectDB();
+
 
 // ── Security middleware ───────────────────────────────────────
 app.use(helmet({
@@ -75,7 +74,6 @@ app.use(helmet({
   xContentTypeOptions: true,
 }));
 app.disable('x-powered-by');
-app.use(mongoSanitize());
 app.use(compression({ level: 6, threshold: 1024 }));
 
 
@@ -99,7 +97,7 @@ app.use(cors({
     try {
       const hostname = new URL(origin).hostname;
       if (
-        hostname === 'amritmanage-app.eurekai.in' ||
+        hostname === 'dairymanagement.local' ||
         hostname.endsWith('.eurekai.in') ||
         hostname.endsWith('.hostingersite.com') ||
         hostname === 'localhost' ||
@@ -124,7 +122,7 @@ const authLimiter = rateLimit({
 });
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 200,
+  max: 2000,
   message: { error: 'Too many requests, please try again later.' }
 });
 
@@ -204,7 +202,7 @@ app.use((err, _req, res, _next) => {
 // ── Start server ──────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, async () => {
-  console.log(`🚀 Amrit Manage backend running on port ${PORT}`);
+  console.log(`🚀 Dairy Management backend running on port ${PORT}`);
   
   const PlanConfig = require('./models/PlanConfig');
   PlanConfig.countDocuments().then(count => {
@@ -215,47 +213,7 @@ const server = app.listen(PORT, async () => {
         .catch(err => console.warn('[SEED] Plan config seed failed:', err.message));
     }
   }).catch(() => { });
-  // Reset pairing attempts on startup (re-deploy / restart)
-  try {
-    const WhatsappConnection = require('./models/WhatsappConnection');
-    await WhatsappConnection.updateMany({}, { $set: { pairing_attempts_timestamps: [] } });
-    console.log('🔄 Reset all WhatsApp pairing attempt limits on startup.');
-  } catch (err) {
-    console.error('Failed to reset WhatsApp pairing attempt limits on startup:', err.message);
-  }
 
-  // Migrate 'daily_owner' to 'dairy_owner' in User collection
-  try {
-    const User = require('./models/User');
-    const result = await User.updateMany({ ownerRole: 'daily_owner' }, { $set: { ownerRole: 'dairy_owner' } });
-    if (result.modifiedCount > 0) {
-      console.log(`🔄 Migrated ${result.modifiedCount} existing 'daily_owner' roles to 'dairy_owner'.`);
-    }
-  } catch (err) {
-    console.error('Failed to migrate daily_owner to dairy_owner roles on startup:', err.message);
-  }
-
-  // Sync staff ownerRole with owner's ownerRole
-  try {
-    const User = require('./models/User');
-    const staffs = await User.find({ role: 'staff' });
-    let updatedCount = 0;
-    for (const staff of staffs) {
-      if (staff.ownerId) {
-        const owner = await User.findById(staff.ownerId);
-        if (owner && staff.ownerRole !== owner.ownerRole) {
-          staff.ownerRole = owner.ownerRole;
-          await staff.save({ validateBeforeSave: false });
-          updatedCount++;
-        }
-      }
-    }
-    if (updatedCount > 0) {
-      console.log(`🔄 Synced ${updatedCount} staff ownerRole settings with their owners.`);
-    }
-  } catch (err) {
-    console.error('Failed to sync staff ownerRole values on startup:', err.message);
-  }
 
   // WhatsApp sessions recovery
   const { reconnectActiveSessions } = require('./services/whatsappService');

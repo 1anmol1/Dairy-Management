@@ -16,8 +16,9 @@ html {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background-color: #F4F4F4;
-  color: #161616;
+  background-color: #FAFBFC;
+  min-height: 100vh;
+  color: #1a1a1a;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
@@ -29,33 +30,37 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 20px;
-  height: 44px;
+  padding: 0 16px;
+  height: 40px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   font-family: inherit;
-  border: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
   cursor: pointer;
   text-decoration: none;
-  transition: background-color 0.1s ease, box-shadow 0.1s ease, transform 0.1s ease;
+  transition: all 0.2s ease;
   user-select: none;
   white-space: nowrap;
 }
 
 .btn:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 .btn-primary {
-  background-color: #0F62FE;
-  color: #FFFFFF;
+  background-color: #0052CC;
+  color: #ffffff;
+  border: 1px solid #0052CC;
+  box-shadow: 0 1px 2px rgba(0, 82, 204, 0.2);
 }
 .btn-primary:hover {
-  background-color: #0353E9;
-  box-shadow: 0 4px 12px rgba(15, 98, 254, 0.35);
+  background-color: #0043a6;
+  border-color: #0043a6;
+  box-shadow: 0 4px 8px rgba(0, 82, 204, 0.25);
 }
 .btn-primary:active {
-  background-color: #0043CE;
+  background-color: #003585;
 }
 
 .btn-danger {
@@ -64,34 +69,24 @@ body {
 }
 .btn-danger:hover {
   background-color: #BA1B23;
-  box-shadow: 0 4px 12px rgba(218, 30, 40, 0.35);
+  box-shadow: 0 4px 12px rgba(218, 30, 40, 0.2);
 }
 .btn-danger:active {
   background-color: #750E13;
 }
 
-.btn-ghost {
-  background-color: transparent;
-  color: #0F62FE;
-  border: 1.5px solid #0F62FE;
+.btn-dark, .btn-ghost {
+  background-color: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
-.btn-ghost:hover {
-  background-color: #EDF5FF;
+.btn-dark:hover, .btn-ghost:hover {
+  background-color: #f7f7f9;
+  border-color: rgba(0, 0, 0, 0.2);
 }
-.btn-ghost:active {
-  background-color: #D0E2FF;
-}
-
-.btn-dark {
-  background-color: #161616;
-  color: #FFFFFF;
-}
-.btn-dark:hover {
-  background-color: #393939;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-}
-.btn-dark:active {
-  background-color: #525252;
+.btn-dark:active, .btn-ghost:active {
+  background-color: #efeff1;
 }
 
 .btn-success {
@@ -100,7 +95,7 @@ body {
 }
 .btn-success:hover {
   background-color: #198038;
-  box-shadow: 0 4px 12px rgba(36, 161, 72, 0.35);
+  box-shadow: 0 4px 12px rgba(36, 161, 72, 0.2);
 }
 .btn-success:active {
   background-color: #0E6027;
@@ -298,11 +293,18 @@ tr:hover td {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* ── Stat card ───────────────────────────────────────────────── */
+/* ── Dashboard Stats ───────────────────────────────────────────── */
 .stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E0E0E0;
-  padding: 20px 24px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06);
 }
 .stat-label {
   font-size: 11px;
@@ -328,6 +330,7 @@ tr:hover td {
 .app-layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
 }
 .sidebar {
   width: 240px;
@@ -735,4 +738,116 @@ input[type="date"]:focus:not(:focus-visible) {
   font-family: 'Noto Sans Devanagari', 'Inter', sans-serif;
   line-height: 1.7;
   letter-spacing: 0;
+}
+
+/* ── Sleek Modern Sidebar Redesign ────────────────────────────────── */
+.cartoonish-sidebar {
+  width: 260px;
+  background-color: #ffffff;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 1px 0 10px rgba(0,0,0,0.02);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cartoonish-sidebar .sidebar-logo {
+  padding: 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: linear-gradient(135deg, #ffffff, #fdfdfd);
+  text-align: left;
+}
+
+.cartoonish-sidebar .sidebar-logo h2 {
+  color: #1a1a1a;
+  font-family: 'Inter', -apple-system, sans-serif;
+  text-shadow: none;
+  transform: none;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.cartoonish-sidebar nav {
+  flex: 1;
+  padding: 20px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cartoon-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background-color: transparent;
+  color: #555555;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease-in-out;
+  box-shadow: none;
+}
+
+.cartoon-nav-item:hover {
+  transform: translateY(-1px);
+  background-color: #f7f7f9;
+  color: #1a1a1a;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+}
+
+.cartoon-nav-item.active {
+  background-color: #f0f4f8;
+  color: #0052cc;
+  font-weight: 600;
+  border: 1px solid rgba(0, 82, 204, 0.1);
+  transform: scale(1.02);
+  box-shadow: 0 4px 6px rgba(0,82,204,0.05);
+}
+
+.cartoon-nav-item svg {
+  stroke-width: 2px;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  box-shadow: none;
+  opacity: 0.8;
+}
+
+.cartoon-nav-item.active svg {
+  color: #0052cc;
+  opacity: 1;
+}
+
+.cartoonish-main {
+  flex: 1;
+  width: 100%;
+  margin-left: 260px;
+  min-height: 100vh;
+  padding: 24px;
+  background-color: #fafbfc;
+}
+
+@media (max-width: 768px) {
+  .cartoonish-sidebar {
+    transform: translateX(-100%);
+  }
+  .cartoonish-sidebar.open {
+    transform: translateX(0);
+  }
+  .cartoonish-main {
+    margin-left: 0;
+    padding: 16px;
+  }
 }

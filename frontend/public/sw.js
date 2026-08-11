@@ -1,5 +1,5 @@
 /**
- * Amrit Manage — Service Worker v3
+ * Dairy Management — Service Worker v3
  * Only active on app.* subdomain (PWA install prompt).
  * Handles deep-link routing so PWA shortcuts always open the right login page.
  * Strategy: Network-first for API, cache-first for static assets.

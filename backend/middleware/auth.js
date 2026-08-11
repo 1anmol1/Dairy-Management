@@ -115,7 +115,12 @@ const requireActiveSubscription = async (req, res, next) => {
       }
     }
 
-    const { status, trialEndsAt, expiresAt } = owner.subscription;
+    // Normalise flat Supabase columns into a subscription object
+    const { status, trialEndsAt, expiresAt } = {
+      status:      owner.subscriptionStatus || owner.subscription?.status || 'trial',
+      trialEndsAt: owner.trialEndsAt        || owner.subscription?.trialEndsAt,
+      expiresAt:   owner.expiresAt          || owner.subscription?.expiresAt,
+    };
 
     if (status === 'inactive') {
       return res.status(403).json({
@@ -141,7 +146,7 @@ const requireActiveSubscription = async (req, res, next) => {
             const goldFeatures = await getGoldFeatures();
             req.effectiveFeatures = { ...goldFeatures };
           } else {
-            req.effectiveFeatures = { ...owner.features.toObject?.() || owner.features };
+            req.effectiveFeatures = { ...(owner?.features?.toObject?.() || owner?.features || {}) };
           }
           return next();
         } else {
@@ -160,7 +165,7 @@ const requireActiveSubscription = async (req, res, next) => {
       // Merge gold features onto the owner object in-memory (not saved to DB)
       req.effectiveFeatures = { ...goldFeatures };
     } else {
-      req.effectiveFeatures = { ...owner.features.toObject?.() || owner.features };
+      req.effectiveFeatures = { ...(owner?.features?.toObject?.() || owner?.features || {}) };
     }
 
     next();

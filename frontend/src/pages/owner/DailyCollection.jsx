@@ -461,8 +461,8 @@ const DailyCollectionDailyOwner = () => {
     const typeStr = savedRecord.milkType === 'Cow' ? (isMr ? 'गाय' : 'Cow') : savedRecord.milkType === 'Buffalo' ? (isMr ? 'म्हैस' : 'Buffalo') : (isMr ? 'मिश्रित' : 'Mixed');
 
     const msg = isMr 
-      ? `🥛 *दूध संकलन पावती* — ${dateStr}\n-------------------------------\nशेतकरी: *${selectedFarmer.name}*\nवेळ: *${shiftStr}*\nदूध प्रकार: *${typeStr}*\nप्रमाण: *${savedRecord.quantity} ली.*\nFAT: *${savedRecord.fat}%* | SNF: *${savedRecord.snf}%*\nदर: *₹${savedRecord.ratePerLiter}/ली.*\nएकूण देय: *₹${savedRecord.netAmount.toFixed(2)}*\n-------------------------------\nअमृत डेअरीद्वारे पाठवले.`
-      : `🥛 *Milk Collection Receipt* — ${dateStr}\n-------------------------------\nFarmer: *${selectedFarmer.name}*\nShift: *${shiftStr}*\nMilk Type: *${typeStr}*\nQty: *${savedRecord.quantity} L*\nFAT: *${savedRecord.fat}%* | SNF: *${savedRecord.snf}%*\nRate: *₹${savedRecord.ratePerLiter}/L*\nNet Payable: *₹${savedRecord.netAmount.toFixed(2)}*\n-------------------------------\nSent via Amrit Dairy.`;
+      ? `🥛 *दूध संकलन पावती* — ${dateStr}\n-------------------------------\nशेतकरी: *${selectedFarmer.name}*\nवेळ: *${shiftStr}*\nदूध प्रकार: *${typeStr}*\nप्रमाण: *${savedRecord.quantity} ली.*\nFAT: *${savedRecord.fat}%* | SNF: *${savedRecord.snf}%*\nदर: *₹${savedRecord.ratePerLiter}/ली.*\nएकूण देय: *₹${savedRecord.netAmount.toFixed(2)}*\n-------------------------------\nडेअरी मॅनेजमेंटद्वारे पाठवले.`
+      : `🥛 *Milk Collection Receipt* — ${dateStr}\n-------------------------------\nFarmer: *${selectedFarmer.name}*\nShift: *${shiftStr}*\nMilk Type: *${typeStr}*\nQty: *${savedRecord.quantity} L*\nFAT: *${savedRecord.fat}%* | SNF: *${savedRecord.snf}%*\nRate: *₹${savedRecord.ratePerLiter}/L*\nNet Payable: *₹${savedRecord.netAmount.toFixed(2)}*\n-------------------------------\nSent via Dairy Management.`;
 
     const url = `https://api.whatsapp.com/send?phone=${clean}&text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');

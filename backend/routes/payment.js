@@ -10,10 +10,7 @@ const User = require('../models/User');
 const PlanConfig = require('../models/PlanConfig');
 const SubscriptionRequest = require('../models/SubscriptionRequest');
 const { protect, authorize, checkPermission } = require('../middleware/auth');
-const {
-  sendLeadEvent,
-  sendCompleteRegistrationEvent,
-} = require('../services/metaCapiService');
+
 
 const PLAN_PRICES = {
   silver: { monthly: 99, setup: 499 },
@@ -185,15 +182,6 @@ router.post('/request-subscription', leadLimiter, async (req, res, next) => {
 
     const request = await SubscriptionRequest.create(requestData);
 
-    // Fire CAPI Lead event for ads_landing source only
-    if (isAdsLanding && leadEventId) {
-      setImmediate(() => {
-        sendLeadEvent(request, leadEventId, req).catch(err => {
-          console.error('[META CAPI] Lead event failed:', err.message);
-        });
-      });
-    }
-
     res.status(201).json({
       request,
       leadId: request._id,
@@ -232,15 +220,6 @@ router.patch('/update-lead/:id', leadLimiter, async (req, res, next) => {
     if (registrationEventId) request.registrationEventId = registrationEventId;
 
     await request.save();
-
-    // Fire CAPI CompleteRegistration event
-    if (registrationEventId) {
-      setImmediate(() => {
-        sendCompleteRegistrationEvent(request, registrationEventId, req).catch(err => {
-          console.error('[META CAPI] CompleteRegistration event failed:', err.message);
-        });
-      });
-    }
 
     res.json({
       request,
@@ -330,27 +309,6 @@ router.patch('/requests/:id/activate', protect, authorize('superadmin'), checkPe
     request.activatedAt = now;
     request.adminNotes = adminNotes || '';
     await request.save();
-
-    // Fire Meta CAPI Subscribe if this is an ads_landing lead
-    if (request.source === 'ads_landing') {
-      setImmediate(async () => {
-        try {
-          if (owner.source === 'ads_landing') {
-            const { sendSubscribeEvent } = require('../services/metaCapiService');
-            const subscribeEventId = require('crypto').randomUUID();
-            const planPrices = { silver: 99, gold: 199, platinum: 399 };
-            await SubscriptionRequest.findByIdAndUpdate(request._id, { subscribeEventId });
-            await sendSubscribeEvent(request, subscribeEventId, {
-              value: planPrices[request.plan] || 199,
-              planName: request.plan,
-              billingCycle: request.billingCycle || 'monthly',
-            });
-          }
-        } catch (err) {
-          console.error('[META CAPI] Subscribe event (activate) failed:', err.message);
-        }
-      });
-    }
 
     res.json({
       message: `Subscription activated for ${owner.name}. Valid until ${newExpiry.toLocaleDateString('en-IN')}.`,

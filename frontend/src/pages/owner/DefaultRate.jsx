@@ -800,8 +800,8 @@ const DairyDefaultRateSection = () => {
             </h2>
             <p style={{ color: '#525252', fontSize: '13px', marginBottom: '20px', lineHeight: 1.5 }}>
               {isMarathi
-                ? 'अमृतमॅनेज तुमची दूध गुणवत्ता आणि दरांचे मोजमाप खालील प्रमाणे अचूक व पारदर्शक पद्धतीने करते.'
-                : 'Here is a detailed breakdown of how AmritManage calculates payout rates for your milk collection entries.'}
+                ? 'डेअरी मॅनेजमेंट तुमची दूध गुणवत्ता आणि दरांचे मोजमाप खालील प्रमाणे अचूक व पारदर्शक पद्धतीने करते.'
+                : 'Here is a detailed breakdown of how Dairy Management calculates payout rates for your milk collection entries.'}
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

@@ -54,7 +54,7 @@ window.addEventListener('load', makeFaviconCircular);
 // ── Prevent PWA prompt on public landing pages ────────────────────────────
 window.addEventListener('beforeinstallprompt', (e) => {
   const h = window.location.hostname;
-  const isAppSubdomain = h === 'amritmanage-app.eurekai.in' || h.startsWith('app.') || h === 'localhost';
+  const isAppSubdomain = h === 'dairymanagement.local' || h.startsWith('app.') || h === 'localhost';
   const isAppPath = window.location.pathname.startsWith('/app');
   
   if (!(isAppSubdomain && isAppPath)) {
@@ -67,7 +67,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     const h = window.location.hostname;
-    const isAppSubdomain = h === 'amritmanage-app.eurekai.in' || h.startsWith('app.') || h === 'localhost';
+    const isAppSubdomain = h === 'dairymanagement.local' || h.startsWith('app.') || h === 'localhost';
     const isAppPath = window.location.pathname.startsWith('/app');
     
     // Only register SW & Inject Manifest if on app subdomain or active app routes

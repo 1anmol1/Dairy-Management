@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { Lock, ArrowRight, Star } from 'lucide-react';
 
 const PLAN_ORDER = { silver: 0, gold: 1, platinum: 2, trial: 1 };
-const PLAN_LABELS = { silver: 'Amrit Silver', gold: 'Amrit Gold', platinum: 'Amrit Platinum' };
+const PLAN_LABELS = { silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
 const PLAN_COLORS = { silver: '#8D8D8D', gold: '#D4AF37', platinum: '#525252' };
 
 // Platinum plan highlights shown in the upgrade prompt

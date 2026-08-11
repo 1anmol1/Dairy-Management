@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
+
 const User = require('../models/User');
 const Customer = require('../models/Customer');
 const DailyLog = require('../models/DailyLog');
@@ -16,7 +16,7 @@ const FarmerCollection = require('../models/FarmerCollection');
 const WhatsappConnection = require('../models/WhatsappConnection');
 const MessageTemplate = require('../models/MessageTemplate');
 const { protect, authorize, checkPermission } = require('../middleware/auth');
-const { sendStartTrialEvent, sendSubscribeEvent } = require('../services/metaCapiService');
+
 
 // Helper to require main superadmin role
 const requireMainSuperadmin = (req, res, next) => {
@@ -176,61 +176,11 @@ router.post('/owners', checkPermission('owners'), async (req, res, next) => {
       maxCustomers: finalMaxCustomers,
       maxStaff: finalMaxStaff,
       source: req.body.source || 'organic',
-      ownerVerificationCode: verificationCode,
-      subscription: {
-        status: subscriptionStatus,
-        plan,
-        trialEndsAt: subscriptionStatus === 'trial' ? end : undefined,
-        expiresAt: subscriptionStatus !== 'trial' ? end : undefined,
-        billingCycle: subscriptionStatus !== 'trial' ? billingCycle : undefined,
-        startDate: start,
-        amountPaid: parseFloat(amountPaid) || 0,
-        setupFeePaid: parseFloat(setupFeePaid) || 0,
-        adminNotes: notes || undefined,
-      }
+      subscriptionStatus: subscriptionStatus,
+      subscriptionPlan: plan,
+      trialEndsAt: subscriptionStatus === 'trial' ? end.toISOString() : undefined,
+      expiresAt: subscriptionStatus !== 'trial' ? end.toISOString() : undefined
     });
-
-    // Fire Meta CAPI events if this owner came from ads_landing
-    if (subscriptionStatus === 'trial' || subscriptionStatus === 'active') {
-      setImmediate(async () => {
-        try {
-          const lead = await SubscriptionRequest.findOne({
-            contactPhone: phone.trim(),
-            source: 'ads_landing',
-          }).sort({ createdAt: -1 }).lean();
-
-          if (lead) {
-            owner.source = 'ads_landing';
-            await owner.save();
-
-            if (owner.source === 'ads_landing') {
-              if (subscriptionStatus === 'trial') {
-                const trialEventId = require('crypto').randomUUID();
-                await SubscriptionRequest.findByIdAndUpdate(lead._id, {
-                  ownerId: owner._id,
-                  trialEventId,
-                });
-                await sendStartTrialEvent(lead, trialEventId);
-              } else if (subscriptionStatus === 'active') {
-                const subscribeEventId = require('crypto').randomUUID();
-                await SubscriptionRequest.findByIdAndUpdate(lead._id, {
-                  ownerId: owner._id,
-                  subscribeEventId,
-                });
-                const planPrices = { silver: 99, gold: 199, platinum: 399 };
-                await sendSubscribeEvent(lead, subscribeEventId, {
-                  value:        planPrices[plan] || 199,
-                  planName:     plan,
-                  billingCycle: billingCycle || 'monthly',
-                });
-              }
-            }
-          }
-        } catch (err) {
-          console.error(`[META CAPI] ${subscriptionStatus} event failed:`, err.message);
-        }
-      });
-    }
 
     res.status(201).json({ owner });
   } catch (err) {
@@ -251,6 +201,35 @@ router.get('/owners/:id', checkPermission('owners'), async (req, res, next) => {
     ]);
 
     res.json({ owner, stats: { customerCount, staffCount, logCount } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── DELETE /api/superadmin/owners/:id ─────────────────────────
+router.delete('/owners/:id', checkPermission('owners'), async (req, res, next) => {
+  try {
+    const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
+    if (!owner) return res.status(404).json({ error: 'Owner not found.' });
+
+    // Protect the latest dairy_owner and milk_supplier from being deleted
+    const dairyOwners = await User.find({ role: 'owner', ownerRole: 'dairy_owner' }).sort({ createdAt: -1 }).limit(1);
+    const milkSuppliers = await User.find({ role: 'owner', ownerRole: 'milk_supplier' }).sort({ createdAt: -1 }).limit(1);
+    
+    if (dairyOwners[0]?._id === owner._id || dairyOwners[0]?.id === owner.id) {
+      return res.status(403).json({ error: 'Cannot delete the primary (latest) Dairy Owner account as it is used for dev testing.' });
+    }
+    if (milkSuppliers[0]?._id === owner._id || milkSuppliers[0]?.id === owner.id) {
+      return res.status(403).json({ error: 'Cannot delete the primary (latest) Milk Supplier account as it is used for dev testing.' });
+    }
+
+    // Delete staff associated with this owner (ON DELETE SET NULL in SQL, so we must manually delete)
+    await User.deleteMany({ ownerId: owner._id, role: 'staff' });
+
+    // Delete the owner (SQL ON DELETE CASCADE handles Customers, Farmers, DailyLogs, etc.)
+    await User.deleteOne({ _id: owner._id });
+
+    res.json({ message: 'Owner and all associated data deleted successfully.' });
   } catch (err) {
     next(err);
   }
@@ -302,35 +281,7 @@ router.patch('/owners/:id/subscription', checkPermission('owners'), async (req, 
 
     await owner.save();
 
-    // Fire Meta CAPI Subscribe if activating a paid plan for an ads_landing user
-    if (status === 'active') {
-      setImmediate(async () => {
-        try {
-          const lead = await SubscriptionRequest.findOne({
-            contactPhone: owner.phone,
-            source: 'ads_landing',
-          }).sort({ createdAt: -1 }).lean();
 
-          if (lead) {
-            owner.source = 'ads_landing';
-            await owner.save();
-
-            if (owner.source === 'ads_landing') {
-              const subscribeEventId = require('crypto').randomUUID();
-              const planPrices = { silver: 99, gold: 199, platinum: 399 };
-              await SubscriptionRequest.findByIdAndUpdate(lead._id, { subscribeEventId });
-              await sendSubscribeEvent(lead, subscribeEventId, {
-                value:        planPrices[owner.subscription.plan] || 199,
-                planName:     owner.subscription.plan,
-                billingCycle: owner.subscription.billingCycle || 'monthly',
-              });
-            }
-          }
-        } catch (err) {
-          console.error('[META CAPI] Subscribe event failed:', err.message);
-        }
-      });
-    }
 
     res.json({ owner });
   } catch (err) {
@@ -1171,7 +1122,7 @@ const moveToRecycleBin = async (doc, modelType, ownerId, deletedBy, cascadedFrom
   await RecycleBin.create({
     modelType,
     originalId: doc._id,
-    data: doc.toObject ? doc.toObject() : doc,
+    data: doc?.toObject ? doc.toObject() : doc,
     ownerId,
     expiresAt,
     cascadedFrom,
@@ -1336,8 +1287,23 @@ router.post('/recycle-bin/delete', checkPermission('owners'), async (req, res, n
       return res.status(403).json({ error: 'Incorrect superadmin password.' });
     }
 
+    const dairyOwners = await User.find({ role: 'owner', ownerRole: 'dairy_owner' }).sort({ createdAt: -1 }).limit(1);
+    const milkSuppliers = await User.find({ role: 'owner', ownerRole: 'milk_supplier' }).sort({ createdAt: -1 }).limit(1);
+    const protectedIds = [
+      dairyOwners[0]?._id?.toString(),
+      dairyOwners[0]?.id?.toString(),
+      milkSuppliers[0]?._id?.toString(),
+      milkSuppliers[0]?.id?.toString()
+    ].filter(Boolean);
+
     for (const target of targets) {
       const { modelType, id } = target;
+      
+      // Prevent deleting the primary protected accounts
+      if (modelType === 'User' && protectedIds.includes(id.toString())) {
+        return res.status(403).json({ error: 'Cannot delete the primary dev Owner accounts (latest Milk Supplier or Dairy Owner). They are protected for Quick Login.' });
+      }
+
       if (modelType === 'User') {
         const u = await User.findById(id);
         if (!u) continue;

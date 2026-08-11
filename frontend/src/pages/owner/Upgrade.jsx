@@ -15,9 +15,9 @@ import { useToast } from '../../context/ToastContext';
 import { useMarathi } from '../../i18n/marathi';
 
 const PLAN_DISPLAY = {
-  silver:   { color: '#8D8D8D', bg: '#F4F4F4', border: '#8D8D8D', icon: CreditCard, label: 'Amrit Silver' },
-  gold:     { color: '#B8860B', bg: '#FFF8E1', border: '#D4AF37', icon: Star,       label: 'Amrit Gold ⭐', recommended: true },
-  platinum: { color: '#6929C4', bg: '#F3F0FF', border: '#8A3FFC', icon: Zap,        label: 'Amrit Platinum' }
+  silver:   { color: '#8D8D8D', bg: '#F4F4F4', border: '#8D8D8D', icon: CreditCard, label: 'Silver' },
+  gold:     { color: '#B8860B', bg: '#FFF8E1', border: '#D4AF37', icon: Star,       label: 'Gold ⭐', recommended: true },
+  platinum: { color: '#6929C4', bg: '#F3F0FF', border: '#8A3FFC', icon: Zap,        label: 'Platinum' }
 };
 
 const INDIAN_STATES = [

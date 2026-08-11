@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
+
 const User = require('../models/User');
 const Customer = require('../models/Customer');
 const Farmer = require('../models/Farmer');
@@ -66,13 +66,13 @@ const moveToRecycleBin = async (doc, modelType, ownerId, deletedBy, cascadedFrom
   await RecycleBin.create({
     modelType,
     originalId: doc._id,
-    data: doc.toObject ? doc.toObject() : doc,
+    data: doc?.toObject ? doc.toObject() : doc,
     ownerId,
     expiresAt,
     cascadedFrom,
     deletedBy
   });
-  const Model = mongoose.model(modelType);
+  const Model = require('../models/' + modelType);
   await Model.deleteOne({ _id: doc._id });
 };
 
@@ -1539,7 +1539,7 @@ router.get('/farmer-collections/next-number', async (req, res, next) => {
 });
 
 router.post('/farmer-collections', async (req, res, next) => {
-  const mongoose = require('mongoose');
+
   let session = null;
   let useTransaction = false;
 

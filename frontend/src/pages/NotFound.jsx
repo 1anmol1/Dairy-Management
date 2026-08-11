@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Home, ArrowLeft } from 'lucide-react';
-import amritLogo from '../assets/Amritmanagelogo.png';
+
 
 const NotFound = () => {
   const navigate = useNavigate();
@@ -14,7 +14,7 @@ const NotFound = () => {
     }}>
       <div style={{ textAlign: 'center', maxWidth: '480px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '40px' }}>
-          <img src={amritLogo} alt="Amrit Manage" style={{ height: '40px', width: 'auto' }} />
+          <h2 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: '#333' }}>Dairy Management</h2>
         </div>
 
         <div style={{

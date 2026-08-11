@@ -87,15 +87,20 @@ export const AuthProvider = ({ children }) => {
     return () => window.removeEventListener('amrit_auth_update', handleExternalAuth);
   }, []);
 
-  const login = async (identifier, password, verificationCode) => {
-    const { data } = await api.post('/auth/login', { identifier, password, verificationCode });
-    localStorage.setItem('amrit_token', data.token);
-    // Strip sensitive fields before storing user in localStorage
-    const safeUser = sanitizeUserForStorage(data.user);
+  // Called by login pages that have already made their own API call
+  // and received a { user, token } response from the backend.
+  const setSession = (user, token) => {
+    localStorage.setItem('amrit_token', token);
+    const safeUser = sanitizeUserForStorage(user);
     localStorage.setItem('amrit_user', JSON.stringify(safeUser));
-    clearAllCache(); // fresh cache for new session
+    clearAllCache();
     setUser(safeUser);
     return safeUser;
+  };
+
+  const login = async (identifier, password) => {
+    const { data } = await api.post('/auth/login', { identifier, password });
+    return setSession(data.user, data.token);
   };
 
   const logout = () => {
@@ -136,47 +141,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const isLocalhost = typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-  let activeUser = user;
-  if (!user && isLocalhost) {
-    const path = typeof window !== 'undefined' ? window.location.pathname : '';
-    if (path.includes('/superadmin')) {
-      activeUser = {
-        _id: 'mock-superadmin-id',
-        name: 'Mock Superadmin (Dev)',
-        phone: '9999999999',
-        role: 'superadmin',
-        ownerRole: 'superadmin',
-        features: {}
-      };
-    } else if (path.includes('/owner')) {
-      activeUser = {
-        _id: 'mock-owner-id',
-        name: 'Mock Owner (Dev)',
-        phone: '8888888888',
-        role: 'owner',
-        ownerRole: 'dairy_owner',
-        businessName: 'Mock Dairy Farm',
-        subscription: { status: 'active', plan: 'gold' },
-        features: { whatsapp: true, sms: true, marathi: true },
-        onboardingDone: true
-      };
-    } else if (path.includes('/staff')) {
-      activeUser = {
-        _id: 'mock-staff-id',
-        name: 'Mock Staff (Dev)',
-        phone: '7777777777',
-        role: 'staff',
-        ownerId: 'mock-owner-id',
-        businessName: 'Mock Dairy Farm'
-      };
-    }
-  }
-
   return (
-    <AuthContext.Provider value={{ user: activeUser, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, setSession, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

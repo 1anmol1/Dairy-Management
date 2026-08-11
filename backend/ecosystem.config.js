@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'amritmanage-backend',
+      name: 'dairymanagement-backend',
       script: './server.js',
       instances: 'max', // Scale across all available CPU cores for multi-user performance
       exec_mode: 'cluster', // Enables clustering mode

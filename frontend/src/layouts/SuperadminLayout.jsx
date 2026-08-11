@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { useToast } from '../context/ToastContext';
-import amritLogo from '../assets/Amritmanagelogo.png';
+
 
 const SuperadminLayout = () => {
   const { user, logout } = useAuth();
@@ -20,7 +20,7 @@ const SuperadminLayout = () => {
   const [showPwModal, setShowPwModal] = useState(false);
 
   React.useEffect(() => {
-    document.title = 'Amrit manage';
+    document.title = 'Dairy Management';
   }, []);
 
   const handleLogout = () => {
@@ -76,15 +76,11 @@ const SuperadminLayout = () => {
 
   return (
     <div className="app-layout">
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        {/* Logo — PNG asset */}
+      <aside className={`cartoonish-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        {/* Logo */}
         <Link to="/app/superadmin" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
           <div style={{ marginBottom: '6px' }}>
-            <img
-              src={amritLogo}
-              alt="Amrit Manage"
-              style={{ height: '30px', width: 'auto', display: 'block', filter: 'brightness(0) invert(1)' }}
-            />
+            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Shield size={12} color="#DA1E28" />
@@ -101,7 +97,7 @@ const SuperadminLayout = () => {
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              className={({ isActive }) => `cartoon-nav-item ${isActive ? 'active' : ''}`}
               onClick={() => setSidebarOpen(false)}
             >
               <item.icon size={18} />
@@ -196,17 +192,12 @@ const SuperadminLayout = () => {
         </div>
       </aside>
 
-      <div className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
-        onClick={() => setSidebarOpen(false)} />
+      <div className={`cartoonish-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)} />
 
-      <div className="main-content">
-        <div className="mobile-header">
+      <div className="cartoonish-main">
+        <div className="cartoonish-header">
           <Link to="/app/superadmin" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <img
-              src={amritLogo}
-              alt="Amrit Manage"
-              style={{ height: '26px', width: 'auto', filter: 'brightness(0) invert(1)' }}
-            />
+              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
           </Link>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}

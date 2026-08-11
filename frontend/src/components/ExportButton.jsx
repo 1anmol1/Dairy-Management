@@ -91,7 +91,7 @@ const ExportButton = ({ data = [], columns = [], filename = 'export', title = 'E
     </thead>
     <tbody>${tableRows}</tbody>
   </table>
-  <div class="footer">Total records: ${data.length} &nbsp;|&nbsp; Amrit Manage</div>
+  <div class="footer">Total records: ${data.length} &nbsp;|&nbsp; Dairy Management</div>
 </body>
 </html>`;
 

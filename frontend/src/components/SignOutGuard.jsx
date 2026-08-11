@@ -21,10 +21,10 @@ const getRoleHome = (role) => {
 };
 
 const getRoleLogin = (role) => {
-  if (role === 'owner')      return '/securelogin/ownerlogin';
+  if (role === 'owner')      return '/owner-login';
   if (role === 'staff')      return '/loginto/staffaccess';
   if (role === 'superadmin') return '/loginto/lockedaccess/app/secure/adminaccounts/superadmin/login';
-  return '/securelogin/ownerlogin';
+  return '/owner-login';
 };
 
 const getRoleLabel = (role) => {
@@ -56,8 +56,10 @@ const SignOutGuard = ({ children }) => {
   const roleColor = getRoleColor(user.role);
 
   const handleSignOut = () => {
-    logout();
-    navigate(getRoleLogin(user.role), { replace: true });
+    navigate('/login', { replace: true });
+    setTimeout(() => {
+      logout();
+    }, 10);
   };
 
   const handleGoBack = () => {

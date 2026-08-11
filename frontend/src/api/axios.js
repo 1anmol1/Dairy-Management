@@ -47,23 +47,13 @@ api.interceptors.response.use(
       }
 
       const hadToken = !!localStorage.getItem('amrit_token');
-      // Read role BEFORE clearing storage
-      let roleLogin = '/app';
-      try {
-        const stored = localStorage.getItem('amrit_user');
-        if (stored) {
-          const u = JSON.parse(stored);
-          if (u.role === 'owner')      roleLogin = '/securelogin/ownerlogin';
-          else if (u.role === 'staff') roleLogin = '/loginto/staffaccess';
-          // superadmin: don't reveal the URL — send to /app gate
-        }
-      } catch { /* ignore parse errors */ }
-
       localStorage.removeItem('amrit_token');
       localStorage.removeItem('amrit_user');
 
-      if (hadToken) {
-        window.location.href = roleLogin;
+      // Prevent redirect loops if already on login
+      const isAuthPage = window.location.pathname.includes('/login');
+      if (hadToken && !isAuthPage) {
+        window.location.href = '/login';
       }
     }
     return Promise.reject(err);

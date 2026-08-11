@@ -13,11 +13,11 @@ export const ToastProvider = ({ children }) => {
     }, duration);
   }, []);
 
-  const toast = {
+  const toast = React.useMemo(() => ({
     success: (msg) => addToast(msg, 'success'),
     error: (msg) => addToast(msg, 'error'),
     info: (msg) => addToast(msg, 'info')
-  };
+  }), [addToast]);
 
   return (
     <ToastContext.Provider value={toast}>

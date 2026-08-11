@@ -17,7 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
 import { useMarathi } from '../../i18n/marathi';
 import LanguageToggle from '../../i18n/marathi/LanguageToggle';
-import LogoImg from '../../assets/Amritmanagelogo.png';
+
 import {
   Users, Milk, ArrowRight, CheckCircle, ChevronRight, Zap, Star, CreditCard,
   MessageSquare, FileText
@@ -26,7 +26,7 @@ import {
 // ── Plan feature definitions ──────────────────────────────────
 const getPlanMeta = (isMarathi) => ({
   silver: {
-    label: isMarathi ? 'अमृत सिल्व्हर' : 'Amrit Silver',
+    label: isMarathi ? 'सिल्व्हर' : 'Silver',
     color: '#8D8D8D',
     bg: '#F4F4F4',
     border: '#C6C6C6',
@@ -44,7 +44,7 @@ const getPlanMeta = (isMarathi) => ({
     ],
   },
   gold: {
-    label: isMarathi ? 'अमृत गोल्ड' : 'Amrit Gold',
+    label: isMarathi ? 'गोल्ड' : 'Gold',
     color: '#B8860B',
     bg: '#FFF8E1',
     border: '#D4AF37',
@@ -64,7 +64,7 @@ const getPlanMeta = (isMarathi) => ({
     ],
   },
   platinum: {
-    label: isMarathi ? 'अमृत प्लॅटिनम' : 'Amrit Platinum',
+    label: isMarathi ? 'प्लॅटिनम' : 'Platinum',
     color: '#6929C4',
     bg: '#F3F0FF',
     border: '#8A3FFC',
@@ -114,9 +114,9 @@ const WelcomePage = ({ user, onNext }) => {
           </h1>
           <p style={{ fontSize: '16px', color: '#525252', lineHeight: 1.6, maxWidth: '420px', margin: '0 auto' }}>
             {isMarathi ? (
-              <>तुमचा दूध व्यवसाय आता <strong>अमृत मॅनेज</strong> वर आहे. {status === 'trial' ? 'तुम्ही फ्री ट्रायलवर आहात — सर्व फीचर्स अनलॉक आहेत.' : 'चला २ मिनिटांत सेटअप पूर्ण करूया.'}</>
+              <>तुमचा दूध व्यवसाय आता <strong>डेअरी मॅनेजमेंट</strong> वर आहे. {status === 'trial' ? 'तुम्ही फ्री ट्रायलवर आहात — सर्व फीचर्स अनलॉक आहेत.' : 'चला २ मिनिटांत सेटअप पूर्ण करूया.'}</>
             ) : (
-              <>Your dairy business is now on <strong>Amrit Manage</strong>.{status === 'trial' ? ' You\'re on a free trial — all features are unlocked.' : ' Let\'s get you set up in 2 minutes.'}</>
+              <>Your dairy business is now on <strong>Dairy Management</strong>.{status === 'trial' ? ' You\'re on a free trial — all features are unlocked.' : ' Let\'s get you set up in 2 minutes.'}</>
             )}
           </p>
         </div>
@@ -342,7 +342,7 @@ const Onboarding = () => {
   const [finishing, setFinishing] = useState(false);
 
   React.useEffect(() => {
-    document.title = 'Amrit manage';
+    document.title = 'Dairy Management';
   }, []);
 
   const handleFinish = async () => {
@@ -371,7 +371,7 @@ const Onboarding = () => {
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <img src={LogoImg} alt="Amrit Manage Logo" style={{ height: '36px', objectFit: 'contain' }} />
+          <h2 style={{ fontSize: '24px', fontWeight: 800, margin: 0, color: '#333' }}>Dairy Management</h2>
         </div>
         {/* Language switch + Progress dots */}
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>

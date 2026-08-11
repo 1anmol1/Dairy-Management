@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Phone, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import amritLogo from '../assets/Amritmanagelogo.png';
+
 import LanguageToggle from '../i18n/marathi/LanguageToggle';
 import { useMarathi } from '../i18n/marathi';
 
@@ -14,7 +14,7 @@ const StaffLayout = () => {
   const [profileOpen, setProfileOpen] = useState(false);
 
   React.useEffect(() => {
-    document.title = 'Amrit manage';
+    document.title = 'Dairy Management';
   }, []);
 
   const handleLogout = () => {
@@ -38,7 +38,7 @@ const StaffLayout = () => {
       }}>
         {/* Brand */}
         <Link to="/app/staff" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-          <img src={amritLogo} alt="Amrit Manage" style={{ height: '28px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
+          <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
         </Link>
 
         {/* Right: profile + logout */}

@@ -76,8 +76,8 @@ const FeedbackPage = () => {
             </h1>
             <p style={{ fontSize: '13px', color: '#525252', margin: '4px 0 0' }}>
               {isMarathi
-                ? 'तुमच्या मौल्यवान सूचना आमच्यासोबत शेअर करा जेणेकरून आम्ही अमृत मॅनेज अधिक सुधारू शकू.'
-                : 'Help us improve Amrit Manage. Share your suggestions, bugs, or feature ideas.'}
+                ? 'तुमच्या मौल्यवान सूचना आमच्यासोबत शेअर करा जेणेकरून आम्ही डेअरी मॅनेजमेंट अधिक सुधारू शकू.'
+                : 'Help us improve Dairy Management. Share your suggestions, bugs, or feature ideas.'}
             </p>
           </div>
         </div>

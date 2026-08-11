@@ -422,7 +422,7 @@ router.get('/farmer-collections/next-number', async (req, res, next) => {
 
 // ── POST /api/staff/farmer-collections ─────────────────────────
 router.post('/farmer-collections', async (req, res, next) => {
-  const mongoose = require('mongoose');
+
   let session = null;
   let useTransaction = false;
 
@@ -595,7 +595,7 @@ router.post('/farmer-collections/send-whatsapp', async (req, res, next) => {
 // ── PATCH /api/staff/farmer-collections/:id ─────────────────────
 // Edit a farmer collection log entry
 router.patch('/farmer-collections/:id', async (req, res, next) => {
-  const mongoose = require('mongoose');
+
   let session = null;
   let useTransaction = false;
 

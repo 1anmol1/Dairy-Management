@@ -15,14 +15,14 @@ const defaultTemplates = {
       name: 'दैनिक दूध वितरण (मराठी)',
       language: 'mr',
       type: 'delivery',
-      body: '✅ *दूध वितरण* — {{date}}\nप्रिय {{customerName}},\nआजचे प्रमाण: *{{quantity}}*\nवेळ: *{{slot}}*\nअमृत डेअरी निवडल्याबद्दल धन्यवाद!'
+      body: '✅ *दूध वितरण* — {{date}}\nप्रिय {{customerName}},\nआजचे प्रमाण: *{{quantity}}*\nवेळ: *{{slot}}*\nडेअरी मॅनेजमेंट निवडल्याबद्दल धन्यवाद!'
     },
     {
       id: 'cust_delivery_en',
       name: 'Daily Milk Delivery (English)',
       language: 'en',
       type: 'delivery',
-      body: '✅ *Milk Delivered* — {{date}}\nDear {{customerName}},\nQuantity: *{{quantity}}*\nSlot: *{{slot}}*\nThank you for choosing Amrit Dairy!'
+      body: '✅ *Milk Delivered* — {{date}}\nDear {{customerName}},\nQuantity: *{{quantity}}*\nSlot: *{{slot}}*\nThank you for choosing Dairy Management!'
     },
     {
       id: 'cust_extra_mr',
@@ -87,14 +87,14 @@ const defaultTemplates = {
       name: 'शेतकरी पेमेंट जमा सूचना (मराठी)',
       language: 'mr',
       type: 'payment_alert',
-      body: '💸 *शेतकरी पेमेंट जमा* — {{date}}\nप्रिय शेतकरी {{customerName}},\nतुमच्या दुधाचे पेमेंट *₹{{totalPaid}}* बिलिंग सायकलसाठी जमा झाले आहे.\nउर्वरित रक्कम: *{{balance}}*.\nधन्यवाद, अमृत डेअरी!'
+      body: '💸 *शेतकरी पेमेंट जमा* — {{date}}\nप्रिय शेतकरी {{customerName}},\nतुमच्या दुधाचे पेमेंट *₹{{totalPaid}}* बिलिंग सायकलसाठी जमा झाले आहे.\nउर्वरित रक्कम: *{{balance}}*.\nधन्यवाद, डेअरी मॅनेजमेंट!'
     },
     {
       id: 'farm_payment_en',
       name: 'Farmer Payment Alert (English)',
       language: 'en',
       type: 'payment_alert',
-      body: '💸 *Farmer Payment Alert* — {{date}}\nDear {{customerName}},\nYour milk payment of *₹{{totalPaid}}* has been credited for the billing cycle.\nRemaining Balance: *{{balance}}*.\nThank you, Amrit Dairy!'
+      body: '💸 *Farmer Payment Alert* — {{date}}\nDear {{customerName}},\nYour milk payment of *₹{{totalPaid}}* has been credited for the billing cycle.\nRemaining Balance: *{{balance}}*.\nThank you, Dairy Management!'
     },
     {
       id: 'farm_deduction_mr',
@@ -440,12 +440,12 @@ const WhatsApp = () => {
               <Lock size={28} color="#D4AF37" />
             </div>
             <h2 style={{ fontWeight: 700, fontSize: '20px', marginBottom: '8px' }}>
-              {isMarathi ? 'WhatsApp मेसेज अमृत गोल्ड मध्ये उपलब्ध आहे' : 'WhatsApp Alerts available in Amrit Gold'}
+              {isMarathi ? 'WhatsApp मेसेज गोल्ड मध्ये उपलब्ध आहे' : 'WhatsApp Alerts available in Gold'}
             </h2>
             <p style={{ color: '#525252', fontSize: '14px', marginBottom: '28px', lineHeight: 1.6 }}>
               {isMarathi
-                ? 'ग्राहकांना आणि शेतकऱ्यांना थेट मेसेज पाठवण्यासाठी अमृत गोल्ड किंवा प्लॅटिनम योजनेत अपग्रेड करा.'
-                : 'Upgrade to Amrit Gold or Platinum to send WhatsApp notifications and collection receipt alerts.'}
+                ? 'ग्राहकांना आणि शेतकऱ्यांना थेट मेसेज पाठवण्यासाठी गोल्ड किंवा प्लॅटिनम योजनेत अपग्रेड करा.'
+                : 'Upgrade to Gold or Platinum to send WhatsApp notifications and collection receipt alerts.'}
             </p>
             <button
               className="btn btn-primary"

@@ -298,7 +298,7 @@ const OwnerDashboard = () => {
                     <div className="stat-value">{s.value}</div>
                     <div className="stat-sub">{s.sub}</div>
                   </div>
-                  <div style={{ backgroundColor: `${s.color}18`, padding: '8px', flexShrink: 0 }}>
+                  <div style={{ backgroundColor: `${s.color}18`, borderRadius: '10px', padding: '8px', flexShrink: 0 }}>
                     <s.icon size={18} color={s.color} />
                   </div>
                 </div>
@@ -319,10 +319,11 @@ const OwnerDashboard = () => {
                 key={i}
                 onClick={() => navigate(card.to)}
                 style={{
-                  backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0',
+                  backgroundColor: '#ffffff', border: '1px solid rgba(0, 0, 0, 0.06)',
+                  borderRadius: '12px',
                   padding: '18px 16px', cursor: 'pointer', textAlign: 'left',
                   display: 'flex', flexDirection: 'column', gap: '10px',
-                  transition: 'box-shadow 0.15s, border-color 0.15s, transform 0.1s',
+                  transition: 'box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease',
                   minHeight: '110px'
                 }}
                 onMouseOver={e => { e.currentTarget.style.boxShadow = `0 4px 16px ${card.color}22`; e.currentTarget.style.borderColor = card.color; }}
@@ -330,7 +331,7 @@ const OwnerDashboard = () => {
                 onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.97)'; }}
                 onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                <div style={{ width: 38, height: 38, backgroundColor: `${card.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: 38, height: 38, backgroundColor: `${card.color}18`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <card.icon size={18} color={card.color} />
                 </div>
                 <div>

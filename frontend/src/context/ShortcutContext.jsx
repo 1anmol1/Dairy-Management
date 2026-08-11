@@ -109,8 +109,9 @@ export const ShortcutProvider = ({ children }) => {
       );
 
       // Find matching action
+      if (!e.key) return;
       const matchedAction = Object.keys(shortcuts).find(
-        (action) => shortcuts[action].key.toLowerCase() === e.key.toLowerCase()
+        (action) => shortcuts[action]?.key?.toLowerCase() === e.key.toLowerCase()
       );
 
       if (!matchedAction) return;
