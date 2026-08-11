@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: amrit-manage-backend
+    env: node
+    buildCommand: "cd backend && npm install"
+    startCommand: "cd backend && npm start"
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
