@@ -67,10 +67,24 @@ const UnifiedLogin = () => {
   const [showPass,  setShowPass]    = useState(false);
   
   const [devAccounts, setDevAccounts] = useState({ owners: [], staff: [] });
+  const [serverStatus, setServerStatus] = useState('waking');
+  const [wakeTimer, setWakeTimer] = useState(0);
 
   React.useEffect(() => {
-    // DEV ONLY: fetch created accounts for quick testing
-    api.get('/auth/dev-users').then(res => setDevAccounts(res.data)).catch(console.error);
+    const timerInterval = setInterval(() => setWakeTimer(t => t + 1), 1000);
+    // DEV ONLY: fetch created accounts for quick testing & ping server
+    api.get('/auth/dev-users')
+      .then(res => {
+        setDevAccounts(res.data);
+        setServerStatus('online');
+        clearInterval(timerInterval);
+      })
+      .catch(err => {
+        setServerStatus('error');
+        clearInterval(timerInterval);
+        console.error(err);
+      });
+    return () => clearInterval(timerInterval);
   }, []);
 
   const { setSession } = useAuth();
@@ -162,6 +176,17 @@ const UnifiedLogin = () => {
       <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }}>
         <LanguageToggle />
       </div>
+
+      {serverStatus === 'waking' && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#f59e0b', color: '#ffffff', padding: '10px', textAlign: 'center', fontSize: '13px', fontWeight: '600', zIndex: 50, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          Server is waking up... Please wait ({wakeTimer}s)
+        </div>
+      )}
+      {serverStatus === 'online' && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#24A148', color: '#ffffff', padding: '10px', textAlign: 'center', fontSize: '13px', fontWeight: '600', zIndex: 50, boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+          Server is online, you can login
+        </div>
+      )}
 
       <div style={{
         width: '100%', maxWidth: '420px',
