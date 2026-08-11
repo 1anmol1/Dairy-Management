@@ -68,7 +68,7 @@ const UnifiedLogin = () => {
   
   const [devAccounts, setDevAccounts] = useState({ owners: [], staff: [] });
   const [serverStatus, setServerStatus] = useState('checking'); // checking, waking, online, hidden, error
-  const [wakeTimer, setWakeTimer] = useState(0);
+  const [wakeTimer, setWakeTimer] = useState(60);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -79,7 +79,7 @@ const UnifiedLogin = () => {
       if (isMounted) {
         setServerStatus(prev => prev === 'checking' ? 'waking' : prev);
         timerInterval = setInterval(() => {
-          setWakeTimer(t => t + 1);
+          setWakeTimer(t => t > 0 ? t - 1 : 0);
         }, 1000);
       }
     }, 1500);
