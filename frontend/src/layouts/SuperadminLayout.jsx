@@ -207,12 +207,6 @@ const SuperadminLayout = () => {
             <Link to="/app/superadmin" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
                 <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
             </Link>
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FFFFFF', padding: '4px' }}
-            >
-              {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
-            </button>
           </div>
         )}
 
