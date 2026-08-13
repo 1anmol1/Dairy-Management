@@ -1,6 +1,6 @@
 
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut,
@@ -19,8 +19,15 @@ const SuperadminLayout = () => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [showPwModal, setShowPwModal] = useState(false);
 
-  React.useEffect(() => {
+  // Mobile UI States
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [showFullMenu, setShowFullMenu] = useState(false);
+
+  useEffect(() => {
     document.title = 'Dairy Management';
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleLogout = () => {
@@ -194,23 +201,151 @@ const SuperadminLayout = () => {
 
       <div className={`cartoonish-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)} />
 
-      <div className="cartoonish-main">
-        <div className="cartoonish-header">
-          <Link to="/app/superadmin" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
-          </Link>
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FFFFFF', padding: '4px' }}
-          >
-            {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
+      <div className="cartoonish-main" style={isMobile ? { paddingBottom: '70px' } : {}}>
+        {!isMobile && (
+          <div className="cartoonish-header">
+            <Link to="/app/superadmin" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
+            </Link>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FFFFFF', padding: '4px' }}
+            >
+              {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
+        )}
 
         <Outlet />
       </div>
 
+      {/* ── Mobile Bottom Tab Bar ── */}
+      {isMobile && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, height: '65px',
+          backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-around',
+          zIndex: 1000, paddingBottom: 'env(safe-area-inset-bottom)'
+        }}>
+          <NavLink to="/app/superadmin" end style={({ isActive }) => ({ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', textDecoration: 'none', color: isActive ? '#DA1E28' : '#64748b' })}>
+            <LayoutDashboard size={22} />
+            <span style={{ fontSize: '10px', fontWeight: 600 }}>Home</span>
+          </NavLink>
+
+          <NavLink to="/app/superadmin/owners" style={({ isActive }) => ({ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', textDecoration: 'none', color: isActive ? '#DA1E28' : '#64748b' })}>
+            <Users size={22} />
+            <span style={{ fontSize: '10px', fontWeight: 600 }}>Owners</span>
+          </NavLink>
+
+          <NavLink to="/app/superadmin/activities" style={({ isActive }) => ({ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', textDecoration: 'none', color: isActive ? '#DA1E28' : '#64748b' })}>
+            <Activity size={22} />
+            <span style={{ fontSize: '10px', fontWeight: 600 }}>Activity</span>
+          </NavLink>
+
+          <button
+            onClick={() => setShowFullMenu(true)}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
+          >
+            <Menu size={22} />
+            <span style={{ fontSize: '10px', fontWeight: 600 }}>Menu</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Mobile Full Screen Menu ── */}
+      {showFullMenu && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: '#FAFBFC', zIndex: 1200, display: 'flex', flexDirection: 'column', animation: 'saSlideUp 0.3s ease-out' }}>
+          <div style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={16} color="#DA1E28" />
+              <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: '#0f172a' }}>Admin Menu</h2>
+            </div>
+            <button onClick={() => setShowFullMenu(false)} style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <X size={20} color="#0f172a" />
+            </button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+              {filteredNavItems.map(item => {
+                // Skip items already visible on the bottom bar
+                if (['/app/superadmin', '/app/superadmin/owners', '/app/superadmin/activities'].includes(item.to)) return null;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setShowFullMenu(false)}
+                    style={({ isActive }) => ({
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px',
+                      backgroundColor: isActive ? '#fef2f2' : '#fff', border: `1px solid ${isActive ? '#fecaca' : '#e2e8f0'}`,
+                      borderRadius: '16px', textDecoration: 'none', color: isActive ? '#b91c1c' : '#475569'
+                    })}
+                  >
+                    <item.icon size={24} />
+                    <span style={{ fontSize: '12px', fontWeight: 600, textAlign: 'center' }}>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+            </div>
+
+            <div style={{ backgroundColor: '#fff', borderRadius: '16px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', backgroundColor: '#DA1E28', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: '18px' }}>
+                  {user?.name?.charAt(0)?.toUpperCase() || 'S'}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#0f172a' }}>{user?.name}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>{user?.phone}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                    <Shield size={10} color="#DA1E28" />
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>{user?.parentAdminId ? (user.roleName || 'Sub Admin') : 'Super Admin'}</span>
+                  </div>
+                </div>
+              </div>
+              <button className="btn btn-danger btn-full" onClick={handleLogout} style={{ height: '44px' }}>
+                <LogOut size={16} /> Sign Out
+              </button>
+            </div>
+
+            {/* Designed & Developed credit */}
+            <div style={{ textAlign: 'center', padding: '12px 0 8px', color: '#94a3b8', fontSize: '11px', lineHeight: 1.5 }}>
+              Designed & Developed by<br />
+              <span style={{ fontWeight: 700, color: '#64748b' }}>Brandkritt Technologies</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Designed & Developed — right edge watermark ── */}
+      {!isMobile && (
+        <div style={{
+          position: 'fixed',
+          right: '0px',
+          top: '50%',
+          transform: 'translateY(-50%) rotate(180deg)',
+          writingMode: 'vertical-rl',
+          fontSize: '10px',
+          fontWeight: 600,
+          color: '#cbd5e1',
+          letterSpacing: '1.5px',
+          textTransform: 'uppercase',
+          pointerEvents: 'none',
+          zIndex: 50,
+          userSelect: 'none',
+          padding: '16px 6px',
+          lineHeight: 1.6,
+        }}>
+          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Brandkritt Technologies</span>
+        </div>
+      )}
+
       {showPwModal && <SuperadminPasswordModal onClose={() => setShowPwModal(false)} />}
+
+      <style>{`
+        @keyframes saSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @media (max-width: 768px) {
+          .cartoonish-sidebar { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 };

@@ -443,6 +443,12 @@ const OwnerLayout = () => {
                 <LogOut size={16} /> {t('app.signOut', 'Sign Out')}
               </button>
             </div>
+
+            {/* Designed & Developed credit */}
+            <div style={{ textAlign: 'center', padding: '12px 0 8px', color: '#94a3b8', fontSize: '11px', lineHeight: 1.5 }}>
+              Designed & Developed by<br />
+              <span style={{ fontWeight: 700, color: '#64748b' }}>Brandkritt Technologies</span>
+            </div>
             
           </div>
         </div>
@@ -454,6 +460,29 @@ const OwnerLayout = () => {
           .cartoonish-sidebar { display: none !important; }
         }
       `}</style>
+
+      {/* ── Designed & Developed — right edge watermark ── */}
+      {!isMobile && (
+        <div style={{
+          position: 'fixed',
+          right: '0px',
+          top: '50%',
+          transform: 'translateY(-50%) rotate(180deg)',
+          writingMode: 'vertical-rl',
+          fontSize: '10px',
+          fontWeight: 600,
+          color: '#cbd5e1',
+          letterSpacing: '1.5px',
+          textTransform: 'uppercase',
+          pointerEvents: 'none',
+          zIndex: 50,
+          userSelect: 'none',
+          padding: '16px 6px',
+          lineHeight: 1.6,
+        }}>
+          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Brandkritt Technologies</span>
+        </div>
+      )}
 
       {showPwModal && <ChangePasswordModal onClose={() => setShowPwModal(false)} />}
       {showRenewalModal && (
