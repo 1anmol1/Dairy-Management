@@ -1,11 +1,9 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut,
   Menu, X, Shield, CreditCard, KeyRound,
-  Phone, Mail, ChevronDown, ChevronUp, Activity, MessageSquare, Trash2
+  Phone, Mail, ChevronDown, ChevronUp, Activity, MessageSquare, Trash2, Plus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -231,6 +229,20 @@ const SuperadminLayout = () => {
             <span style={{ fontSize: '10px', fontWeight: 600 }}>Owners</span>
           </NavLink>
 
+          {/* Add FAB */}
+          <button 
+            onClick={() => {
+              navigate('/app/superadmin/owners', { state: { openAdd: true } });
+            }}
+            style={{
+              width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#DA1E28',
+              color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(218, 30, 40, 0.4)', transform: 'translateY(-10px)'
+            }}
+          >
+            <Plus size={26} strokeWidth={3} />
+          </button>
+
           <NavLink to="/app/superadmin/activities" style={({ isActive }) => ({ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', textDecoration: 'none', color: isActive ? '#DA1E28' : '#64748b' })}>
             <Activity size={22} />
             <span style={{ fontSize: '10px', fontWeight: 600 }}>Activity</span>
@@ -303,7 +315,7 @@ const SuperadminLayout = () => {
             {/* Designed & Developed credit */}
             <div style={{ textAlign: 'center', padding: '12px 0 8px', color: '#94a3b8', fontSize: '11px', lineHeight: 1.5 }}>
               Designed & Developed by<br />
-              <span style={{ fontWeight: 700, color: '#64748b' }}>Brandkritt Technologies</span>
+              <span style={{ fontWeight: 700, color: '#64748b' }}>Anmol Patil</span>
             </div>
           </div>
         </div>
@@ -311,24 +323,10 @@ const SuperadminLayout = () => {
 
       {/* ── Designed & Developed — right edge watermark ── */}
       {!isMobile && (
-        <div style={{
-          position: 'fixed',
-          right: '0px',
-          top: '50%',
-          transform: 'translateY(-50%) rotate(180deg)',
-          writingMode: 'vertical-rl',
-          fontSize: '10px',
-          fontWeight: 600,
-          color: '#cbd5e1',
-          letterSpacing: '1.5px',
-          textTransform: 'uppercase',
-          pointerEvents: 'none',
-          zIndex: 50,
-          userSelect: 'none',
-          padding: '16px 6px',
-          lineHeight: 1.6,
-        }}>
-          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Brandkritt Technologies</span>
+        <div className="watermark-container hide-on-mobile" style={{ position: 'fixed', right: '0px', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', zIndex: 0, opacity: 0.7, pointerEvents: 'none' }}>
+          <div style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', fontSize: '12px', color: '#cbd5e1', letterSpacing: '2px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Anmol Patil</span>
+          </div>
         </div>
       )}
 

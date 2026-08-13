@@ -574,7 +574,7 @@ router.post('/farmer-collections/send-whatsapp', async (req, res, next) => {
     const { sendMessage } = require('../services/whatsappService');
     const farmer = coll.farmerId;
     
-    const msg = `*Amrit Dairy Milk Collection Receipt*\n\n` +
+    const msg = `*Dairy Management Milk Collection Receipt*\n\n` +
                 `Receipt No: ${coll.collectionNumber}\n` +
                 `Date: ${coll.date} (${coll.shift === 'Morning' ? 'सकाळ' : 'संध्याकाळ'})\n` +
                 `Farmer: ${farmer.name} (${farmer.customerCode || 'N/A'})\n` +

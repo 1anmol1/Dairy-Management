@@ -1,7 +1,7 @@
 {
-  "name": "amrit-manage-backend",
+  "name": "dairy-management-backend",
   "version": "1.0.0",
-  "description": "Amrit Manage SaaS Backend - Multi-tenant dairy management",
+  "description": "Dairy Management Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

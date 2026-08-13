@@ -443,7 +443,7 @@ const OwnerLayout = () => {
             {/* Designed & Developed credit */}
             <div style={{ textAlign: 'center', padding: '12px 0 8px', color: '#94a3b8', fontSize: '11px', lineHeight: 1.5 }}>
               Designed & Developed by<br />
-              <span style={{ fontWeight: 700, color: '#64748b' }}>Brandkritt Technologies</span>
+              <span style={{ fontWeight: 700, color: '#64748b' }}>Anmol Patil</span>
             </div>
             
           </div>

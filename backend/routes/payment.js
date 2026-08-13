@@ -58,20 +58,20 @@ router.get('/plans', async (req, res, next) => {
           monthly: 99, setup: 499,
           features: PLAN_FEATURES.silver,
           limits: { maxCustomers: 50, maxStaff: 2 },
-          description: 'Entry plan – basic usage only', label: 'Amrit Silver'
+          description: 'Entry plan – basic usage only', label: 'Silver'
         },
         gold: {
           monthly: 199, setup: 1499,
           features: PLAN_FEATURES.gold,
           limits: { maxCustomers: 150, maxStaff: 5 },
-          description: 'Main plan – full working system', label: 'Amrit Gold',
+          description: 'Main plan – full working system', label: 'Gold',
           recommended: true
         },
         platinum: {
           monthly: 399, setup: 1999,
           features: PLAN_FEATURES.platinum,
           limits: { maxCustomers: 999999, maxStaff: 15 },
-          description: 'Premium plan – advanced usage', label: 'Amrit Platinum'
+          description: 'Premium plan – advanced usage', label: 'Platinum'
         }
       }
     });

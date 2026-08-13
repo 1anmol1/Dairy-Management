@@ -10,7 +10,7 @@ const PlanConfig = require('../models/PlanConfig');
 const defaults = [
   {
     plan: 'silver',
-    label: 'Amrit Silver',
+    label: 'Silver',
     description: 'Entry plan – basic usage only',
     monthlyPrice: 99,
     setupFee: 499,
@@ -19,7 +19,7 @@ const defaults = [
   },
   {
     plan: 'gold',
-    label: 'Amrit Gold',
+    label: 'Gold',
     description: 'Main plan – full working system',
     monthlyPrice: 199,
     setupFee: 1499,
@@ -28,7 +28,7 @@ const defaults = [
   },
   {
     plan: 'platinum',
-    label: 'Amrit Platinum',
+    label: 'Platinum',
     description: 'Premium plan – advanced usage',
     monthlyPrice: 399,
     setupFee: 1999,
