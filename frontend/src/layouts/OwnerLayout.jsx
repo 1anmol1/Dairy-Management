@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useShortcuts } from '../context/ShortcutContext';
 import api from '../api/axios';
 import { useToast } from '../context/ToastContext';
+import DAIryAssistant from '../components/DAIryAssistant';
 
 import LanguageToggle from '../i18n/marathi/LanguageToggle';
 import { useMarathi } from '../i18n/marathi';
@@ -36,6 +37,7 @@ const OwnerLayout = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [showFullMenu, setShowFullMenu] = useState(false);
+  const [showAI, setShowAI] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -447,6 +449,35 @@ const OwnerLayout = () => {
           </div>
         </div>
       )}
+
+      {/* ── AI Assistant FAB (Mobile) ── */}
+      {isMobile && !showAI && (
+        <button
+          onClick={() => setShowAI(true)}
+          style={{
+            position: 'fixed',
+            bottom: '80px',
+            right: '16px',
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            backgroundColor: '#0F62FE',
+            color: '#fff',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(15, 98, 254, 0.4)',
+            zIndex: 1050,
+            cursor: 'pointer'
+          }}
+        >
+          <Sparkles size={24} />
+        </button>
+      )}
+
+      {/* ── AI Assistant Modal ── */}
+      {showAI && <DAIryAssistant onClose={() => setShowAI(false)} />}
 
       <style>{`
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
