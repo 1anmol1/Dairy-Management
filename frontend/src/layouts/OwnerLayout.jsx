@@ -505,7 +505,7 @@ const OwnerLayout = () => {
           padding: '16px 6px',
           lineHeight: 1.6,
         }}>
-          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Brandkritt Technologies</span>
+          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Anmol Patil</span>
         </div>
       )}
 
