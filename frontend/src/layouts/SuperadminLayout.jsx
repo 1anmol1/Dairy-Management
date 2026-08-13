@@ -324,8 +324,8 @@ const SuperadminLayout = () => {
       {/* ── Designed & Developed — right edge watermark ── */}
       {!isMobile && (
         <div className="watermark-container hide-on-mobile" style={{ position: 'fixed', right: '0px', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', zIndex: 0, opacity: 0.7, pointerEvents: 'none' }}>
-          <div style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', fontSize: '12px', color: '#cbd5e1', letterSpacing: '2px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Anmol Patil</span>
+          <div style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', fontSize: '10px', color: '#cbd5e1', letterSpacing: '1.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+          Designed & Developed by <a href="https://anmol-patil-portfolio.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ pointerEvents: 'auto', fontWeight: 800, color: '#94a3b8', textDecoration: 'underline' }}>Anmol Patil</a>
           </div>
         </div>
       )}

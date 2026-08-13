@@ -5,7 +5,7 @@ import {
   ClipboardList, Receipt, LogOut,
   Menu, X, Milk, KeyRound, Phone, Mail, Building2, Plus,
   ChevronDown, ChevronUp, Droplets, BookOpen, CheckCircle, MessageSquare,
-  AlertCircle, Keyboard, PlusCircle
+  AlertCircle, Keyboard, PlusCircle, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useShortcuts } from '../context/ShortcutContext';
@@ -505,7 +505,7 @@ const OwnerLayout = () => {
           padding: '16px 6px',
           lineHeight: 1.6,
         }}>
-          Designed & Developed by <span style={{ fontWeight: 800, color: '#94a3b8' }}>Anmol Patil</span>
+          Designed & Developed by <a href="https://anmol-patil-portfolio.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ pointerEvents: 'auto', fontWeight: 800, color: '#94a3b8', textDecoration: 'underline' }}>Anmol Patil</a>
         </div>
       )}
 

@@ -59,22 +59,7 @@ const getRoleHome = (role) => {
   return '/';
 };
 
-const PortfolioBadge = () => (
-  <div style={{
-    position: 'fixed',
-    bottom: '2px',
-    left: '0px',
-    right: '0px',
-    textAlign: 'center',
-    padding: '2px',
-    fontSize: '10px',
-    color: '#A0A0A0',
-    zIndex: 99999,
-    pointerEvents: 'none'
-  }}>
-    Designed and Developed by <a href="https://anmol-patil-portfolio.vercel.app/" target="_blank" rel="noopener noreferrer" style={{ pointerEvents: 'auto', color: '#8D8D8D', textDecoration: 'underline' }}>Anmol Patil</a>
-  </div>
-);
+
 
 // ── App Gate — redirects logged in users to their dashboard ──
 const AppGate = () => {
@@ -376,7 +361,6 @@ const App = () => {
         </ToastProvider>
       </ShortcutProvider>
     </AuthProvider>
-    <PortfolioBadge />
   </BrowserRouter>
   );
 };
