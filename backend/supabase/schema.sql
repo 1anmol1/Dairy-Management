@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS "MessageTemplate"   CASCADE;
 DROP TABLE IF EXISTS "WhatsappConnection" CASCADE;
 DROP TABLE IF EXISTS "SystemConfig"      CASCADE;
 DROP TABLE IF EXISTS "PlanConfig"        CASCADE;
+DROP TABLE IF EXISTS "AIChat"            CASCADE;
 DROP TABLE IF EXISTS "Customer"          CASCADE;
 DROP TABLE IF EXISTS "Farmer"            CASCADE;
 DROP TABLE IF EXISTS "User"              CASCADE;
@@ -409,3 +410,15 @@ CREATE INDEX idx_dailylog_customer   ON "DailyLog"("customerId");
 CREATE INDEX idx_collection_owner    ON "DailyCollection"("ownerId", date);
 CREATE INDEX idx_bill_owner          ON "Bill"("ownerId");
 CREATE INDEX idx_authlog_user        ON "AuthLog"("userId");
+
+-- ═══════════════════════════════════════════════════════════════
+-- AI CHAT
+-- ═══════════════════════════════════════════════════════════════
+CREATE TABLE "AIChat" (
+    id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    "userId"  UUID NOT NULL REFERENCES "User"(id) ON DELETE CASCADE UNIQUE,
+    messages  JSONB DEFAULT '[]'::jsonb,
+    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+

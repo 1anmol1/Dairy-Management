@@ -1,29 +1,10 @@
-const mongoose = require('mongoose');
+const SupabaseAdapter = require('./SupabaseAdapter');
 
-const messageSchema = new mongoose.Schema({
-  role: {
-    type: String,
-    enum: ['user', 'model', 'assistant'],
-    required: true
-  },
-  content: {
-    type: String,
-    required: true
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now
+class AIChatModel extends SupabaseAdapter {
+  constructor() {
+    super('AIChat');
   }
-});
+}
 
-const aiChatSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    unique: true
-  },
-  messages: [messageSchema]
-}, { timestamps: true });
+module.exports = new AIChatModel();
 
-module.exports = mongoose.model('AIChat', aiChatSchema);

@@ -25,7 +25,7 @@ const DAIryAssistant = ({ onClose }) => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const res = await api.get('/api/ai/history');
+        const res = await api.get('/ai/history');
         if (res.data.messages && res.data.messages.length > 0) {
           setMessages(res.data.messages);
         } else {
@@ -82,7 +82,7 @@ const DAIryAssistant = ({ onClose }) => {
       ]);
 
       // Save messages to backend asynchronously
-      api.post('/api/ai/history', {
+      api.post('/ai/history', {
         messages: [
           { role: 'user', content: userMessage },
           { role: 'assistant', content: assistantMessage }
