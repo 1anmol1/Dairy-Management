@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Plus, Search, ToggleLeft, ToggleRight, Settings,
   ChevronDown, ChevronUp, KeyRound, Users, User, FileText, Check, X, RefreshCw, Calculator,
@@ -138,8 +138,12 @@ const Owners = () => {
 
   useEffect(() => {
     const t = setTimeout(fetchOwners, 300);
+    if (location.state?.openAdd) {
+      setShowAddModal(true);
+      window.history.replaceState({}, document.title);
+    }
     return () => clearTimeout(t);
-  }, [fetchOwners]);
+  }, [fetchOwners, location.state]);
 
   const toggleAccount = async (owner) => {
     try {
