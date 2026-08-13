@@ -37,6 +37,7 @@ const ownerRoutes = require('./routes/owner');
 const staffRoutes = require('./routes/staff');
 const whatsappRoutes = require('./routes/whatsapp');
 const paymentRoutes = require('./routes/payment');
+const aiChatRoutes = require('./routes/aiChat');
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
@@ -173,6 +174,7 @@ app.use('/api/owner', apiLimiter, ownerRoutes);
 app.use('/api/staff', apiLimiter, staffRoutes);
 app.use('/api/whatsapp', apiLimiter, whatsappRoutes);
 app.use('/api/payment', apiLimiter, paymentRoutes);
+app.use('/api/ai', apiLimiter, aiChatRoutes);
 
 // ── API 404 — unknown /api/* routes ──────────────────────────
 app.use('/api/*', (_req, res) => {

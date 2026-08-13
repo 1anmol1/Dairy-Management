@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Sparkles, Bot, User } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
+import api from '../api/axios';
 
 const DAIryAssistant = ({ onClose }) => {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'Hello! I am dAIry, your AI assistant for dairy management. How can I help you today?'
-    }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
@@ -24,6 +20,28 @@ const DAIryAssistant = ({ onClose }) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Fetch Chat History
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const res = await api.get('/api/ai/history');
+        if (res.data.messages && res.data.messages.length > 0) {
+          setMessages(res.data.messages);
+        } else {
+          setMessages([
+            {
+              role: 'assistant',
+              content: 'Hello! I am dAIry, your AI assistant for dairy management. How can I help you today?'
+            }
+          ]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch AI chat history:", err);
+      }
+    };
+    fetchHistory();
+  }, []);
 
   // Lock body scroll
   useEffect(() => {
@@ -57,10 +75,20 @@ const DAIryAssistant = ({ onClose }) => {
         input: prompt,
       });
 
+      const assistantMessage = interaction.output_text || "I'm not sure how to answer that.";
       setMessages(prev => [
         ...prev, 
-        { role: 'assistant', content: interaction.output_text || "I'm not sure how to answer that." }
+        { role: 'assistant', content: assistantMessage }
       ]);
+
+      // Save messages to backend asynchronously
+      api.post('/api/ai/history', {
+        messages: [
+          { role: 'user', content: userMessage },
+          { role: 'assistant', content: assistantMessage }
+        ]
+      }).catch(err => console.error("Failed to save chat history:", err));
+
     } catch (error) {
       console.error("AI Error:", error);
       setMessages(prev => [

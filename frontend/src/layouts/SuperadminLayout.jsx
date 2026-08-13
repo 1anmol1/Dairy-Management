@@ -87,7 +87,7 @@ const SuperadminLayout = () => {
         {/* Logo */}
         <Link to="/app/superadmin" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
           <div style={{ marginBottom: '6px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Dairy Management</h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Shield size={12} color="#DA1E28" />

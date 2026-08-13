@@ -161,7 +161,7 @@ const OwnerLayout = () => {
       <aside className={`cartoonish-sidebar ${sidebarOpen ? 'open' : ''}`}>
         {/* Logo */}
         <Link to="/app/owner" className="sidebar-logo" style={{ display: 'block', textDecoration: 'none' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: '#fff', marginBottom: '4px' }}>Dairy Management</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, marginBottom: '4px' }}>Dairy Management</h2>
           {user?.businessName && (
             <div style={{ color: '#8D8D8D', fontSize: '12px', marginTop: '2px' }}>{user.businessName}</div>
           )}
