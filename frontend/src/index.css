@@ -229,6 +229,7 @@ tr:hover td {
 }
 .modal {
   background: #FFFFFF;
+  border-radius: 16px;
   width: 100%;
   max-width: 480px;
   max-height: 90vh;
@@ -237,6 +238,7 @@ tr:hover td {
   padding: 32px;
   position: relative;
   box-sizing: border-box;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
 }
 .modal:not(:has(.modal-body)) {
   overflow-y: auto;

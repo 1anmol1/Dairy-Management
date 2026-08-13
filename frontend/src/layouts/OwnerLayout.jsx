@@ -283,7 +283,7 @@ const OwnerLayout = () => {
         onClick={() => setSidebarOpen(false)} />
 
       <div className="cartoonish-main" style={isMobile ? { paddingBottom: '70px' } : {}}>
-        {!isMobile && (
+        {isMobile && (
           <div className="mobile-header">
             <Link to="/app/owner" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>

@@ -202,8 +202,8 @@ const SuperadminLayout = () => {
       <div className={`cartoonish-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)} />
 
       <div className="cartoonish-main" style={isMobile ? { paddingBottom: '70px' } : {}}>
-        {!isMobile && (
-          <div className="cartoonish-header">
+        {isMobile && (
+          <div className="mobile-header">
             <Link to="/app/superadmin" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
                 <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: '#fff' }}>Dairy Management</h2>
             </Link>
