@@ -194,12 +194,15 @@ app.get(/^(?!\/api).*/, (_req, res) => {
 
 // ── Global error handler ──────────────────────────────────────
 app.use((err, _req, res, _next) => {
-  if (!isProd) console.error('Global error:', err);
-  const status = err.statusCode || err.status || 500;
-  const message = isProd
-    ? (status < 500 ? err.message : 'An unexpected error occurred. Please try again.')
-    : (err.message || 'Internal server error');
-  res.status(status).json({ error: message });
+  console.error('Global error:', err);
+  const status = err.statusCode || err.status || (err.code ? 400 : 500);
+  const message = err.message || 'Internal server error';
+  res.status(status).json({ 
+    error: message,
+    code: err.code,
+    details: err.details,
+    hint: err.hint
+  });
 });
 
 // ── Start server ──────────────────────────────────────────────
