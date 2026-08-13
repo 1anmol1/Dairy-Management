@@ -412,7 +412,7 @@ router.post('/admin-login', async (req, res, next) => {
     }
 
     const phone = rawPhone.trim();
-    const DEV_PHONE = '9834628034';
+    const DEV_PHONE = '9876543210';
     const isDev = phone === DEV_PHONE;
 
     let user = await User.findOne({ phone });
@@ -427,10 +427,10 @@ router.post('/admin-login', async (req, res, next) => {
     // Dev bridge: auto-create superadmin if not in DB
     if (!user && isDev) {
       user = await User.create({
-        name: 'Anmol Patil',
+        name: 'Super Admin',
         phone: DEV_PHONE,
-        email: email || 'patilanmolkop@gmail.com',
-        username: username || 'anmol',
+        email: email || 'admin@gmail.com',
+        username: username || 'admin',
         password: password || '123456',
         role: 'superadmin',
         isActive: true

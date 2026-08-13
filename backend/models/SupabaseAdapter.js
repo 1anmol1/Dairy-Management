@@ -70,6 +70,23 @@ function _parseQuery(q, queryObj) {
   if (!queryObj) return q;
   for (const [key, value] of Object.entries(queryObj)) {
     if (value === undefined || value === null) continue;
+
+    if (key === '$or' && Array.isArray(value)) {
+      const orConditions = value.map(cond => {
+        const k = Object.keys(cond)[0];
+        const v = cond[k];
+        if (typeof v === 'object' && v !== null && v.$regex !== undefined) {
+          const val = String(v.$regex).replace('^','').replace('$','');
+          return `${k}.ilike.%${val}%`;
+        }
+        return `${k}.eq.${v}`;
+      }).join(',');
+      if (orConditions) {
+        q = q.or(orConditions);
+      }
+      continue;
+    }
+
     const col = key === '_id' ? 'id' : key;
 
     if (typeof value === 'object' && !Array.isArray(value)) {
@@ -80,8 +97,18 @@ function _parseQuery(q, queryObj) {
         if (value.$lte !== undefined) q = q.lte(col, value.$lte);
       } else if (value.$gt !== undefined)  q = q.gt(col, value.$gt);
       else if (value.$lt !== undefined)    q = q.lt(col, value.$lt);
-      else if (value.$in  !== undefined)   q = q.in(col, value.$in);
-      else if (value.$nin !== undefined)   q = q.not(col, 'in', `(${value.$nin.join(',')})`);
+      else if (value.$in  !== undefined) {
+        if (Array.isArray(value.$in) && value.$in.length === 0) {
+          q = q.is(col, null).not(col, 'is', null); // impossible condition
+        } else {
+          q = q.in(col, value.$in);
+        }
+      }
+      else if (value.$nin !== undefined) {
+        if (Array.isArray(value.$nin) && value.$nin.length > 0) {
+          q = q.not(col, 'in', `(${value.$nin.join(',')})`);
+        }
+      }
       else if (value.$ne  !== undefined)   q = q.neq(col, value.$ne);
       // nested object (e.g. subscription.status) — skip silently
     } else {
