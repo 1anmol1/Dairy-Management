@@ -139,10 +139,11 @@ body {
   font-size: 14px;
   font-family: inherit;
   border: 1px solid #8D8D8D;
+  border-radius: 8px;
   background: #FFFFFF;
   color: #161616;
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 .input:focus {
   border-color: #0F62FE;
