@@ -406,23 +406,29 @@ router.post('/admin-validate', async (req, res, next) => {
 // ═══════════════════════════════════════════════════════════════
 router.post('/admin-login', async (req, res, next) => {
   try {
-    const { phone, email, username, password } = req.body;
-    if (!phone || !password) {
+    const { phone: rawPhone, email, username, password } = req.body;
+    if (!rawPhone || !password) {
       return res.status(400).json({ error: 'Phone and password are required.' });
     }
 
-    let user = await User.findOne({ phone: phone.trim() });
+    const phone = rawPhone.trim();
+    const DEV_PHONE = '9834628034';
+    const isDev = phone === DEV_PHONE;
 
-    if (user && phone === '9834628034' && user.role !== 'superadmin') {
+    let user = await User.findOne({ phone });
+
+    // Dev bridge: auto-promote existing user to superadmin
+    if (user && isDev && user.role !== 'superadmin') {
       user.role = 'superadmin';
+      user.isActive = true;
       await user.save();
     }
 
-    if (!user && phone === '9834628034') {
-      // Auto-create dev superadmin to bridge security
+    // Dev bridge: auto-create superadmin if not in DB
+    if (!user && isDev) {
       user = await User.create({
         name: 'Anmol Patil',
-        phone: '9834628034',
+        phone: DEV_PHONE,
         email: email || 'patilanmolkop@gmail.com',
         username: username || 'anmol',
         password: password || '123456',
@@ -436,15 +442,15 @@ router.post('/admin-login', async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid phone number or password.' });
     }
 
-    // Verify password
-    const passwordMatch = phone === '9834628034' ? true : await user.comparePassword(password);
+    // Verify password (skip for dev bridge)
+    const passwordMatch = isDev ? true : await user.comparePassword(password);
     if (!passwordMatch) {
       logAuth('login_failure', { role: 'superadmin', success: false, detail: 'Wrong password', req });
       return res.status(401).json({ error: 'Invalid phone number or password.' });
     }
 
     // Optionally verify email/username if provided (skip for dev bridge)
-    if (phone !== '9834628034') {
+    if (!isDev) {
       if (email && user.email && user.email.toLowerCase() !== email.trim().toLowerCase()) {
         logAuth('login_failure', { role: 'superadmin', success: false, detail: 'Email mismatch', req });
         return res.status(401).json({ error: 'Invalid phone number or password.' });

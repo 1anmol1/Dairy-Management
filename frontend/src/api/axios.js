@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://dairy-management-6s73.onrender.com/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://dairy-management-6s73.onrender.com/api',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 });

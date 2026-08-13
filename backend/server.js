@@ -57,7 +57,7 @@ app.use(helmet({
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: isProd
-        ? ["'self'", process.env.FRONTEND_URL]
+        ? ["'self'", process.env.FRONTEND_URL, 'https://*.vercel.app'].filter(Boolean)
         : ["'self'", 'http://localhost:5173'],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
@@ -100,6 +100,7 @@ app.use(cors({
         hostname === 'dairymanagement.local' ||
         hostname.endsWith('.eurekai.in') ||
         hostname.endsWith('.hostingersite.com') ||
+        hostname.endsWith('.vercel.app') ||
         hostname === 'localhost' ||
         hostname === '127.0.0.1'
       ) {
