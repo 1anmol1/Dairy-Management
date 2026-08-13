@@ -7,6 +7,7 @@ import ScrollToTop from './components/ScrollToTop';
 import SignOutGuard from './components/SignOutGuard';
 // ── Marathi i18n (self-contained — delete i18n/marathi/ to remove) ──
 import { MarathiProvider } from './i18n/marathi';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // ── Static Imports for critical/initial pages ──────────────────
 import SuperadminLayout    from './layouts/SuperadminLayout';
@@ -292,83 +293,85 @@ const App = () => {
             <MarathiProvider>
               <ImpersonationBanner />
               <ScrollToTop />
-              <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  {/* ── Root URL ──────────────────────── */}
-                  <Route path="/" element={<SignOutGuard><UnifiedLogin /></SignOutGuard>} />
-                <Route path="/register" element={<OwnerRegister />} />
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
+                    {/* ── Root URL ──────────────────────── */}
+                    <Route path="/" element={<SignOutGuard><UnifiedLogin /></SignOutGuard>} />
+                  <Route path="/register" element={<OwnerRegister />} />
 
-                {/* ── Legacy → 404 ──────────────────────────── */}
-                <Route path="/ownerlogin"  element={<NotFound />} />
-                <Route path="/staffaccess" element={<NotFound />} />
-                <Route path="/app/login"   element={<NotFound />} />
-                <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
-                <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+                  {/* ── Legacy → 404 ──────────────────────────── */}
+                  <Route path="/ownerlogin"  element={<NotFound />} />
+                  <Route path="/staffaccess" element={<NotFound />} />
+                  <Route path="/app/login"   element={<NotFound />} />
+                  <Route path="/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
+                  <Route path="/loginto/staffaccess/app/secure/adminaccounts/superadmin/login" element={<NotFound />} />
 
-                {/* ── Superadmin ────────────────────────────── */}
-                <Route path="/app/superadmin" element={
-                  <ProtectedRoute allowedRoles={['superadmin']}>
-                    <SuperadminLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<SuperadminDashboard />} />
-                  <Route path="owners"      element={<SuperadminOwners />} />
-                  <Route path="activities"  element={<SuperadminActivities />} />
-                  <Route path="plans"       element={<SuperadminPlans />} />
-                  <Route path="requests"    element={<SuperadminRequests />} />
-                  <Route path="impersonate" element={<SuperadminImpersonation />} />
-                  <Route path="feedback"    element={<SuperadminFeedbackList />} />
-                  <Route path="admins"      element={<SuperadminAdmins />} />
-                  <Route path="recycle-bin" element={<SuperadminRecycleBin />} />
-                </Route>
+                  {/* ── Superadmin ────────────────────────────── */}
+                  <Route path="/app/superadmin" element={
+                    <ProtectedRoute allowedRoles={['superadmin']}>
+                      <SuperadminLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<SuperadminDashboard />} />
+                    <Route path="owners"      element={<SuperadminOwners />} />
+                    <Route path="activities"  element={<SuperadminActivities />} />
+                    <Route path="plans"       element={<SuperadminPlans />} />
+                    <Route path="requests"    element={<SuperadminRequests />} />
+                    <Route path="impersonate" element={<SuperadminImpersonation />} />
+                    <Route path="feedback"    element={<SuperadminFeedbackList />} />
+                    <Route path="admins"      element={<SuperadminAdmins />} />
+                    <Route path="recycle-bin" element={<SuperadminRecycleBin />} />
+                  </Route>
 
-                {/* ── Owner ─────────────────────────────────── */}
-                <Route path="/app/owner" element={
-                  <ProtectedRoute allowedRoles={['owner']}>
-                    <OwnerLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<OwnerDashboard />} />
-                  <Route path="customers"         element={<OwnerCustomers />} />
-                  <Route path="farmers"           element={<OwnerFarmers />} />
-                  <Route path="staff"             element={<OwnerStaff />} />
-                  <Route path="collection"        element={<OwnerDailyCollection />} />
-                  <Route path="logs"              element={<OwnerLogs />} />
-                  <Route path="billing"           element={<OwnerBilling />} />
-                  <Route path="whatsapp"          element={<OwnerWhatsApp />} />
-                  <Route path="default-rate"      element={<OwnerDefaultRate />} />
-                  <Route path="upgrade"           element={<OwnerUpgrade />} />
-                  <Route path="message-templates" element={<OwnerMessageTemplates />} />
-                  <Route path="delivery"          element={<StaffDelivery />} />
-                  <Route path="feedback"          element={<FeedbackPage />} />
-                  <Route path="shortcuts"         element={<OwnerShortcuts />} />
-                </Route>
+                  {/* ── Owner ─────────────────────────────────── */}
+                  <Route path="/app/owner" element={
+                    <ProtectedRoute allowedRoles={['owner']}>
+                      <OwnerLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<OwnerDashboard />} />
+                    <Route path="customers"         element={<OwnerCustomers />} />
+                    <Route path="farmers"           element={<OwnerFarmers />} />
+                    <Route path="staff"             element={<OwnerStaff />} />
+                    <Route path="collection"        element={<OwnerDailyCollection />} />
+                    <Route path="logs"              element={<OwnerLogs />} />
+                    <Route path="billing"           element={<OwnerBilling />} />
+                    <Route path="whatsapp"          element={<OwnerWhatsApp />} />
+                    <Route path="default-rate"      element={<OwnerDefaultRate />} />
+                    <Route path="upgrade"           element={<OwnerUpgrade />} />
+                    <Route path="message-templates" element={<OwnerMessageTemplates />} />
+                    <Route path="delivery"          element={<StaffDelivery />} />
+                    <Route path="feedback"          element={<FeedbackPage />} />
+                    <Route path="shortcuts"         element={<OwnerShortcuts />} />
+                  </Route>
 
-                {/* ── Onboarding ────────────────────────────── */}
-                <Route path="/app/owner/onboarding" element={
-                  <ProtectedRoute allowedRoles={['owner']}>
-                    <OwnerOnboarding />
-                  </ProtectedRoute>
-                } />
+                  {/* ── Onboarding ────────────────────────────── */}
+                  <Route path="/app/owner/onboarding" element={
+                    <ProtectedRoute allowedRoles={['owner']}>
+                      <OwnerOnboarding />
+                    </ProtectedRoute>
+                  } />
 
-                {/* ── Staff ─────────────────────────────────── */}
-                <Route path="/app/staff" element={
-                  <ProtectedRoute allowedRoles={['staff']}>
-                    <StaffLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<StaffHomeRedirect />} />
-                  <Route path="delivery" element={<StaffDelivery />} />
-                  <Route path="collection" element={<OwnerDailyCollection />} />
-                </Route>
+                  {/* ── Staff ─────────────────────────────────── */}
+                  <Route path="/app/staff" element={
+                    <ProtectedRoute allowedRoles={['staff']}>
+                      <StaffLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<StaffHomeRedirect />} />
+                    <Route path="delivery" element={<StaffDelivery />} />
+                    <Route path="collection" element={<OwnerDailyCollection />} />
+                  </Route>
 
-                {/* ── /app root ─────────────────────────────── */}
-                <Route path="/app" element={<AppGate />} />
+                  {/* ── /app root ─────────────────────────────── */}
+                  <Route path="/app" element={<AppGate />} />
 
-                {/* ── 404 ───────────────────────────────────── */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
+                  {/* ── 404 ───────────────────────────────────── */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </MarathiProvider>
         </ToastProvider>
       </ShortcutProvider>
