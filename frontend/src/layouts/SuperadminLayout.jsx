@@ -3,11 +3,12 @@ import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut,
   Menu, X, Shield, CreditCard, KeyRound,
-  Phone, Mail, ChevronDown, ChevronUp, Activity, MessageSquare, Trash2, Plus
+  Phone, Mail, ChevronDown, ChevronUp, Activity, MessageSquare, Trash2, Plus, Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { useToast } from '../context/ToastContext';
+import DAIryAssistant from '../components/DAIryAssistant';
 
 
 const SuperadminLayout = () => {
@@ -20,6 +21,7 @@ const SuperadminLayout = () => {
   // Mobile UI States
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showFullMenu, setShowFullMenu] = useState(false);
+  const [showAI, setShowAI] = useState(false);
 
   useEffect(() => {
     document.title = 'Dairy Management';
@@ -331,6 +333,35 @@ const SuperadminLayout = () => {
       )}
 
       {showPwModal && <SuperadminPasswordModal onClose={() => setShowPwModal(false)} />}
+
+      {/* ── AI Assistant FAB (Global) ── */}
+      {!showAI && (
+        <button
+          onClick={() => setShowAI(true)}
+          style={{
+            position: 'fixed',
+            bottom: isMobile ? '80px' : '32px',
+            right: '16px',
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            backgroundColor: '#0F62FE',
+            color: '#fff',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(15, 98, 254, 0.4)',
+            zIndex: 1050,
+            cursor: 'pointer'
+          }}
+        >
+          <Sparkles size={24} />
+        </button>
+      )}
+
+      {/* ── AI Assistant Modal ── */}
+      {showAI && <DAIryAssistant onClose={() => setShowAI(false)} />}
 
       <style>{`
         @keyframes saSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }

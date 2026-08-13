@@ -450,13 +450,13 @@ const OwnerLayout = () => {
         </div>
       )}
 
-      {/* ── AI Assistant FAB (Mobile) ── */}
-      {isMobile && !showAI && (
+      {/* ── AI Assistant FAB (Global) ── */}
+      {!showAI && (
         <button
           onClick={() => setShowAI(true)}
           style={{
             position: 'fixed',
-            bottom: '80px',
+            bottom: isMobile ? '80px' : '32px',
             right: '16px',
             width: '48px',
             height: '48px',
