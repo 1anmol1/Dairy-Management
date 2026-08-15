@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const AIChat = require('../models/AIChat');
-const { requireAuth } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/auth');
 
 // Get chat history for the logged in user
-router.get('/history', requireAuth, async (req, res) => {
+router.get('/history', protect, async (req, res) => {
   try {
     const chat = await AIChat.findOne({ userId: req.user._id });
     if (!chat) {
@@ -18,7 +18,7 @@ router.get('/history', requireAuth, async (req, res) => {
 });
 
 // Append new messages to the chat history
-router.post('/history', requireAuth, async (req, res) => {
+router.post('/history', protect, async (req, res) => {
   try {
     const { messages } = req.body; // Expects an array of new messages to append
     
